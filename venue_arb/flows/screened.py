@@ -11,10 +11,10 @@ from datetime import UTC, datetime
 
 from prefect import flow, get_run_logger
 from prefect.runtime import flow_run
-from qa import checks, db, store
+from qa import checks, db, sql, store
 
 from venue_arb import screened
-from venue_arb.config import PIPELINE_PREFIX
+from venue_arb.config import PIPELINE_PREFIX, SQL_CHECKS
 from venue_arb.exact import eligible
 from venue_arb.flows.exact_sql import load_eligible
 from venue_arb.sources import kalshi, polymarket
@@ -76,6 +76,7 @@ def screened_flow(end: datetime | None = None) -> dict:
                 "AND (kalshi_id, pm_id) IN {ids:Array(Tuple(String, String))}",
                 parameters={"ids": sorted({(r["kalshi_id"], r["pm_id"]) for r in rows})}).result_rows[0]
             results.append(checks.expect_count_match(len(rows), stored, TABLE, tolerance=0.01))
+        results += sql.run_all(pattern="screened_*.sql", directory=SQL_CHECKS)
         checks.enforce(results)
         out = {"pairs": len(pairs), "rows": len(rows), "rows_per_pair": per_pair}
         log.info("screened ok: %s", out)
