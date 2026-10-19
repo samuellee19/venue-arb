@@ -1,0 +1,12 @@
+[Unit]
+Description=Run the venue-arb score flow hourly at :40
+
+[Timer]
+# ponytail: systemd timers instead of Prefect deployment schedules — the platform Prefect server's scheduler
+# crashes (sqlalchemy bulk DML error, 2026-10-19). Runs still report to Prefect as ad hoc flow runs; a oneshot
+# unit never overlaps itself. Move back to `prefect serve` once the platform scheduler is fixed.
+OnCalendar=*-*-* *:40:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

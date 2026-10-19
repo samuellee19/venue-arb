@@ -15,6 +15,7 @@ Follow `~/platform/docs/NEW_PROJECT.md` (platform checkout, `secrets` wrapper, `
 secrets uv run python -m venue_arb.flows.catalog      # listings from both venues
 secrets uv run python -m venue_arb.flows.match        # candidates + LLM adjudication (re-judges pairs stored under an older prompt version)
 secrets uv run python -m venue_arb.flows.review_cli   # hand review of adjudicated matches
+secrets uv run python -m venue_arb.flows.score        # exact pairs: executable edges (ClickHouse) + opportunity episodes (Postgres)
 secrets uv run python -m venue_arb.collect            # order-book snapshot collector (runs forever)
 secrets uv run python -m db.migrate                   # apply migrations
 ```
@@ -31,18 +32,19 @@ secrets uv run pytest -m integration    # needs the stack up
 
 ## Services
 
-On the OptiPlex: one long-running systemd user unit, `venue-arb-collector` (order-book snapshots), and two
-hourly timers that start oneshot units: `venue-arb-catalog.timer` (:05) and `venue-arb-match.timer` (:20). Runs
+On the OptiPlex: one long-running systemd user unit, `venue-arb-collector` (order-book snapshots), and three
+hourly timers that start oneshot units: `venue-arb-catalog.timer` (:05), `venue-arb-match.timer` (:20) and
+`venue-arb-score.timer` (:40, scores the last 26 h of books; overlapping windows re-score idempotently). Runs
 still appear in Prefect as ad hoc flow runs. (Timers replace Prefect deployment schedules because the platform
 Prefect server's scheduler crashed on 2026-10-19; switch back once it's fixed.)
 
 ```bash
 mkdir -p ~/.config/systemd/user
 cp deploy/*.service deploy/*.timer ~/.config/systemd/user/ && systemctl --user daemon-reload
-systemctl --user enable --now venue-arb-collector venue-arb-catalog.timer venue-arb-match.timer
+systemctl --user enable --now venue-arb-collector venue-arb-catalog.timer venue-arb-match.timer venue-arb-score.timer
 loginctl enable-linger "$USER"          # keep them running after logout
 systemctl --user list-timers 'venue-arb-*'
-journalctl --user -u venue-arb-collector -u venue-arb-catalog -u venue-arb-match -f
+journalctl --user -u venue-arb-collector -u venue-arb-catalog -u venue-arb-match -u venue-arb-score -f
 ```
 
 systemd doesn't load `mise.toml`, so each unit repeats its non-secret `[env]` values as `Environment=` lines
@@ -50,7 +52,7 @@ systemd doesn't load `mise.toml`, so each unit repeats its non-secret `[env]` va
 database superusers. After installing, check they connect as the project role:
 
 ```bash
-systemctl --user show venue-arb-collector venue-arb-catalog venue-arb-match -p Environment | tr ' ' '\n' \
+systemctl --user show venue-arb-collector venue-arb-catalog venue-arb-match venue-arb-score -p Environment | tr ' ' '\n' \
   | grep -E '^(PGUSER|CLICKHOUSE_USER|PREFECT_API_URL)='
 cd ~/platform && docker compose exec postgres psql -U postgres -d app -c \
   "SELECT usename, count(*) FROM pg_stat_activity WHERE datname = 'app' GROUP BY 1"   # expect venue_arb, not postgres

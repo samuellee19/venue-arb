@@ -1,6 +1,7 @@
 """Fee model for netting cross-venue edges. Pure: no qa import. Sources and dates: docs/venues.md."""
 from math import ceil
 
+FEE_VERSION = "2026-10-19"  # date of the fee entries in docs/venues.md; stamped on every edge row
 KALSHI_RATE = 0.07  # secondhand, unverified: no Kalshi-owned page fetched states the coefficient (docs/venues.md)
 _KALSHI_QUADRATIC = {"quadratic", "quadratic_with_maker_fees"}
 
