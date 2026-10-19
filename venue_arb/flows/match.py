@@ -83,7 +83,8 @@ def match_flow(limit: int = 500) -> dict:
                 "source = EXCLUDED.source", [(a, b, s, src) for a, b, s, src in cands])
             # ponytail: pairs past the error cap still take `limit` slots (run() skips them for free); exclude them
             # here if they ever crowd out new pairs
-            done = set(conn.execute("SELECT a_id, a_version, b_id, b_version FROM venue_arb.adjudications").fetchall())
+            done = set(conn.execute("SELECT a_id, a_version, b_id, b_version FROM venue_arb.adjudications "
+                                    "WHERE prompt_version = %s", (adjudicate.PROMPT_VERSION,)).fetchall())
             pairs = unadjudicated(cands, {r["market_id"]: r for r in rows if r["venue"] == "kalshi"},
                                   {r["market_id"]: r for r in rows if r["venue"] == "polymarket"}, done, limit)
             m = adjudicate.month_spend(conn)

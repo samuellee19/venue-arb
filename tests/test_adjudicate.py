@@ -9,6 +9,7 @@ from venue_arb.matching.adjudicate import (
     EST_CALL_USD,
     MAX_CONSECUTIVE_ERRORS,
     PRICES,
+    PROMPT_VERSION,
     Verdict,
     adjudicate,
     daily_budget,
@@ -41,8 +42,10 @@ class Cur:
 
 
 class FakeConn:
-    def __init__(self, cached=(), errors=()):
-        self.cached = set(cached)  # (a_id, a_version, b_id, b_version)
+    def __init__(self, cached=(), errors=(), old=()):
+        self.cached = set(cached)  # (a_id, a_version, b_id, b_version) stored at the current prompt version
+        self.old = set(old)  # same, stored at prompt v1
+        self.sqls = []
         self.inserts = []  # adjudications rows
         self.attempts = [{"pair": k, "outcome": "error", "error_type": "X", "cost": 0.0} for k in errors]
 
@@ -54,11 +57,13 @@ class FakeConn:
         if "count(*) FROM venue_arb.llm_attempts" in sql:
             return Cur((sum(a["pair"] == pair and a["outcome"] == "error" for a in self.attempts),))
         if sql.startswith("SELECT 1 FROM venue_arb.adjudications"):
-            return Cur((1,) if pair in self.cached else None)
+            hit = pair in self.cached and params[6] == PROMPT_VERSION or pair in self.old and params[6] == "v1"
+            return Cur((1,) if hit else None)
         if sql.startswith("INSERT INTO venue_arb.llm_attempts"):
             self.attempts.append({"pair": pair, "outcome": params[7], "error_type": params[8], "cost": params[9]})
         else:
             self.inserts.append(params)
+            self.sqls.append(sql)
         return Cur(None)
 
 
@@ -100,7 +105,7 @@ def test_verdict_rejects_bad_relation():
 def test_adjudicate_cost_and_prompt():
     v, cost = adjudicate(listing("k", "v"), listing("p", "w"), call=FakeCall())
     assert v == V and cost == pytest.approx(20_000 * PRICES[next(iter(PRICES))][0] / 1e6)
-    assert "same resolution source" in prompt_for(listing("k", "v"), listing("p", "w"))
+    assert "same authority" in prompt_for(listing("k", "v"), listing("p", "w"))
 
 
 def test_month_spend():
@@ -217,3 +222,31 @@ def test_run_checks_skips_warn():
     rs = by_check(base_out(skipped_budget=3, skipped_failing=1))
     assert [(rs[k]["passed"], rs[k]["severity"], rs[k]["observed"]) for k in ("skipped_budget", "skipped_failing")] \
         == [(False, "warn", 3), (False, "warn", 1)]
+
+
+def test_cache_respects_prompt_version():
+    pair = [(listing("k1", "v1"), listing("p1", "w1"))]
+    call = FakeCall()
+    run(FakeConn(old=[("k1", "v1", "p1", "w1")]), pair, 0.0, call=call)
+    assert call.n == 1  # stored v1 row: re-judged
+    call = FakeCall()
+    out = run(FakeConn(cached=[("k1", "v1", "p1", "w1")]), pair, 0.0, call=call)
+    assert call.n == 0 and out["cached"] == 1
+
+
+def test_rejudge_upserts():
+    conn = FakeConn(old=[("k1", "v1", "p1", "w1")])
+    v = V.model_copy(update={"tail_risks": "Meeting cancelled resolves No Change."})
+    run(conn, [(listing("k1", "v1"), listing("p1", "w1"))], 0.0, call=lambda p: (v.model_dump(), 1000, 0))
+    assert "ON CONFLICT (a_venue,a_id,a_version,b_venue,b_id,b_version) DO UPDATE SET" in conn.sqls[0]
+    assert conn.inserts[0][-2:] == ("v2", "Meeting cancelled resolves No Change.")
+
+
+def test_prompt_v2_mentions_rules():
+    p = prompt_for(listing("k", "v"), listing("p", "w"))
+    assert "Trading closes" in p and "decision date" in p and "tail_risks" in p and "untrusted" in p
+
+
+def test_verdict_tail_risks_optional():
+    assert V.tail_risks is None
+    assert Verdict(relation="exact", yes_maps_to="yes", reason="x", confidence=0.9, tail_risks="a").tail_risks == "a"

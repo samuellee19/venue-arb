@@ -13,7 +13,7 @@ Follow `~/platform/docs/NEW_PROJECT.md` (platform checkout, `secrets` wrapper, `
 
 ```bash
 secrets uv run python -m venue_arb.flows.catalog      # listings from both venues
-secrets uv run python -m venue_arb.flows.match        # candidates + LLM adjudication
+secrets uv run python -m venue_arb.flows.match        # candidates + LLM adjudication (re-judges pairs stored under an older prompt version)
 secrets uv run python -m venue_arb.flows.review_cli   # hand review of adjudicated matches
 secrets uv run python -m venue_arb.collect            # order-book snapshot collector (runs forever)
 secrets uv run python -m db.migrate                   # apply migrations
