@@ -1,4 +1,5 @@
 import json
+import logging
 from datetime import datetime
 
 from venue_arb import http
@@ -6,6 +7,8 @@ from venue_arb.models import Level, Listing
 
 GAMMA = "https://gamma-api.polymarket.com"
 CLOB = "https://clob.polymarket.com"
+
+log = logging.getLogger(__name__)
 
 
 def list_events(tag_slugs: list[str], get=http.get_json, page: int = 100) -> list[dict]:
@@ -24,20 +27,28 @@ def list_events(tag_slugs: list[str], get=http.get_json, page: int = 100) -> lis
 
 
 def parse_listings(events: list[dict]) -> list[Listing]:
-    out = []
+    out, skipped = [], 0
     for e in events:
         ev = {k: v for k, v in e.items() if k != "markets"}
         for m in e.get("markets", []):
             if not m.get("enableOrderBook") or m.get("closed"):
                 continue
-            (yes_label, no_label), (yes_token, no_token) = json.loads(m["outcomes"]), json.loads(m["clobTokenIds"])
+            try:
+                outcomes, tokens = json.loads(m["outcomes"]), json.loads(m["clobTokenIds"])
+                end = datetime.fromisoformat(m["endDate"])
+                (yes_label, no_label), (yes_token, no_token) = outcomes, tokens
+            except (KeyError, TypeError, ValueError):  # missing/malformed field, or not exactly 2 outcomes/tokens
+                skipped += 1
+                continue
             out.append(Listing(
                 venue="polymarket", market_id=m["conditionId"], event_id=e["id"], category=None,
                 title=m["question"], rules=m["description"], yes_label=yes_label, no_label=no_label,
                 yes_token=yes_token, no_token=no_token,
-                close_time=datetime.fromisoformat(m["endDate"]),
+                close_time=end,
                 resolution_source=m.get("resolutionSource") or None, raw={"event": ev, "market": m},
             ))
+    if skipped:
+        log.warning("skipped %d malformed polymarket markets", skipped)
     return out
 
 

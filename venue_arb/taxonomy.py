@@ -20,7 +20,8 @@ KALSHI_SERIES = {
 }
 
 # Checked 2026-10-19 against gamma /events?tag_slug=S&active=true&closed=false&limit=1:
-# every slug returned an event, none dropped.
+# every slug returned an event, none dropped. crypto-prices dropped: /events?tag_slug=crypto-prices returns
+# HTTP 422; bitcoin/ethereum cover it.
 POLYMARKET_TAGS = {
     "fed": "fed_macro",
     "fed-rates": "fed_macro",
@@ -28,7 +29,6 @@ POLYMARKET_TAGS = {
     "inflation": "fed_macro",
     "bitcoin": "crypto_price",
     "ethereum": "crypto_price",
-    "crypto-prices": "crypto_price",
 }
 
 

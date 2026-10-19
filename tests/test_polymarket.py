@@ -64,3 +64,19 @@ def test_parse_book_sorts_best_first():
     yes = [x.price for x in lv if x.side == "yes"]
     no = [x.price for x in lv if x.side == "no"]
     assert yes == sorted(yes) and no == sorted(no) and yes and no
+
+
+def test_parse_listings_skips_malformed_markets(caplog):
+    p1 = load("pm_events_p1.json")
+    good = len(polymarket.parse_listings(p1))
+    base = p1[0]["markets"][0]
+    bad = [
+        {k: v for k, v in base.items() if k != "endDate"},
+        {k: v for k, v in base.items() if k != "clobTokenIds"},
+        {**base, "outcomes": '["A","B","C"]'},
+        {**base, "clobTokenIds": '["t1"]'},
+    ]
+    events = [{**p1[0], "markets": bad + p1[0]["markets"]}] + p1[1:]
+    with caplog.at_level("WARNING"):
+        assert len(polymarket.parse_listings(events)) == good
+    assert "skipped 4" in caplog.text
