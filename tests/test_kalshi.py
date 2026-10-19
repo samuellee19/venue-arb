@@ -53,3 +53,15 @@ def test_parse_book_empty_side():
     assert lv and not [x for x in lv if x.side == "no"]
     assert all(0 < x.price < 1 for x in lv)
     assert kalshi.parse_book(load("kalshi_book.json"))
+
+
+def test_parse_listings_skips_malformed_and_handles_nulls():
+    ev = load("kalshi_events_p1.json")["events"][0]
+    good = ev["markets"][0]
+    no_title = {k: v for k, v in good.items() if k != "title"} | {"ticker": "NO-TITLE"}
+    null_rules = good | {"ticker": "NULL-RULES", "rules_secondary": None, "rules_primary": None}
+    bad_close = good | {"ticker": "BAD-CLOSE", "close_time": None}
+    ls = kalshi.parse_listings([ev | {"markets": [no_title, null_rules, bad_close]}])
+    assert [x.market_id for x in ls] == ["NULL-RULES"]
+    assert ls[0].rules == "\n"
+    assert kalshi.parse_listings([ev | {"markets": None}]) == []

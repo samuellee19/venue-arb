@@ -80,3 +80,13 @@ def test_parse_listings_skips_malformed_markets(caplog):
     with caplog.at_level("WARNING"):
         assert len(polymarket.parse_listings(events)) == good
     assert "skipped 4" in caplog.text
+
+
+def test_parse_listings_skips_malformed_and_handles_null_description():
+    ev = load("pm_events_p1.json")[0]
+    good = next(m for m in ev["markets"] if m.get("enableOrderBook") and not m.get("closed"))
+    no_cid = {k: v for k, v in good.items() if k != "conditionId"}
+    no_q = {k: v for k, v in good.items() if k != "question"} | {"conditionId": "no-q"}
+    null_desc = good | {"conditionId": "null-desc", "description": None}
+    ls = polymarket.parse_listings([ev | {"markets": [no_cid, no_q, null_desc]}])
+    assert [(x.market_id, x.rules) for x in ls] == [("null-desc", "")]

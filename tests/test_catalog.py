@@ -30,3 +30,24 @@ def test_keep_current_drops_stale_close_times():
     assert catalog.keep_current([fresh, edge, stale], NOW) == [fresh, edge]
     boundary = replace(stale, close_time=NOW - timedelta(days=1))
     assert catalog.keep_current([boundary], NOW) == [boundary]
+
+
+def pm(market_id, tags):
+    return Listing("polymarket", market_id, "e1", None, "t", "r", "Yes", "No", "y", "n", NOW, None,
+                   {"event": {"tags": tags}, "market": {}})
+
+
+def test_categorize_maps_series_and_tags_and_dedups():
+    k = replace(listing("k1"), category=None, raw={"event": {"series_ticker": "KXFED"}, "market": {}})
+    k_unknown = replace(k, market_id="k2", raw={"event": {"series_ticker": "KXNOPE"}, "market": {}})
+    p1 = pm("p1", [{"slug": "bitcoin"}])
+    p1_again = pm("p1", [{"slug": "fed"}])  # same market under another tag: first one wins
+    out = catalog.categorize([k, k_unknown, p1, p1_again, pm("p2", [{"slug": "sports"}])])
+    assert [(x.venue, x.market_id, x.category) for x in out] == [
+        ("kalshi", "k1", "fed_macro"), ("polymarket", "p1", "crypto_price")]
+
+
+def test_categorize_null_tags_and_series():
+    out = catalog.categorize([pm("p1", None), pm("p2", [{"label": "no slug"}, None]),
+                              replace(listing(), category=None, raw={"event": {"series_ticker": None}, "market": {}})])
+    assert out == []

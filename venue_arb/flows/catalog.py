@@ -5,7 +5,6 @@
 
 import logging
 import uuid
-from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 from prefect import flow, get_run_logger, task
@@ -16,7 +15,7 @@ from venue_arb import catalog
 from venue_arb.config import PIPELINE_PREFIX, SQL_CHECKS
 from venue_arb.models import Listing
 from venue_arb.sources import kalshi, polymarket
-from venue_arb.taxonomy import KALSHI_SERIES, POLYMARKET_TAGS, assign_category, version
+from venue_arb.taxonomy import KALSHI_SERIES, POLYMARKET_TAGS, version
 
 PIPELINE = f"{PIPELINE_PREFIX}_catalog"
 TARGET = "venue_arb.listings"
@@ -34,17 +33,6 @@ def fetch(venue: str) -> list[Listing]:
     return polymarket.parse_listings(polymarket.list_events(list(POLYMARKET_TAGS)))
 
 
-def categorize(listings: list[Listing]) -> list[Listing]:
-    """Assign categories, drop uncategorized, de-duplicate on market_id (a Polymarket market sits in many tags)."""
-    out = {}
-    for x in listings:
-        ev = x.raw["event"]
-        cat = assign_category(x, ev.get("series_ticker"), [t["slug"] for t in ev.get("tags", [])])
-        if cat:
-            out.setdefault((x.venue, x.market_id), replace(x, category=cat))
-    return list(out.values())
-
-
 @flow(name=PIPELINE)
 def catalog_flow() -> dict:
     log = get_run_logger()
@@ -52,7 +40,7 @@ def catalog_flow() -> dict:
     results: list[checks.Result] = []
     try:
         now = datetime.now(UTC)
-        by_venue = {v: catalog.keep_current(categorize(fetch(v)), now) for v in ("kalshi", "polymarket")}
+        by_venue = {v: catalog.keep_current(catalog.categorize(fetch(v)), now) for v in ("kalshi", "polymarket")}
         listings = [x for xs in by_venue.values() for x in xs]
         rows = catalog.to_rows(listings, {(x.venue, x.market_id): version(x) for x in listings}, now)
         pre = [checks.expect_rows(len(xs), f"{TARGET}:{v}") for v, xs in by_venue.items()]
