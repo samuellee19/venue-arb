@@ -1,0 +1,84 @@
+import json
+from datetime import UTC, datetime
+from pathlib import Path
+
+from venue_arb.exact import ExactPair
+from venue_arb.screened import gaps
+from venue_arb.sources import kalshi, polymarket
+
+FX = Path(__file__).parent / "fixtures"
+
+
+def load(name):
+    return json.loads((FX / name).read_text())
+
+
+def test_kalshi_candles_parse_and_historical_fallback():
+    calls = []
+
+    def live(url, params=None, **kw):
+        calls.append(url)
+        return load("kalshi_candles.json")
+
+    out = kalshi.fetch_candles("S", "S-T", 1792270000, 1792281600, get=live)
+    assert out[0] == {"ts": datetime.fromtimestamp(1792274400 - 3600, UTC), "yes_bid": 0.86, "yes_ask": 0.87}
+    assert out[2]["yes_bid"] is None and out[2]["yes_ask"] is None
+    assert len(out) == 3 and calls == [f"{kalshi.API}/series/S/markets/S-T/candlesticks"]
+
+    calls.clear()
+
+    def hist(url, params=None, **kw):
+        calls.append(url)
+        return {} if "/series/" in url else load("kalshi_candles_historical.json")
+
+    out = kalshi.fetch_candles("S", "S-T", 1787180000, 1787190000, get=hist)
+    assert calls == [f"{kalshi.API}/series/S/markets/S-T/candlesticks", f"{kalshi.API}/historical/markets/S-T/candlesticks"]
+    assert out == [{"ts": datetime.fromtimestamp(1787183220 - 3600, UTC).replace(minute=0, second=0),
+                    "yes_bid": 0.0, "yes_ask": 1.0}]
+
+
+def test_kalshi_candles_chunk_60_days():
+    seen = []
+
+    def fake(url, params=None, **kw):
+        seen.append((params["start_ts"], params["end_ts"]))
+        return {"candlesticks": []}
+
+    kalshi.fetch_candles("S", "T", 0, 130 * 86400, get=fake)
+    assert len(seen) == 3 and all(e - s <= 60 * 86400 for s, e in seen) and seen[1][0] == seen[0][1]
+
+
+def test_pm_history_parse():
+    out = polymarket.fetch_price_history("tok", 1792188000, 1792200000, get=lambda *a, **k: load("pm_history.json"))
+    assert out[0] == {"ts": datetime.fromtimestamp(1792188027, UTC), "price": 0.0065}
+    assert len(out) == 3
+
+
+def pair(maps="yes"):
+    return ExactPair("K", "P", "tok", maps, datetime(2027, 1, 1, tzinfo=UTC), "S", None, False, 0.9, False)
+
+
+H = [datetime(2026, 10, 19, h, tzinfo=UTC) for h in range(4)]
+FEE = {"fee_type": "quadratic", "fee_multiplier": 1}
+
+
+def test_gaps_directions_and_mapping():
+    k = [{"ts": H[0], "yes_bid": 0.30, "yes_ask": 0.40}]
+    pm = [{"ts": H[0].replace(minute=20), "price": 0.50}]  # truncated to the hour
+    r = {g["direction"]: g for g in gaps(pair("yes"), k, pm, FEE)}
+    assert r["k_yes_pm_no"]["k_price"] == 0.40 and r["k_yes_pm_no"]["pm_price"] == 0.50
+    assert abs(r["k_yes_pm_no"]["gross_gap"] - 0.10) < 1e-9
+    assert abs(r["k_no_pm_yes"]["k_price"] - 0.70) < 1e-9 and r["k_no_pm_yes"]["pm_price"] == 0.50
+    assert r["k_yes_pm_no"]["ts"] == H[0] and r["k_yes_pm_no"]["net_gap_top"] < r["k_yes_pm_no"]["gross_gap"]
+    r = {g["direction"]: g for g in gaps(pair("no"), k, pm, FEE)}  # flipped Polymarket leg
+    assert r["k_yes_pm_no"]["pm_price"] == 0.50 and r["k_no_pm_yes"]["pm_price"] == 0.50
+    pm = [{"ts": H[0], "price": 0.2}]
+    r = {g["direction"]: g for g in gaps(pair("no"), k, pm, FEE)}
+    assert r["k_yes_pm_no"]["pm_price"] == 0.2 and abs(r["k_no_pm_yes"]["pm_price"] - 0.8) < 1e-9
+
+
+def test_gaps_skip_missing_hours():
+    k = [{"ts": H[0], "yes_bid": 0.3, "yes_ask": 0.4}, {"ts": H[1], "yes_bid": None, "yes_ask": None},
+         {"ts": H[2], "yes_bid": 0.3, "yes_ask": 0.4}]
+    pm = [{"ts": H[0], "price": 0.5}, {"ts": H[1], "price": 0.5}, {"ts": H[3], "price": 0.5}]
+    assert {g["ts"] for g in gaps(pair(), k, pm, FEE)} == {H[0]}

@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 
 from venue_arb import http
 from venue_arb.models import Level, Listing
@@ -61,4 +61,27 @@ def parse_book(payload: dict, depth: int = 10) -> list[Level]:
     for side, bids in (("yes", book.get("no_dollars") or []), ("no", book.get("yes_dollars") or [])):
         asks = sorted((round(1 - float(p), 4), float(s)) for p, s in bids)[:depth]
         out += [Level(side, i, p, s) for i, (p, s) in enumerate(asks)]
+    return out
+
+
+CHUNK_S = 60 * 86400
+
+
+def _price(side: dict | None) -> float | None:
+    # live fields are *_dollars, the historical endpoint's are bare
+    v = (side or {}).get("close_dollars", (side or {}).get("close"))
+    return None if v is None else float(v)
+
+
+def fetch_candles(series: str, ticker: str, start_ts: int, end_ts: int, get=http.get_json) -> list[dict]:
+    """Hourly yes bid/ask closes, keyed by the candle's period start (UTC, truncated to the hour)."""
+    out = []
+    for lo in range(start_ts, end_ts, CHUNK_S):
+        params = {"start_ts": lo, "end_ts": min(lo + CHUNK_S, end_ts), "period_interval": 60}
+        page = get(f"{API}/series/{series}/markets/{ticker}/candlesticks", params=params)
+        if not page:  # 404: settled before the live cutoff
+            page = get(f"{API}/historical/markets/{ticker}/candlesticks", params=params)
+        for c in page.get("candlesticks") or []:
+            ts = datetime.fromtimestamp(c["end_period_ts"] - 3600, UTC).replace(minute=0, second=0, microsecond=0)
+            out.append({"ts": ts, "yes_bid": _price(c.get("yes_bid")), "yes_ask": _price(c.get("yes_ask"))})
     return out

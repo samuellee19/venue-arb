@@ -1,12 +1,13 @@
 import json
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 
 from venue_arb import http
 from venue_arb.models import Level, Listing
 
 GAMMA = "https://gamma-api.polymarket.com"
 CLOB = "https://clob.polymarket.com"
+PM_CHUNK_S = 14 * 86400
 
 log = logging.getLogger(__name__)
 
@@ -64,3 +65,13 @@ def parse_book(payload: dict, depth: int = 10) -> list[Level]:
     return [Level("yes", i, p, s) for i, (p, s) in enumerate(asks)] + [
         Level("no", i, round(1 - p, 4), s) for i, (p, s) in enumerate(bids)
     ]
+
+
+def fetch_price_history(token_id: str, start_ts: int, end_ts: int, get=http.get_json) -> list[dict]:
+    """Hourly traded/mid price of the token (not an ask)."""
+    out = []
+    for lo in range(start_ts, end_ts, PM_CHUNK_S):  # long ranges at fidelity=60 come back empty, so chunk
+        params = {"market": token_id, "startTs": lo, "endTs": min(lo + PM_CHUNK_S, end_ts), "fidelity": 60}
+        out += [{"ts": datetime.fromtimestamp(h["t"], UTC), "price": float(h["p"])}
+                for h in get(f"{CLOB}/prices-history", params=params).get("history") or []]
+    return out
