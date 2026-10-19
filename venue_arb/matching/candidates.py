@@ -41,6 +41,6 @@ def embed_pairs(kalshi, pm, kvec, pvec, k=5, min_sim=0.75, max_days=31):
 
 
 def merge(rule: list, emb: list) -> list[tuple[str, str, float, str]]:
-    out = {(a, b): (a, b, s, "embedding") for a, b, s in emb}
+    out = {(a, b): (a, b, s, "embed") for a, b, s in emb}
     out.update({(a, b): (a, b, s, "rule") for a, b, s in rule})
     return list(out.values())
