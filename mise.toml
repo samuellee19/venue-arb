@@ -1,0 +1,16 @@
+[tools]
+python = "3.14"
+
+[env]
+BWS_PROJECT_ID = "42f2b924-cf96-49c8-85a3-b4e4001765b4"
+MLFLOW_TRACKING_URI = "http://localhost:5050"
+PREFECT_API_URL = "http://127.0.0.1:4200/api"
+# least-privilege DB logins (not secrets); passwords VENUE_ARB_PG_PASSWORD / VENUE_ARB_CH_PASSWORD come via `secrets`
+PGHOST = "127.0.0.1"
+PGPORT = "5432"
+PGDATABASE = "app"
+PGUSER = "venue_arb"
+CLICKHOUSE_HOST = "127.0.0.1"
+CLICKHOUSE_USER = "venue_arb"
+# the platform's qa package (not pip-installable); flows import it, pure modules never do
+PYTHONPATH = "{{env.HOME}}/platform"
