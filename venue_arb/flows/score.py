@@ -34,7 +34,16 @@ WHERE ts >= {start:DateTime64(3, 'UTC')} AND ts < {end:DateTime64(3, 'UTC')}
 UPSERT = (f"INSERT INTO {OPPS} ({', '.join(OPP_COLS)}) VALUES ({', '.join(['%s'] * len(OPP_COLS))}) "
           "ON CONFLICT (kalshi_id, pm_id, direction, start_ts) DO UPDATE SET "
           + ", ".join(f"{c} = EXCLUDED.{c}" for c in OPP_COLS[4:]) + ", scored_at = now()")
+# an episode still open at the window start: read books back to its start so it re-forms under the same key
+OPEN_START = (f"SELECT min(start_ts) FROM {OPPS} WHERE end_ts >= %(start)s - make_interval(secs => %(gap)s)")
 logging.getLogger("httpx").setLevel(logging.WARNING)
+
+
+def upsert_opportunities(conn, opps: list[dict]) -> int:
+    """Upsert episodes; returns rows written in this call. Caller holds one transaction so now() is fixed."""
+    conn.cursor().executemany(UPSERT, [tuple(o[c] for c in OPP_COLS) for o in opps])
+    (n,) = conn.execute(f"SELECT count(*) FROM {OPPS} WHERE scored_at = now()").fetchone()
+    return n
 
 
 @flow(name=PIPELINE)
@@ -49,6 +58,11 @@ def score_flow(window_hours: int = 26, end: datetime | None = None) -> dict:
         start = end - timedelta(hours=window_hours)
         with db.pg() as conn:
             pairs = eligible(load_eligible(conn))
+            (open_start,) = conn.execute(OPEN_START, {"start": start, "gap": episodes.MAX_GAP_S}).fetchone()
+        # ponytail: an episode first seen already truncated (first run, or an outage longer than the window) keeps
+        # its truncated start; later runs extend that row. Full history needs one re-score from the books' start.
+        if open_start and open_start < start:
+            start = open_start
         fees = {s: kalshi.fetch_series(s) for s in {p.kalshi_series for p in pairs}}
         ch = db.ch()
         snaps = scoring.snapshots(ch.query(BOOKS_SQL, parameters={
@@ -80,8 +94,7 @@ def score_flow(window_hours: int = 26, end: datetime | None = None) -> dict:
             results.append(checks.expect_count_match(len(rows), stored, EDGES, tolerance=0.01))
         opps = [scoring.opportunity_row(e) for e in eps]
         with db.pg() as conn, conn.transaction():  # qa.db is autocommit; one transaction keeps now() fixed
-            conn.cursor().executemany(UPSERT, [tuple(o[c] for c in OPP_COLS) for o in opps])
-            (n,) = conn.execute(f"SELECT count(*) FROM {OPPS} WHERE scored_at = now()").fetchone()
+            n = upsert_opportunities(conn, opps)
         results.append(checks.expect_count_match(len(opps), n, OPPS))
         results += sql.run_all(pattern="edges_*.sql", directory=SQL_CHECKS)
         results += sql.run_all(pattern="opportunities_*.sql", directory=SQL_CHECKS)

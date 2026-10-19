@@ -14,6 +14,7 @@ JOIN venue_arb.listings p ON p.venue = a.b_venue AND p.market_id = a.b_id AND p.
 LEFT JOIN venue_arb.reviews r USING (a_venue, a_id, a_version, b_venue, b_id, b_version)
 WHERE a.a_venue = %(a)s AND a.b_venue = %(b)s
   AND k.last_seen > now() - interval '2 hours' AND p.last_seen > now() - interval '2 hours'
+  AND k.close_time > now() AND p.close_time > now()
 ORDER BY k.market_id, p.market_id, a.created_at DESC
 """
 
