@@ -16,7 +16,7 @@ Environment=PREFECT_API_URL=http://127.0.0.1:4200/api
 Environment=MLFLOW_TRACKING_URI=http://localhost:5050
 Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
 Environment=PYTHONPATH=%h/platform
-ExecStart=%h/.local/bin/secrets %h/.local/bin/uv run python -m venue_arb.collect
+ExecStart=%h/.local/bin/mise exec -- %h/.local/bin/secrets uv run python -m venue_arb.collect
 Restart=always
 RestartSec=30
 
