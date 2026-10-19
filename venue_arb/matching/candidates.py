@@ -20,7 +20,8 @@ def rule_pairs(kalshi: list[dict], pm: list[dict]) -> list[tuple[str, str, float
             continue
         name = calendar.month_name[month]
         for p in pm:
-            if p["category"] != "fed_macro" or name.lower() not in p["title"].lower() or _days(k, p) > 2:
+            if (p["category"] != "fed_macro" or not re.search(rf"\b{name}\b", p["title"], re.IGNORECASE)
+                    or _days(k, p) > 2):
                 continue
             # year must be in the title, else fall back to the Polymarket close_time year
             years = re.findall(r"\b(20\d\d)\b", p["title"]) or [str(p["close_time"].year)]

@@ -129,6 +129,8 @@ def daily_budget(month_spend: float, today_spend: float, today: date, monthly: f
 _KEY = "a_venue=%s AND a_id=%s AND a_version=%s AND b_venue=%s AND b_id=%s AND b_version=%s"
 
 
+TRANSIENT_ERRORS = frozenset(
+    {"APIConnectionError", "APITimeoutError", "RateLimitError", "InternalServerError", "OverloadedError"})
 MAX_PAIR_ERRORS = 3  # error attempts at the same versions before a pair is no longer retried
 MAX_CONSECUTIVE_ERRORS = 5  # an outage stops the run instead of logging estimated spend for every pair
 
@@ -152,7 +154,8 @@ def run(conn, pairs: list[tuple[dict, dict]], month_spend: float, budget: float 
             out["cached"] += 1
             continue
         (n_err,) = conn.execute(
-            f"SELECT count(*) FROM venue_arb.llm_attempts WHERE {_KEY} AND outcome = 'error'", key).fetchone()
+            f"SELECT count(*) FROM venue_arb.llm_attempts WHERE {_KEY} AND outcome = 'error' "
+            "AND error_type <> ALL(%s)", (*key, list(TRANSIENT_ERRORS))).fetchone()
         if n_err >= MAX_PAIR_ERRORS:
             out["skipped_failing"] += 1
             continue

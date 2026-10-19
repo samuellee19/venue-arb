@@ -1,6 +1,6 @@
 from collections import Counter
 
-from venue_arb.matching.review import BANDS, precision, recall, stratified_sample
+from venue_arb.matching.review import BANDS, precision, recall, stratified_sample, trust
 
 
 def rows():
@@ -34,3 +34,9 @@ def test_precision_excludes_unsure():
 def test_recall():
     known = [("k1", "p1"), ("k2", "p2"), ("k3", "p3"), ("k4", "p4")]
     assert recall(known, {("k1", "p1"), ("k2", "p2"), ("x", "y")}) == 0.5
+
+
+def test_trust_pass_and_threshold():
+    assert trust(["correct"] * 150) == (1.0, 150, True)
+    assert not trust(["correct"] * 149)[2]
+    assert trust(["correct"] * 19 + ["wrong"]) == (0.95, 20, False)

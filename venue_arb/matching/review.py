@@ -44,5 +44,10 @@ def precision(labels: list[str]) -> tuple[float, int]:
     return (sum(x == "correct" for x in used) / len(used) if used else 0.0), len(used)
 
 
+def trust(labels: list[str]) -> tuple[float, int, bool]:
+    p, n = precision(labels)
+    return p, n, p >= 0.95 and n >= 150
+
+
 def recall(known: list[tuple[str, str]], found: set[tuple[str, str]]) -> float:
     return sum(p in found for p in known) / len(known) if known else 0.0

@@ -37,6 +37,12 @@ def test_rule_pairs_fomc_month():
     assert rule_pairs(k, [row("p", title="Fed decision in October 2025?")]) == []
 
 
+def test_rule_pairs_month_word_boundary():
+    k = [row("k", event_id="KXFEDDECISION-26MAY")]
+    assert rule_pairs(k, [row("p", title="Will the Fed cut in May 2026?")]) == [("k", "p", 1.0)]
+    assert rule_pairs(k, [row("p", title="Maybe a Fed cut in 2026?")]) == []
+
+
 def test_merge_prefers_rule():
     out = merge([("k", "p", 1.0)], [("k", "p", 0.8), ("k", "q", 0.9)])
     assert sorted(out) == [("k", "p", 1.0, "rule"), ("k", "q", 0.9, "embed")]

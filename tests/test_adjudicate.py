@@ -42,12 +42,12 @@ class Cur:
 
 
 class FakeConn:
-    def __init__(self, cached=(), errors=(), old=()):
+    def __init__(self, cached=(), errors=(), old=(), error_type="X"):
         self.cached = set(cached)  # (a_id, a_version, b_id, b_version) stored at the current prompt version
         self.old = set(old)  # same, stored at prompt v1
         self.sqls = []
         self.inserts = []  # adjudications rows
-        self.attempts = [{"pair": k, "outcome": "error", "error_type": "X", "cost": 0.0} for k in errors]
+        self.attempts = [{"pair": k, "outcome": "error", "error_type": error_type, "cost": 0.0} for k in errors]
 
     def execute(self, sql, params=()):
         pair = tuple(params[i] for i in (1, 2, 4, 5)) if params else None
@@ -55,7 +55,9 @@ class FakeConn:
             assert "venue_arb.llm_attempts" in sql  # spend comes from the ledger, not adjudications
             return Cur((1.5,))
         if "count(*) FROM venue_arb.llm_attempts" in sql:
-            return Cur((sum(a["pair"] == pair and a["outcome"] == "error" for a in self.attempts),))
+            transient = params[-1] if len(params) > 6 else ()
+            return Cur((sum(a["pair"] == pair and a["outcome"] == "error" and a["error_type"] not in transient
+                            for a in self.attempts),))
         if sql.startswith("SELECT 1 FROM venue_arb.adjudications"):
             hit = pair in self.cached and params[6] == PROMPT_VERSION or pair in self.old and params[6] == "v1"
             return Cur((1,) if hit else None)
@@ -260,3 +262,12 @@ def test_tail_risks_normalized():
     assert tr('["a", "b"]') == "a; b"
     assert tr("plain") == "plain"
     assert tr([]) is None and tr("") is None and tr("[]") is None
+
+
+def test_transient_errors_do_not_cap_pair():
+    pair = [(listing("k1", "v"), listing("p1", "w"))]
+    e = [("k1", "v", "p1", "w")] * 3
+    out = run(FakeConn(errors=e, error_type="RateLimitError"), pair, 0.0, call=FakeCall())
+    assert out["adjudicated"] == 1 and out["skipped_failing"] == 0
+    out = run(FakeConn(errors=e, error_type="BilledError"), pair, 0.0, call=FakeCall())
+    assert out["adjudicated"] == 0 and out["skipped_failing"] == 1
