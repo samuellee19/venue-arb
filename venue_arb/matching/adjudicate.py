@@ -1,12 +1,13 @@
 """LLM adjudication of Kalshi/Polymarket pairs: structured verdict, version-keyed cache, monthly budget."""
 
 import calendar
+import json
 import logging
 from datetime import date
 from typing import Literal
 
 import anthropic
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from venue_arb.config import LLM_MODEL, MONTHLY_LLM_BUDGET_USD
 
@@ -27,7 +28,20 @@ class Verdict(BaseModel):
     reason: str  # one plain sentence: "same event because X, differs by Y"
     confidence: float = Field(ge=0, le=1)
     # low-probability clauses that could make the two resolve differently, one short sentence each
-    tail_risks: str | None = None
+    tail_risks: str | list[str] | None = None
+
+    @field_validator("tail_risks", mode="before")
+    @classmethod
+    def _flatten_tail_risks(cls, v):
+        """The model may send a list or a JSON-list string; store one plain string, None if empty."""
+        if isinstance(v, str) and v.strip().startswith("["):
+            try:
+                v = json.loads(v)
+            except ValueError:
+                pass
+        if isinstance(v, list):
+            v = "; ".join(str(x).strip() for x in v if str(x).strip())
+        return v.strip() or None if isinstance(v, str) else v
 
 
 _TOOL = {

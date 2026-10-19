@@ -8,5 +8,6 @@ JOIN venue_arb.listings lb ON lb.venue = c.b_venue AND lb.market_id = c.b_id
 WHERE c.score >= 0.9 AND la.last_seen > now() - INTERVAL '2 hours' AND lb.last_seen > now() - INTERVAL '2 hours'
   AND NOT EXISTS (SELECT 1 FROM venue_arb.adjudications d
                   WHERE d.a_venue = c.a_venue AND d.a_id = c.a_id AND d.a_version = la.version
-                    AND d.b_venue = c.b_venue AND d.b_id = c.b_id AND d.b_version = lb.version)
+                    AND d.b_venue = c.b_venue AND d.b_id = c.b_id AND d.b_version = lb.version
+                    AND d.prompt_version = 'v2')  -- keep equal to adjudicate.PROMPT_VERSION
 LIMIT 10

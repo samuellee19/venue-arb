@@ -250,3 +250,13 @@ def test_prompt_v2_mentions_rules():
 def test_verdict_tail_risks_optional():
     assert V.tail_risks is None
     assert Verdict(relation="exact", yes_maps_to="yes", reason="x", confidence=0.9, tail_risks="a").tail_risks == "a"
+
+
+def test_tail_risks_normalized():
+    def tr(x):
+        return Verdict(relation="exact", yes_maps_to="yes", reason="x", confidence=0.9, tail_risks=x).tail_risks
+
+    assert tr(["a", "b"]) == "a; b"
+    assert tr('["a", "b"]') == "a; b"
+    assert tr("plain") == "plain"
+    assert tr([]) is None and tr("") is None and tr("[]") is None
