@@ -46,6 +46,10 @@ def parse_listings(events: list[dict]) -> list[Listing]:
     return out
 
 
+def fetch_series(ticker: str, get=http.get_json) -> dict:
+    return get(f"{API}/series/{ticker}").get("series", {})
+
+
 def fetch_book(ticker: str, get=http.get_json) -> dict:
     return get(f"{API}/markets/{ticker}/orderbook", params={"depth": 10})
 

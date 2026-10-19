@@ -65,3 +65,14 @@ def test_parse_listings_skips_malformed_and_handles_nulls():
     assert [x.market_id for x in ls] == ["NULL-RULES"]
     assert ls[0].rules == "\n"
     assert kalshi.parse_listings([ev | {"markets": None}]) == []
+
+
+def test_fetch_series_returns_series_dict():
+    seen = []
+
+    def fake(url, params=None, **kw):
+        seen.append(url)
+        return {"series": {"fee_type": "quadratic_with_maker_fees", "fee_multiplier": 1}}
+
+    assert kalshi.fetch_series("KXFEDDECISION", get=fake)["fee_multiplier"] == 1
+    assert seen == [f"{kalshi.API}/series/KXFEDDECISION"]

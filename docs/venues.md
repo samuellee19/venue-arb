@@ -27,6 +27,21 @@ did not settle when fetched is marked "unverified". Re-check before relying on a
 - Sources: <https://kalshi.com/docs/kalshi-fee-schedule.pdf>, <https://help.kalshi.com/en/articles/13823805-fees>.
   Verify the formula against the PDF before using it in P&L.
 
+### Fee verification attempt (2026-10-19, Task 2)
+- Fee schedule PDF <https://kalshi.com/docs/kalshi-fee-schedule.pdf>: HTTP 429 (Vercel Security Checkpoint) on
+  two further tries today, after the same on 2026-10-18/19. Coefficient 0.07 stays **secondhand, unverified**.
+- <https://help.kalshi.com/en/articles/13823805-fees> (page dated April 19, 2026) fetched OK but gives no
+  coefficient: "The complete Fee Schedule, and the math behind the fees, are posted at the bottom of our website".
+- <https://docs.kalshi.com/api-reference/market/get-series> defines `fee_type` ('quadratic' = "General Trading Fees
+  Table", 'quadratic_with_maker_fees' = that table plus maker fees, 'quadratic_with_combo_maker_fees', 'flat') and
+  `fee_multiplier` ("a floating point multiplier applied to the fee calculations"), no numbers.
+- <https://docs.kalshi.com/getting_started/fee_rounding>: trade fee is "rounded up to the nearest $0.000001" per
+  fill, then a rounding fee restores the account's balance precision ($0.01 for non-direct members). The code
+  rounds up to the cent per order, a conservative approximation.
+- Observed 2026-10-19: `GET /series/KXFEDDECISION` gives `fee_type = "quadratic_with_maker_fees"`,
+  `fee_multiplier = 1`. Code (`venue_arb/fees.py`) reads both per series and raises on any other `fee_type`
+  (`flat`, combo) rather than guess.
+
 ### Jurisdictions where trading is allowed (2026-10-19)
 - Unverified. The fetched docs pages list no country list. Kalshi is a US-regulated exchange; US availability is
   not confirmed from a primary page here. This project does not trade, so it only matters for the demo's framing.
@@ -54,6 +69,16 @@ did not settle when fetched is marked "unverified". Re-check before relying on a
   Other/General 0.05, Mentions 0.04, Tech 0.04, Geopolitics 0. Maker rebates of 15-25% of fees (Crypto 20%,
   Sports 15%, others 25%) are paid daily. Rounding rule: unverified.
   Source: <https://docs.polymarket.com/trading/fees>
+
+### Market fee schedule field (2026-10-19, observed)
+- Fed markets on Gamma carry `feesEnabled: true`, `feeType: "economics_fees"`, `feeSchedule: {"exponent": 1,
+  "rate": 0.05, "takerOnly": true, "rebateRate": 0.25}`. This matches the Economics 0.05 rate and 25% maker rebate
+  above. Code reads `rate` and `exponent` from the market's own `feeSchedule` (`listings.raw["market"]`) and charges
+  `C x rate x (p(1-p))^exponent` with no rounding (rule unverified).
+
+### Capital transfer assumption (2026-10-19)
+- Not a venue number. `fees.TRANSFER` assumes $10 fixed plus 10 bps per round trip (deposit/withdraw plus
+  USD to USDC), deliberately conservative, reported as a sensitivity column rather than baked into headline edge.
 
 ### Jurisdictions where trading is allowed (2026-10-19)
 - The geoblock page lists fully blocked regions (Iran, Syria, Cuba, North Korea, Crimea, Donetsk, Luhansk) and
