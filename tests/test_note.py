@@ -72,8 +72,12 @@ def test_render_sections_and_tiers_labeled(tmp_path):
                        [edge(m=m) for m in range(10)], [], adjudications={("K-1", "0xpm"): {"tail_risks": "Cancelled meeting resolves No", "model": "m", "prompt_version": "v2"}})
     text = note.render(s, tmp_path).read_text()
     for h in ("## Question", "## Data and window", "## Method", "## Results", "## Limits", "## Next",
-              "Contract-term differences (tail risk)", "k_price < 1", "Cancelled meeting resolves No"):
+              "Contract-term differences (tail risk)", "k_price < 1", "Cancelled meeting resolves No",
+              "venue_arb.screened_v2", "biased in both directions", "end_period_ts", "not to payout",
+              "up to about a cent per contract at mid prices", "jurisdictions each venue admits is itself unverified",
+              "builder's own reading"):
         assert h in text, h
+    assert "conservative" not in text and "fraction of a cent" not in text
     assert (tmp_path / "screened-net-gap.png").exists() and (tmp_path / "executable-edge.png").exists()
 
 
@@ -88,6 +92,13 @@ def test_tail_parser_keeps_lowercase_semicolons():
                                                        "A 12.5bp move rounds up"})
     assert lines[1:] == ["  - If cancelled, Kalshi pays; then Polymarket follows", "  - A 12.5bp move rounds up"]
     assert note._tail({"kalshi_id": "K", "tail_risks": None}) == ["- **K**: none recorded"]
+
+
+def test_tail_flags_pair_and_clause(monkeypatch):
+    monkeypatch.setattr(note, "NEEDS_REVIEW", {"K": {0: "pair reason", 2: "clause reason"}})
+    lines = note._tail({"kalshi_id": "K", "tail_risks": "A first; B second"})
+    assert "pair reason" in lines[0] and "clause reason" not in lines[0]
+    assert lines[1] == "  - A first" and lines[2].startswith("  - B second *(flagged") and "clause reason" in lines[2]
 
 
 def test_episode_survives_transfer():

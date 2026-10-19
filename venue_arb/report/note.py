@@ -24,12 +24,20 @@ SCREENED_PNG = "screened-net-gap.png"
 EXEC_PNG = "executable-edge.png"
 EARLY_DAYS = 7  # "early life": a pair's first week of screened history
 CONCLUSIVE_H = 14 * 24  # below this much executable data the short answer says it is too short to conclude
-# Author's reading of the LLM tail_risks text (2026-10-19, Task 8 review): clauses that read like real contract
-# differences or are muddled, to be checked at a human review sitting before v1-final. Drop entries once reviewed.
+# The builder's reading of the LLM tail_risks text (2026-10-19; Task 8 review + final review): clauses that read like
+# real contract differences or are muddled, to be checked at a human review sitting before v1-final.
+# {kalshi_id: {clause number (1-based, 0 = the pair as a whole): reason}}. Drop entries once reviewed.
+REVIEW_FLAGS_DATE = "2026-10-19"
 NEEDS_REVIEW = {
-    "KXFEDDECISION-26DEC-C25": "says Kalshi's rules do not define the rate variable precisely, which reads like a "
-                               "real resolution difference rather than a rare edge case",
-    "KXFEDDECISION-26DEC-H25": "the cancelled-meeting clause is muddled about which side resolves how",
+    "KXFEDDECISION-26DEC-C25": {0: "says Kalshi's rules do not define the rate variable precisely, which reads like "
+                                   "a real resolution difference rather than a rare edge case"},
+    "KXFEDDECISION-26DEC-H25": {0: "the cancelled-meeting clause is muddled about which side resolves how"},
+    "KXFEDDECISION-26OCT-H25": {3: "says the mapping holds only for exactly 25 bp moves, which reads like a bracket "
+                                   "difference rather than a rare edge case"},
+    "KXFEDDECISION-26OCT-H0": {2: "the 'resolves No on both' claim rests on Kalshi treating a 12.5 bp move as not "
+                                  "'maintains rate', which the clause does not show from Kalshi's rules"},
+    "KXFEDDECISION-27JAN-C25": {1: "argues from the sibling 'Fed maintains rate' market, not from the Cut 25bps "
+                                   "market's own cancellation rule"},
 }
 
 # Queries main() runs; quoted verbatim in the note so every number traces to a table.
@@ -319,10 +327,13 @@ def _tail(p: dict) -> list[str]:
     except ValueError:
         items = [x.strip() for x in re.split(r"; (?=[A-Z])", t) if x.strip()]
     items = items if isinstance(items, list) else [str(items)]
-    flag = f" *(needs human review before v1-final: {NEEDS_REVIEW[p['kalshi_id']]})*" \
-        if p["kalshi_id"] in NEEDS_REVIEW else ""
-    return ([f"- **{p['kalshi_id']}**" + ("" if items else ": none recorded") + flag]
-            + [f"  - {x}" for x in items])
+    flags = NEEDS_REVIEW.get(p["kalshi_id"], {})
+
+    def flag(i):
+        return f" *(flagged for human review before v1-final: {flags[i]})*" if i in flags else ""
+
+    return ([f"- **{p['kalshi_id']}**" + ("" if items else ": none recorded") + flag(0)]
+            + [f"  - {x}{flag(i)}" for i, x in enumerate(items, 1)])
 
 
 def _scope_line(tier: str, sc: dict | None) -> str:
@@ -361,7 +372,8 @@ def render(summary: dict, out_dir: Path) -> Path:
         "",
         ("When Kalshi and Polymarket list the same contract, do their prices leave money on the table after taker "
         "fees and order-book depth? Headline perspective: arbitrage that someone, somewhere could execute (both "
-        "legs tradable by some eligible participant), with a US-only cut alongside."),
+        "legs tradable by some eligible participant; which jurisdictions each venue admits is itself unverified, see "
+        "`docs/venues.md`), with a US-only cut alongside."),
         "",
         "**Short answer so far** (each figure is restated with its source under Results):",
         "",
@@ -370,8 +382,8 @@ def render(summary: dict, out_dir: Path) -> Path:
          + f"; the largest top-of-book edge after fees was {_f(ex['best_edge_max'], 4)} per $1 against a "
          f"{MIN_EDGE} threshold."),
         (f"- Screened tier (history, not executable): median hourly net gap {_f(sc['p50'])}; "
-         f"{_f(sc['share_ge_001'], pct=True)} of rows reached {MIN_EDGE} (a count that is conservative by up to "
-         "~$0.01 per contract, see Limits), "
+         f"{_f(sc['share_ge_001'], pct=True)} of rows reached {MIN_EDGE} (a count biased in both directions: the "
+         "1-contract fee ceiling pushes it down, the mid/last Polymarket price pushes it up; see Limits), "
          f"{_f(_share(sc['n_ge_001_early'], sc['n_ge_001']), pct=True)} of those in a pair's first {EARLY_DAYS} days."),
         "",
         "## Data and window",
@@ -440,9 +452,10 @@ def render(summary: dict, out_dir: Path) -> Path:
         f"- Rows (pair x hour x direction): {sc['rows']:,}.",
         f"- `net_gap_top` p50 {_f(sc['p50'])}, p90 {_f(sc['p90'])}, max {_f(sc['max'])}.",
         (f"- Rows with `net_gap_top > 0`: {sc['n_gt0']:,} ({_f(sc['share_gt0'], pct=True)}); "
-        f">= {MIN_EDGE}: {sc['n_ge_001']:,} ({_f(sc['share_ge_001'], pct=True)}). Both counts are conservative: "
-        "the 1-contract Kalshi fee is ceiled to the cent, which can understate a net gap by up to ~$0.01 "
-        "(see Limits)."),
+        f">= {MIN_EDGE}: {sc['n_ge_001']:,} ({_f(sc['share_ge_001'], pct=True)}). Both counts are biased in both "
+        "directions: the 1-contract Kalshi fee is ceiled to the cent, which can understate a net gap by up to "
+        "~$0.01 (biases the counts down), and Polymarket's history is a mid/last price rather than an ask "
+        "(biases them up). Which effect dominates is not known; see Limits."),
         (f"- Of the rows >= {MIN_EDGE}, {sc['n_ge_001_early']:,} ({_f(_share(sc['n_ge_001_early'], sc['n_ge_001']), pct=True)}) "
         f"fall in their pair's first {EARLY_DAYS} days of screened history, which hold "
         f"{_f(_share(sc['n_early'], sc['rows']), pct=True)} of all rows."),
@@ -488,8 +501,10 @@ def render(summary: dict, out_dir: Path) -> Path:
         "### Contract-term differences (tail risk)",
         "",
         ("Clauses the LLM adjudicator recorded as rare edge cases that keep each eligible pair exact (latest "
-        "adjudication at current versions). They are LLM-written, quoted verbatim, and not human-reviewed; "
-        "pairs whose clauses read like real differences or are muddled are flagged for review before v1-final."),
+        "adjudication at current versions). They are LLM-written, quoted verbatim, and not human-reviewed. "
+        f"The flags are the builder's own reading of the clauses, dated {REVIEW_FLAGS_DATE}, not a human review "
+        "sitting: a pair or clause that reads like a real difference or is muddled is flagged for review before "
+        "v1-final; an unflagged clause has not been checked either."),
         "",
         *[line for p in s["pair_list"] for line in _tail(p)],
         "",
@@ -500,14 +515,17 @@ def render(summary: dict, out_dir: Path) -> Path:
         (f"- The executable window is {hours:.1f} hours long. Zero or few episodes over hours says little about "
         "weeks; v1-final re-runs this after about four weeks of snapshots."),
         ("- Kalshi's 0.07 taker coefficient is secondhand and unverified (the fee-schedule PDF could not be fetched; "
-        "`docs/venues.md`). Polymarket's fee rounding rule is unverified. Either could move edges by a fraction "
-        "of a cent per contract."),
+        "`docs/venues.md`). Polymarket's fee rounding rule is unverified. Either could move edges by up to about "
+        "a cent per contract at mid prices."),
         ("- The screened tier charges Kalshi's fee on one contract, ceiled to the cent (at 50c: 0.07 x 0.25 = "
-         "$0.0175, charged as $0.02), so screened net gaps are conservative by up to ~$0.01 per contract, the "
+         "$0.0175, charged as $0.02), so screened net gaps can be understated by up to ~$0.01 per contract, the "
          "same size as the 0.01 threshold. The executable tier rounds per order-book slice, where the cent is "
          "spread over the slice's contracts."),
         ("- Polymarket price history is a traded/mid price, not an ask, so the screened tier overstates what was "
         "takeable; screened hours are never called arbitrage."),
+        ("- Annualized figures use days to the later of the two trading close times, not to payout. Polymarket "
+        "settles through UMA's oracle, which can pay out later than trading closes, so annualized edges are "
+        "slightly overstated."),
         (f"- Few exact pairs ({pc['eligible']}), from Kalshi series {series}; nothing here generalizes to "
         "other categories."),
         (f"- Matches were adjudicated by an LLM, {model_txt}; no human review sitting has happened yet: "
