@@ -46,15 +46,16 @@ SCREENED_SQL = ("SELECT ts, kalshi_id, pm_id, direction, net_gap_top FROM venue_
 EDGES_SQL = "SELECT ts, kalshi_id, pm_id, direction, best_edge, capacity_usd FROM venue_arb.edges FINAL"
 OPPS_SQL = ("SELECT kalshi_id, pm_id, direction, start_ts, end_ts, snapshots, max_edge, median_capacity_usd, "
             "annualized, us_executable, transfer_cost_usd FROM venue_arb.opportunities")
-# Tier scope (Ruling 11): pairs whose latest prompt-v2 adjudication is 'exact' and that carry no wrong/unsure review,
-# whether or not they are open now (a closed pair's history is still evidence).
+# Tier scope (Ruling 11): pairs whose latest adjudication at the current prompt version (%(pv)s) is 'exact' and that
+# carry no wrong/unsure review made at that prompt version, whether or not they are open now (a closed pair's history
+# is still evidence). A review made against an older prompt's verdict judged a different verdict and is ignored.
 SCOPE_SQL = """
 WITH latest AS (
   SELECT DISTINCT ON (a_id, b_id) a_id, b_id, relation FROM venue_arb.adjudications
-  WHERE a_venue = 'kalshi' AND b_venue = 'polymarket' AND prompt_version = 'v2'
+  WHERE a_venue = 'kalshi' AND b_venue = 'polymarket' AND prompt_version = %(pv)s
   ORDER BY a_id, b_id, created_at DESC),
 bad AS (SELECT DISTINCT a_id, b_id FROM venue_arb.reviews
-  WHERE a_venue = 'kalshi' AND b_venue = 'polymarket' AND label IN ('wrong', 'unsure')),
+  WHERE a_venue = 'kalshi' AND b_venue = 'polymarket' AND label IN ('wrong', 'unsure') AND prompt_version = %(pv)s),
 cl AS (SELECT DISTINCT ON (venue, market_id) venue, market_id, close_time FROM venue_arb.listings
   ORDER BY venue, market_id, last_seen DESC)
 SELECT l.a_id, l.b_id, l.relation, b.a_id IS NOT NULL AS bad_review,
@@ -398,7 +399,8 @@ def render(summary: dict, out_dir: Path) -> Path:
         f"over {ex['pairs']} pairs."
         + (f" Eligible pairs with no executable rows yet: {', '.join(no_books)}." if no_books else ""),
         ("- Tier scope: both tiers keep every pair whose latest prompt-v2 adjudication is `exact` and that has no "
-         "`wrong`/`unsure` review, whether or not it is open now (a closed pair's history is still evidence). "
+         "`wrong`/`unsure` review of that verdict (reviews made against an older prompt's verdict are ignored), "
+         "whether or not it is open now (a closed pair's history is still evidence). "
          "Pairs are Kalshi-Polymarket market pairs."),
         _scope_line("Screened", sc["scope"]),
         _scope_line("Executable", ex["scope"]),
@@ -417,7 +419,8 @@ def render(summary: dict, out_dir: Path) -> Path:
         "",
         ("**Eligibility.** The latest adjudication at the listings' current versions says `relation = 'exact'`, and "
         f"either confidence >= {MIN_CONFIDENCE} with no review, or a human review labeled `correct`; any `wrong` "
-        "or `unsure` review excludes the pair. Both listings must be open and seen in the last 2 hours."),
+        "or `unsure` review excludes the pair. The adjudication must be at the current prompt version, and only "
+        "reviews made of that verdict count. Both listings must be open and seen in the last 2 hours."),
         "",
         "**Two tiers, never combined.**",
         "",
@@ -569,6 +572,8 @@ def main(out_dir: Path = Path("reports")) -> Path:
     def utc(r: dict) -> dict:
         return {k: v.replace(tzinfo=UTC) if isinstance(v, datetime) and not v.tzinfo else v for k, v in r.items()}
 
+    from venue_arb.matching.adjudicate import PROMPT_VERSION
+
     with db.pg() as conn:
         pairs = eligible(load_eligible(conn))
         episodes = rows(conn.execute(OPPS_SQL))
@@ -576,7 +581,7 @@ def main(out_dir: Path = Path("reports")) -> Path:
                conn.execute(ADJ_SQL, {"k": [p.kalshi_id for p in pairs]}).fetchall()}
         scope = {(k, p): {"reason": None if rel == "exact" and not bad else
                           ("wrong/unsure review" if bad else f"latest v2 relation '{rel}'"), "closed": closed}
-                 for k, p, rel, bad, closed in conn.execute(SCOPE_SQL).fetchall()}
+                 for k, p, rel, bad, closed in conn.execute(SCOPE_SQL, {"pv": PROMPT_VERSION}).fetchall()}
     ch = db.ch()
     scr = [utc(dict(zip(("ts", "kalshi_id", "pm_id", "direction", "net_gap_top"), r, strict=True)))
            for r in ch.query(SCREENED_SQL).result_rows]

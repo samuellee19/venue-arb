@@ -12,6 +12,7 @@ KNOWN = Path("labels/known_pairs.csv")
 
 SAMPLE_SQL = """
 SELECT a.a_venue, a.a_id, a.a_version, a.b_venue, a.b_id, a.b_version, a.relation, a.reason, a.confidence,
+       a.prompt_version,
        l.category, l.title AS a_title, l.rules AS a_rules, l.close_time AS a_close,
        p.title AS b_title, p.rules AS b_rules, p.close_time AS b_close
 FROM venue_arb.adjudications a
@@ -19,10 +20,11 @@ JOIN venue_arb.listings l ON l.venue = a.a_venue AND l.market_id = a.a_id
 JOIN venue_arb.listings p ON p.venue = a.b_venue AND p.market_id = a.b_id
 WHERE a.relation <> 'different' AND l.category IS NOT NULL
 """
+# A review counts only for the verdict it judged: the adjudication's current prompt version (older ones re-judged).
 ALL_REVIEWS_SQL = """
 SELECT r.label
 FROM venue_arb.reviews r
-JOIN venue_arb.adjudications a USING (a_venue, a_id, a_version, b_venue, b_id, b_version)
+JOIN venue_arb.adjudications a USING (a_venue, a_id, a_version, b_venue, b_id, b_version, prompt_version)
 JOIN venue_arb.listings l ON l.venue = a.a_venue AND l.market_id = a.a_id AND l.version = a.a_version
 JOIN venue_arb.listings p ON p.venue = a.b_venue AND p.market_id = a.b_id AND p.version = a.b_version
 WHERE a.relation <> 'different'
@@ -40,9 +42,16 @@ def load_sample(conn, n: int = 200, seed: int = 7) -> list[dict]:
     return stratified_sample([dict(zip(cols, row, strict=True)) for row in cur.fetchall()], n, seed)
 
 
+LABELS_SQL = """
+SELECT a_venue, a_id, a_version, b_venue, b_id, b_version, r.label
+FROM venue_arb.reviews r JOIN venue_arb.adjudications a USING (a_venue, a_id, a_version, b_venue, b_id, b_version,
+                                                              prompt_version)
+"""
+
+
 def load_labels(conn) -> dict[tuple, str]:
-    rows = conn.execute("SELECT a_venue,a_id,a_version,b_venue,b_id,b_version,label FROM venue_arb.reviews").fetchall()
-    return {tuple(r[:6]): r[6] for r in rows}
+    """Reviews of each adjudication's current verdict; a review of an older prompt's verdict is not a label."""
+    return {tuple(r[:6]): r[6] for r in conn.execute(LABELS_SQL).fetchall()}
 
 
 def all_review_labels(conn) -> list[str]:
@@ -50,10 +59,14 @@ def all_review_labels(conn) -> list[str]:
 
 
 def save_review(conn, r: dict, label: str, note: str) -> None:
+    """Record the review with the prompt version of the verdict shown. The key has no prompt version (no ALTER of a
+    primary key: migrations are additive), so a review of an older prompt's verdict is replaced, not kept beside."""
     conn.execute(
-        "INSERT INTO venue_arb.reviews (a_venue,a_id,a_version,b_venue,b_id,b_version,label,note) "
-        "VALUES (%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING",
-        (*key(r), label, note or None),
+        "INSERT INTO venue_arb.reviews (a_venue,a_id,a_version,b_venue,b_id,b_version,label,note,prompt_version) "
+        "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT (a_venue,a_id,a_version,b_venue,b_id,b_version) DO UPDATE "
+        "SET label = EXCLUDED.label, note = EXCLUDED.note, prompt_version = EXCLUDED.prompt_version, "
+        "reviewed_at = now() WHERE venue_arb.reviews.prompt_version <> EXCLUDED.prompt_version",
+        (*key(r), label, note or None, r["prompt_version"]),
     )
 
 
