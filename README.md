@@ -16,6 +16,7 @@ secrets uv run python -m venue_arb.flows.catalog      # listings from both venue
 secrets uv run python -m venue_arb.flows.match        # candidates + LLM adjudication (re-judges pairs stored under an older prompt version)
 secrets uv run python -m venue_arb.flows.review_cli   # hand review of adjudicated matches
 secrets uv run python -m venue_arb.flows.score        # exact pairs: executable edges (ClickHouse) + opportunity episodes (Postgres)
+secrets uv run python -m venue_arb.report.note  # research note v1 -> reports/research-note-v1.md + PNGs (re-run after ~4 weeks of snapshots for v1-final)
 secrets uv run python -m venue_arb.collect            # order-book snapshot collector (runs forever)
 secrets uv run python -m db.migrate                   # apply migrations
 ```
