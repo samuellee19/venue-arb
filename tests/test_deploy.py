@@ -24,5 +24,6 @@ def test_unit_env_matches_mise(unit):
             assert env.get(k) == v, k
 
 
-def test_both_units_present():
-    assert [p.name for p in UNITS] == ["venue-arb-collector.service", "venue-arb-flows.service"]
+def test_units_present():
+    assert [p.name for p in UNITS] == ["venue-arb-catalog.service", "venue-arb-collector.service", "venue-arb-match.service"]
+    assert sorted(p.name for p in (ROOT / "deploy").glob("*.timer")) == ["venue-arb-catalog.timer", "venue-arb-match.timer"]

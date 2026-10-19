@@ -31,16 +31,18 @@ secrets uv run pytest -m integration    # needs the stack up
 
 ## Services
 
-Two systemd user units on the OptiPlex: `venue-arb-collector` (order-book snapshots) and `venue-arb-flows`
-(serves the catalog flow at :05 and the match flow at :20 each hour).
+On the OptiPlex: one long-running systemd user unit, `venue-arb-collector` (order-book snapshots), and two
+hourly timers that start oneshot units: `venue-arb-catalog.timer` (:05) and `venue-arb-match.timer` (:20). Runs
+still appear in Prefect as ad hoc flow runs. (Timers replace Prefect deployment schedules because the platform
+Prefect server's scheduler crashed on 2026-10-19; switch back once it's fixed.)
 
 ```bash
 mkdir -p ~/.config/systemd/user
-cp deploy/*.service ~/.config/systemd/user/ && systemctl --user daemon-reload
-systemctl --user enable --now venue-arb-collector venue-arb-flows
+cp deploy/*.service deploy/*.timer ~/.config/systemd/user/ && systemctl --user daemon-reload
+systemctl --user enable --now venue-arb-collector venue-arb-catalog.timer venue-arb-match.timer
 loginctl enable-linger "$USER"          # keep them running after logout
-systemctl --user status venue-arb-collector venue-arb-flows
-journalctl --user -u venue-arb-collector -u venue-arb-flows -f
+systemctl --user list-timers 'venue-arb-*'
+journalctl --user -u venue-arb-collector -u venue-arb-catalog -u venue-arb-match -f
 ```
 
 systemd doesn't load `mise.toml`, so each unit repeats its non-secret `[env]` values as `Environment=` lines
@@ -48,7 +50,7 @@ systemd doesn't load `mise.toml`, so each unit repeats its non-secret `[env]` va
 database superusers. After installing, check they connect as the project role:
 
 ```bash
-systemctl --user show venue-arb-collector venue-arb-flows -p Environment | tr ' ' '\n' \
+systemctl --user show venue-arb-collector venue-arb-catalog venue-arb-match -p Environment | tr ' ' '\n' \
   | grep -E '^(PGUSER|CLICKHOUSE_USER|PREFECT_API_URL)='
 cd ~/platform && docker compose exec postgres psql -U postgres -d app -c \
   "SELECT usename, count(*) FROM pg_stat_activity WHERE datname = 'app' GROUP BY 1"   # expect venue_arb, not postgres

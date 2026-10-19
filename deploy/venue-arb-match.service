@@ -1,7 +1,8 @@
 [Unit]
-Description=venue-arb flow server (catalog and match schedules)
+Description=venue-arb match flow (candidates + LLM adjudication); started hourly by venue-arb-match.timer
 
 [Service]
+Type=oneshot
 WorkingDirectory=%h/projects/venue-arb
 Environment=BWS_PROJECT_ID=42f2b924-cf96-49c8-85a3-b4e4001765b4
 # same values as mise.toml [env]: systemd loads no mise, and without PGUSER/CLICKHOUSE_USER qa.db
@@ -16,9 +17,4 @@ Environment=PREFECT_API_URL=http://127.0.0.1:4200/api
 Environment=MLFLOW_TRACKING_URI=http://localhost:5050
 Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
 Environment=PYTHONPATH=%h/platform
-ExecStart=%h/.local/bin/mise exec -- %h/.local/bin/secrets uv run python -m venue_arb.flows.serve
-Restart=always
-RestartSec=30
-
-[Install]
-WantedBy=default.target
+ExecStart=%h/.local/bin/mise exec -- %h/.local/bin/secrets uv run python -m venue_arb.flows.match
