@@ -1,9 +1,9 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from venue_arb import episodes
 from venue_arb.edges import Edge
 
-T0 = datetime(2026, 1, 1, tzinfo=timezone.utc)
+T0 = datetime(2026, 1, 1, tzinfo=UTC)
 CLOSE = T0 + timedelta(days=10)
 
 
