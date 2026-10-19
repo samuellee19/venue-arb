@@ -1,6 +1,8 @@
 """LLM adjudication of Kalshi/Polymarket pairs: structured verdict, version-keyed cache, monthly budget."""
 
+import calendar
 import logging
+from datetime import date
 from typing import Literal
 
 import anthropic
@@ -71,6 +73,19 @@ def month_spend(conn) -> float:
         "SELECT coalesce(sum(cost_usd),0) FROM venue_arb.adjudications WHERE created_at >= date_trunc('month', now())"
     ).fetchone()
     return float(row[0])
+
+
+def today_spend(conn) -> float:
+    row = conn.execute(
+        "SELECT coalesce(sum(cost_usd),0) FROM venue_arb.adjudications WHERE created_at >= date_trunc('day', now())"
+    ).fetchone()
+    return float(row[0])
+
+
+def daily_budget(month_spend: float, today_spend: float, today: date, monthly: float = MONTHLY_LLM_BUDGET_USD) -> float:
+    """Today's remaining allowance: an even split of what is left of the month, today included, minus today's spend."""
+    days_left = calendar.monthrange(today.year, today.month)[1] - today.day + 1
+    return max(0.0, (monthly - month_spend + today_spend) / days_left - today_spend)
 
 
 _KEY = "a_venue=%s AND a_id=%s AND a_version=%s AND b_venue=%s AND b_id=%s AND b_version=%s"

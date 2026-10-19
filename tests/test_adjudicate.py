@@ -1,7 +1,18 @@
+from datetime import date
+
 import pytest
 from pydantic import ValidationError
 
-from venue_arb.matching.adjudicate import PRICES, Verdict, adjudicate, month_spend, prompt_for, run
+from venue_arb.matching.adjudicate import (
+    PRICES,
+    Verdict,
+    adjudicate,
+    daily_budget,
+    month_spend,
+    prompt_for,
+    run,
+    today_spend,
+)
 
 V = Verdict(
     relation="exact", yes_maps_to="yes", deadline_diff=None, threshold_diff=None,
@@ -100,3 +111,24 @@ def test_error_isolated_and_counted():
 def test_verdict_rejects_bad_confidence():
     with pytest.raises(ValidationError):
         Verdict(relation="exact", yes_maps_to="yes", reason="x", confidence=1.5)
+
+
+def test_today_spend():
+    assert today_spend(FakeConn()) == 1.5
+
+
+def test_daily_budget_even_split():
+    assert daily_budget(0, 0, date(2026, 10, 19)) == pytest.approx(20 / 13)
+
+
+def test_daily_budget_nearly_spent_month():
+    assert daily_budget(19.99, 0, date(2026, 10, 19)) == pytest.approx(0.01 / 13)
+
+
+def test_daily_budget_zero_once_allowance_used():
+    assert daily_budget(1.54, 1.54, date(2026, 10, 19)) == 0.0  # allowance (20-1.54+1.54)/13 = 1.538 < 1.54
+    assert daily_budget(25, 0, date(2026, 10, 19)) == 0.0
+
+
+def test_daily_budget_last_day_takes_all_remaining():
+    assert daily_budget(15, 1, date(2026, 10, 31)) == pytest.approx(5.0)  # 20 - 14 spent before today - 1 spent today

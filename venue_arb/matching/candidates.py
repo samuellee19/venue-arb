@@ -44,3 +44,20 @@ def merge(rule: list, emb: list) -> list[tuple[str, str, float, str]]:
     out = {(a, b): (a, b, s, "embed") for a, b, s in emb}
     out.update({(a, b): (a, b, s, "rule") for a, b, s in rule})
     return list(out.values())
+
+
+def needs_embedding(rows: list[dict], have: set[tuple[str, str, str]]) -> list[dict]:
+    return [r for r in rows if (r["venue"], r["market_id"], r["version"]) not in have]
+
+
+def unadjudicated(cands: list[tuple[str, str, float, str]], kalshi: dict, pm: dict,
+                  done: set[tuple[str, str, str, str]], limit: int) -> list[tuple[dict, dict]]:
+    """Top `limit` candidate pairs by score with no adjudication at the current versions (`done` holds
+    (a_id, a_version, b_id, b_version)). `kalshi`/`pm` map market_id to the current listing row."""
+    out = []
+    for a, b, *_ in sorted(cands, key=lambda c: -c[2]):
+        if len(out) == limit:
+            break
+        if a in kalshi and b in pm and (a, kalshi[a]["version"], b, pm[b]["version"]) not in done:
+            out.append((kalshi[a], pm[b]))
+    return out
