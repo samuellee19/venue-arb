@@ -1,15 +1,17 @@
 """LLM adjudication of Kalshi/Polymarket pairs: structured verdict, version-keyed cache, monthly budget."""
 
+import logging
 from typing import Literal
 
 import anthropic
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, ValidationError
 
 from venue_arb.config import LLM_MODEL, MONTHLY_LLM_BUDGET_USD
 
 # USD per million input/output tokens. Source: claude-api skill model table, 2026-10-19
 # (Haiku 5.5, prompts up to 100K tokens; our prompts are ~1-2K).
 PRICES: dict[str, tuple[float, float]] = {"claude-haiku-5-5": (0.10, 0.50)}
+log = logging.getLogger(__name__)
 EST_CALL_USD = 0.002  # pre-call ceiling for the budget check (real calls run ~0.0005)
 
 
@@ -20,7 +22,7 @@ class Verdict(BaseModel):
     threshold_diff: str | None = None
     resolution_diff: str | None = None
     reason: str  # one plain sentence: "same event because X, differs by Y"
-    confidence: float  # 0..1
+    confidence: float = Field(ge=0, le=1)
 
 
 _TOOL = {
@@ -59,8 +61,8 @@ def _call_claude(prompt: str) -> tuple[Verdict, int, int]:
 
 
 def adjudicate(a: dict, b: dict, call=_call_claude) -> tuple[Verdict, float]:
+    pin, pout = PRICES[LLM_MODEL]  # before the paid call: an unpriced model override fails without spending
     verdict, tin, tout = call(prompt_for(a, b))
-    pin, pout = PRICES[LLM_MODEL]
     return verdict, (tin * pin + tout * pout) / 1e6
 
 
@@ -76,7 +78,7 @@ _KEY = "a_venue=%s AND a_id=%s AND a_version=%s AND b_venue=%s AND b_id=%s AND b
 
 def run(conn, pairs: list[tuple[dict, dict]], month_spend: float, budget: float = MONTHLY_LLM_BUDGET_USD,
         call=_call_claude) -> dict:
-    out = {"adjudicated": 0, "cached": 0, "skipped_budget": 0, "spend": 0.0}
+    out = {"adjudicated": 0, "cached": 0, "skipped_budget": 0, "errors": 0, "spend": 0.0}
     for a, b in pairs:
         key = ("kalshi", a["market_id"], a["version"], "polymarket", b["market_id"], b["version"])
         if conn.execute(f"SELECT 1 FROM venue_arb.adjudications WHERE {_KEY}", key).fetchone():
@@ -85,7 +87,13 @@ def run(conn, pairs: list[tuple[dict, dict]], month_spend: float, budget: float 
         if month_spend + out["spend"] + EST_CALL_USD > budget:
             out["skipped_budget"] += 1
             continue
-        v, cost = adjudicate(a, b, call)
+        try:
+            v, cost = adjudicate(a, b, call)
+        except (anthropic.APIError, StopIteration, ValidationError) as e:
+            log.warning("adjudication failed for %s / %s: %s", a["market_id"], b["market_id"], type(e).__name__)
+            out["errors"] += 1
+            out["spend"] += EST_CALL_USD  # the call may have been billed; keep the budget stop conservative
+            continue
         conn.execute(
             "INSERT INTO venue_arb.adjudications (a_venue,a_id,a_version,b_venue,b_id,b_version,model,relation,"
             "yes_maps_to,deadline_diff,threshold_diff,resolution_diff,reason,confidence,cost_usd) "

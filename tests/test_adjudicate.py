@@ -81,3 +81,22 @@ def test_adjudicate_cost_and_prompt():
 
 def test_month_spend():
     assert month_spend(FakeConn()) == 1.5
+
+
+def test_error_isolated_and_counted():
+    n = [0]
+
+    def flaky(prompt):
+        n[0] += 1
+        if n[0] == 1:
+            Verdict.model_validate({"relation": "maybe"})
+        return V, 1000, 0
+
+    pairs = [(listing(f"k{i}", "v"), listing(f"p{i}", "w")) for i in range(2)]
+    out = run(FakeConn(), pairs, 0.0, call=flaky)
+    assert out["adjudicated"] == 1 and out["errors"] == 1
+
+
+def test_verdict_rejects_bad_confidence():
+    with pytest.raises(ValidationError):
+        Verdict(relation="exact", yes_maps_to="yes", reason="x", confidence=1.5)
