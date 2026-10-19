@@ -1,0 +1,16 @@
+# draft: Sam to confirm
+# Fed-decision pairs: same FOMC meeting, same outcome, same threshold (checked 2026-10-19 against live listings).
+# Left out: Kalshi ">25bps" vs Polymarket "50+ bps" (equal only if the Fed moves in 25bp steps). Polymarket rounds odd
+# moves up to the nearest 25bp bracket; Kalshi's rules are silent on that, so odd-size moves are an edge case.
+# BTC/ETH: none included. Polymarket's same-day price markets resolve on Binance BTC/USDT (noon ET) while Kalshi uses
+# CF Benchmarks RTI (2pm/5pm ET); Polymarket markets closing at the Kalshi times are Up/Down, not thresholds.
+kalshi_market_id,pm_market_id,note
+KXFEDDECISION-26OCT-C25,0x9cf563d7b55aa9aa876d5d7e55126347eee473f0ae56d799e325fdef2bf25297,October 2026 FOMC decrease interest rates by 25 bps
+KXFEDDECISION-26OCT-H0,0xdf9bf27ee5757c55b44b8b9826ddc9ec3a8809aa3278634c45edbb7fc8f1a3e3,October 2026 FOMC no change
+KXFEDDECISION-26OCT-H25,0x12aa13b3da17ceae1b0a59b5d5b77121e91bb79b4bb0b52bf6543ed3f8d0953b,October 2026 FOMC increase interest rates by 25 bps
+KXFEDDECISION-26DEC-C25,0xf17ad24eb4ad57926495b114149c765b9b95bc286eadc91cbbfa901ceb10d0b8,December 2026 FOMC decrease interest rates by 25 bps
+KXFEDDECISION-26DEC-H0,0x723822eb2b143cee54c0bd7c1efba322b21f0051984c266df8879c394f1011c0,December 2026 FOMC no change
+KXFEDDECISION-26DEC-H25,0x8a4196617dcb703e49d9bb36d3847bf6a75fd364dbd19f8d408ac944bf1a03d8,December 2026 FOMC increase interest rates by 25 bps
+KXFEDDECISION-27JAN-C25,0x0bbe79a986a3f84ea82ebe714159fcfaa488f80df878599e2cd9297ea57ee60f,January 2027 FOMC decrease interest rates by 25 bps
+KXFEDDECISION-27JAN-H0,0xf6e7c89ec4b5d3c887ed9b70dfbcac9392e287367783ce475d32e8c16ed9f61c,January 2027 FOMC no change
+KXFEDDECISION-27JAN-H25,0x50642b28be893e8752649e9ae6d687558fc5dcfeeecd10713cf59ef6ea0edce4,January 2027 FOMC increase interest rates by 25 bps
