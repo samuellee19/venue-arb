@@ -35,11 +35,23 @@ Two systemd user units on the OptiPlex: `venue-arb-collector` (order-book snapsh
 (serves the catalog flow at :05 and the match flow at :20 each hour).
 
 ```bash
+mkdir -p ~/.config/systemd/user
 cp deploy/*.service ~/.config/systemd/user/ && systemctl --user daemon-reload
 systemctl --user enable --now venue-arb-collector venue-arb-flows
 loginctl enable-linger "$USER"          # keep them running after logout
 systemctl --user status venue-arb-collector venue-arb-flows
 journalctl --user -u venue-arb-collector -u venue-arb-flows -f
+```
+
+systemd doesn't load `mise.toml`, so each unit repeats its non-secret `[env]` values as `Environment=` lines
+(`tests/test_deploy.py` fails if they drift). Without `PGUSER`/`CLICKHOUSE_USER` the services would log in as the
+database superusers. After installing, check they connect as the project role:
+
+```bash
+systemctl --user show venue-arb-collector venue-arb-flows -p Environment | tr ' ' '\n' \
+  | grep -E '^(PGUSER|CLICKHOUSE_USER|PREFECT_API_URL)='
+cd ~/platform && docker compose exec postgres psql -U postgres -d app -c \
+  "SELECT usename, count(*) FROM pg_stat_activity WHERE datname = 'app' GROUP BY 1"   # expect venue_arb, not postgres
 ```
 
 ## Schwab
