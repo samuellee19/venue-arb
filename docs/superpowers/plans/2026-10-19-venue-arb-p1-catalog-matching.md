@@ -428,7 +428,7 @@ usage from the response).
   it rebuilds the watchlist every 10 ticks, fetches each book (Kalshi by `market_id`, Polymarket by `yes_token`),
   and buffers rows. A failure on one market or venue is logged and counted, never raised. Every `flush_every` ticks
   it runs guards (`expect_schema`; `expect_rows ≥ 1` **per venue that was on the watchlist**), loads to ClickHouse,
-  runs `sql_checks/book_levels_*.sql`, and calls `store.record` (pipeline `venue_arb_books`). A failed guard
+  runs `qa.sql.run_all(pattern="book_levels_*.sql", directory=SQL_CHECKS)`, and calls `store.record` (pipeline `venue_arb_books`). A failed guard
   for one venue drops that venue's buffer and records the failure. The other venue still loads.
 - SQL checks: `book_levels_in_unit.sql` (error) returns rows with `price <= 0 OR price >= 1 OR size <= 0`.
   `book_levels_fresh.sql` (error) returns a row if the newest `ts` for any venue is more than 10 minutes old.
