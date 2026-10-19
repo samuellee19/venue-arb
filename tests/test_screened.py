@@ -34,7 +34,7 @@ def test_kalshi_candles_parse_and_historical_fallback():
     out = kalshi.fetch_candles("S", "S-T", 1787180000, 1787190000, get=hist)
     assert calls == [f"{kalshi.API}/series/S/markets/S-T/candlesticks", f"{kalshi.API}/historical/markets/S-T/candlesticks"]
     assert out == [{"ts": datetime.fromtimestamp(1787183220 - 3600, UTC).replace(minute=0, second=0),
-                    "yes_bid": 0.0, "yes_ask": 1.0}]
+                    "yes_bid": None, "yes_ask": None}]
 
 
 def test_kalshi_candles_chunk_60_days():
@@ -42,7 +42,7 @@ def test_kalshi_candles_chunk_60_days():
 
     def fake(url, params=None, **kw):
         seen.append((params["start_ts"], params["end_ts"]))
-        return {"candlesticks": []}
+        return {"candlesticks": [{"end_period_ts": 7200}]}
 
     kalshi.fetch_candles("S", "T", 0, 130 * 86400, get=fake)
     assert len(seen) == 3 and all(e - s <= 60 * 86400 for s, e in seen) and seen[1][0] == seen[0][1]
@@ -82,3 +82,27 @@ def test_gaps_skip_missing_hours():
          {"ts": H[2], "yes_bid": 0.3, "yes_ask": 0.4}]
     pm = [{"ts": H[0], "price": 0.5}, {"ts": H[1], "price": 0.5}, {"ts": H[3], "price": 0.5}]
     assert {g["ts"] for g in gaps(pair(), k, pm, FEE)} == {H[0]}
+
+
+def test_gaps_skip_empty_book_hours():
+    k = [{"ts": H[0], "yes_bid": None, "yes_ask": None}]
+    assert gaps(pair(), k, [{"ts": H[0], "price": 0.5}], FEE) == []
+
+
+def test_gaps_numeric_asymmetric_with_fees():
+    from venue_arb.fees import kalshi_taker_fee
+
+    k = [{"ts": H[0], "yes_bid": 0.30, "yes_ask": 0.40}]
+    r = {g["direction"]: g for g in gaps(pair("yes"), k, [{"ts": H[0], "price": 0.30}], FEE)}
+    a, b = r["k_yes_pm_no"], r["k_no_pm_yes"]
+    assert (a["k_price"], a["pm_price"]) == (0.40, 0.70) and abs(a["gross_gap"] - (-0.10)) < 1e-9
+    assert abs(b["k_price"] - 0.70) < 1e-9 and b["pm_price"] == 0.30 and abs(b["gross_gap"]) < 1e-9
+    assert abs(a["net_gap_top"] - (a["gross_gap"] - kalshi_taker_fee(0.40, 1, "quadratic", 1))) < 1e-9
+    assert abs(a["net_gap_top"] - (-0.10 - 0.02)) < 1e-9  # ceil(7 * .4 * .6 = 1.68c) = 2c, Polymarket fees off
+
+
+def test_kalshi_candles_fall_back_on_empty_live_page():
+    def fake(url, params=None, **kw):
+        return {"candlesticks": []} if "/series/" in url else load("kalshi_candles_historical.json")
+
+    assert len(kalshi.fetch_candles("S", "T", 1787180000, 1787190000, get=fake)) == 1

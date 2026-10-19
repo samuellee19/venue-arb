@@ -73,15 +73,21 @@ def _price(side: dict | None) -> float | None:
     return None if v is None else float(v)
 
 
+def _quote(side: dict | None, empty: float) -> float | None:
+    # an empty side shows as ask 1.0 / bid 0.0: no executable price
+    v = _price(side)
+    return None if v == empty else v
+
+
 def fetch_candles(series: str, ticker: str, start_ts: int, end_ts: int, get=http.get_json) -> list[dict]:
     """Hourly yes bid/ask closes, keyed by the candle's period start (UTC, truncated to the hour)."""
     out = []
     for lo in range(start_ts, end_ts, CHUNK_S):
         params = {"start_ts": lo, "end_ts": min(lo + CHUNK_S, end_ts), "period_interval": 60}
         page = get(f"{API}/series/{series}/markets/{ticker}/candlesticks", params=params)
-        if not page:  # 404: settled before the live cutoff
+        if not page or not page.get("candlesticks"):  # 404 or empty: settled before the live cutoff
             page = get(f"{API}/historical/markets/{ticker}/candlesticks", params=params)
         for c in page.get("candlesticks") or []:
             ts = datetime.fromtimestamp(c["end_period_ts"] - 3600, UTC).replace(minute=0, second=0, microsecond=0)
-            out.append({"ts": ts, "yes_bid": _price(c.get("yes_bid")), "yes_ask": _price(c.get("yes_ask"))})
+            out.append({"ts": ts, "yes_bid": _quote(c.get("yes_bid"), 0.0), "yes_ask": _quote(c.get("yes_ask"), 1.0)})
     return out

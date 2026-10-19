@@ -33,8 +33,10 @@ GROUP BY venue, market_id
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
-def _start(first_seen, opened) -> datetime:
-    return datetime.fromisoformat(opened) if opened else first_seen
+def _start(first_seen, *opens) -> datetime:
+    """Earliest of first sighting and the venue's own open time(s), as aware UTC."""
+    ts = [first_seen] + [datetime.fromisoformat(o) for o in opens if o]
+    return min(t if t.tzinfo else t.replace(tzinfo=UTC) for t in ts)
 
 
 @flow(name=PIPELINE)
@@ -43,10 +45,10 @@ def screened_flow(end: datetime | None = None) -> dict:
     run_id = str(flow_run.get_id() or uuid.uuid4())
     results: list[checks.Result] = []
     try:
-        end = end or datetime.now(UTC)
+        end = (end or datetime.now(UTC)).replace(minute=0, second=0, microsecond=0)  # skip the in-progress hour
         with db.pg() as conn:
             pairs = eligible(load_eligible(conn))
-            starts = {r[0]: _start(r[1], r[2] or r[3]) for r in conn.execute(
+            starts = {r[0]: _start(r[1], r[2], r[3]) for r in conn.execute(
                 START_SQL, {"k": [p.kalshi_id for p in pairs], "p": [p.pm_id for p in pairs]}).fetchall()}
         fees = {s: kalshi.fetch_series(s) for s in {p.kalshi_series for p in pairs}}
         rows, per_pair = [], {}
@@ -60,13 +62,18 @@ def screened_flow(end: datetime | None = None) -> dict:
         pre = [checks.expect_schema(rows, CONTRACT, TABLE)]
         if pairs:
             pre.append(checks.expect_rows(len(rows), TABLE))
+        empty = sorted(k for k, n in per_pair.items() if n == 0)
+        pre.append(checks.Result("every_pair_has_rows", not empty, observed=len(empty), threshold=0,
+                                 detail=f"pairs without rows: {empty}", severity="warn", target=TABLE))
         results += pre
         checks.enforce(pre)
         ch = db.ch()
         if rows:
             ch.insert(TABLE, [[r[c] for c in COLUMNS] for r in rows], column_names=COLUMNS)
+            # k_price < 1 excludes the empty-book sentinel rows an earlier version wrote (no deletes allowed)
             (stored,) = ch.query(
-                f"SELECT count() FROM {TABLE} FINAL WHERE (kalshi_id, pm_id) IN {{ids:Array(Tuple(String, String))}}",
+                f"SELECT count() FROM {TABLE} FINAL WHERE k_price < 1 "
+                "AND (kalshi_id, pm_id) IN {ids:Array(Tuple(String, String))}",
                 parameters={"ids": sorted({(r["kalshi_id"], r["pm_id"]) for r in rows})}).result_rows[0]
             results.append(checks.expect_count_match(len(rows), stored, TABLE, tolerance=0.01))
         checks.enforce(results)
