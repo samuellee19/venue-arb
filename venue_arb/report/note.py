@@ -7,7 +7,8 @@ executable tier (our own order-book snapshots) are summarized from separate inpu
 combined into one number.
 """
 import json
-from collections import defaultdict
+import re
+from collections import Counter, defaultdict
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from statistics import median
@@ -22,6 +23,14 @@ NOTE = "research-note-v1.md"
 SCREENED_PNG = "screened-net-gap.png"
 EXEC_PNG = "executable-edge.png"
 EARLY_DAYS = 7  # "early life": a pair's first week of screened history
+CONCLUSIVE_H = 14 * 24  # below this much executable data the short answer says it is too short to conclude
+# Author's reading of the LLM tail_risks text (2026-10-19, Task 8 review): clauses that read like real contract
+# differences or are muddled, to be checked at a human review sitting before v1-final. Drop entries once reviewed.
+NEEDS_REVIEW = {
+    "KXFEDDECISION-26DEC-C25": "says Kalshi's rules do not define the rate variable precisely, which reads like a "
+                               "real resolution difference rather than a rare edge case",
+    "KXFEDDECISION-26DEC-H25": "the cancelled-meeting clause is muddled about which side resolves how",
+}
 
 # Queries main() runs; quoted verbatim in the note so every number traces to a table.
 SCREENED_SQL = ("SELECT ts, kalshi_id, pm_id, direction, net_gap_top FROM venue_arb.screened FINAL "
@@ -29,6 +38,23 @@ SCREENED_SQL = ("SELECT ts, kalshi_id, pm_id, direction, net_gap_top FROM venue_
 EDGES_SQL = "SELECT ts, kalshi_id, pm_id, direction, best_edge, capacity_usd FROM venue_arb.edges FINAL"
 OPPS_SQL = ("SELECT kalshi_id, pm_id, direction, start_ts, end_ts, snapshots, max_edge, median_capacity_usd, "
             "annualized, us_executable, transfer_cost_usd FROM venue_arb.opportunities")
+# Tier scope (Ruling 11): pairs whose latest prompt-v2 adjudication is 'exact' and that carry no wrong/unsure review,
+# whether or not they are open now (a closed pair's history is still evidence).
+SCOPE_SQL = """
+WITH latest AS (
+  SELECT DISTINCT ON (a_id, b_id) a_id, b_id, relation FROM venue_arb.adjudications
+  WHERE a_venue = 'kalshi' AND b_venue = 'polymarket' AND prompt_version = 'v2'
+  ORDER BY a_id, b_id, created_at DESC),
+bad AS (SELECT DISTINCT a_id, b_id FROM venue_arb.reviews
+  WHERE a_venue = 'kalshi' AND b_venue = 'polymarket' AND label IN ('wrong', 'unsure')),
+cl AS (SELECT DISTINCT ON (venue, market_id) venue, market_id, close_time FROM venue_arb.listings
+  ORDER BY venue, market_id, last_seen DESC)
+SELECT l.a_id, l.b_id, l.relation, b.a_id IS NOT NULL AS bad_review,
+       coalesce(least(k.close_time, p.close_time) <= now(), false) AS closed
+FROM latest l LEFT JOIN bad b USING (a_id, b_id)
+LEFT JOIN cl k ON k.venue = 'kalshi' AND k.market_id = l.a_id
+LEFT JOIN cl p ON p.venue = 'polymarket' AND p.market_id = l.b_id
+"""
 # latest adjudication at the listings' current versions, as in flows/exact_sql.ELIGIBLE_SQL
 ADJ_SQL = """
 SELECT DISTINCT ON (k.market_id, p.market_id) k.market_id, p.market_id, a.tail_risks, a.prompt_version, a.model
@@ -92,8 +118,8 @@ def _executable(edge_rows: list[dict], episodes: list[dict]) -> dict:
             series[k].append((ts, max(b)))
     dur = [(e["end_ts"] - e["start_ts"]).total_seconds() / 60 for e in episodes]
     cap = [e["median_capacity_usd"] for e in episodes]
-    # ponytail: episode profit upper bound = max_edge * contracts, contracts ~ capacity_usd / (1 - max_edge);
-    # store the episode's median avg_edge to tighten this if episodes start appearing
+    # ponytail: approximate and optimistic: profit ~ max_edge * contracts, contracts ~ capacity_usd / (1 - max_edge),
+    # i.e. the episode's best edge on all its median capacity. Store the episode's median avg_edge to tighten this.
     net_ok = sum(e["max_edge"] * e["median_capacity_usd"] / (1 - e["max_edge"]) > e["transfer_cost_usd"]
                  for e in episodes)
     in_ep = [(r["capacity_usd"], r["best_edge"]) for r in edge_rows for e in episodes
@@ -126,12 +152,37 @@ def _executable(edge_rows: list[dict], episodes: list[dict]) -> dict:
     }
 
 
+def _scoped(rows: list[dict], scope: dict | None, eligible_keys: set) -> tuple[list[dict], dict | None]:
+    """Keep rows of in-scope pairs; count pairs by status. scope: {(kalshi_id, pm_id): {"reason", "closed"}},
+    reason None = in scope. A pair with no prompt-v2 adjudication is out of scope."""
+    if scope is None:
+        return rows, None
+    keys = {(r["kalshi_id"], r["pm_id"]) for r in rows}
+
+    def why(k):
+        return scope[k]["reason"] if k in scope else "no prompt-v2 adjudication"
+
+    kept = {k for k in keys if why(k) is None}
+    closed = {k for k in kept - eligible_keys if scope[k]["closed"]}
+    return [r for r in rows if (r["kalshi_id"], r["pm_id"]) in kept], {
+        "pairs": len(kept), "eligible": len(kept & eligible_keys), "closed": len(closed),
+        "other": len(kept - eligible_keys - closed),
+        "excluded": dict(Counter(why(k) for k in keys - kept)),
+    }
+
+
 def summarize(pairs: list[ExactPair], screened_rows: list[dict], edge_rows: list[dict], episodes: list[dict],
-              *, adjudications: dict | None = None, generated_at: datetime | None = None) -> dict:
-    """Pure. `adjudications`: {(kalshi_id, pm_id): {"tail_risks", "model", "prompt_version"}} for eligible pairs."""
+              *, adjudications: dict | None = None, scope: dict | None = None,
+              generated_at: datetime | None = None) -> dict:
+    """Pure. `adjudications`: {(kalshi_id, pm_id): {"tail_risks", "model", "prompt_version"}} for eligible pairs.
+    `scope`: see `_scoped`; None keeps every row (no scope filter)."""
     adj = adjudications or {}
+    ek = {(p.kalshi_id, p.pm_id) for p in pairs}
+    screened_rows, sc_scope = _scoped(screened_rows, scope, ek)
+    edge_rows, ex_scope = _scoped(edge_rows, scope, ek)
+    episodes, _ = _scoped(episodes, scope, ek)
     reviewed = sum(p.reviewed for p in pairs)
-    us = [e for e in episodes if e["us_executable"]]
+    us = [e for e in episodes if e["us_executable"]]  # episodes already scoped above
     return {
         "generated_at": generated_at,
         "note": "" if pairs else "There are no eligible pairs at generation time, so there is nothing to score.",
@@ -141,8 +192,8 @@ def summarize(pairs: list[ExactPair], screened_rows: list[dict], edge_rows: list
                        "pm_fee": json.dumps(p.pm_fee_schedule, sort_keys=True) if p.pm_fees_enabled else "none",
                        **adj.get((p.kalshi_id, p.pm_id), {})} for p in sorted(pairs, key=lambda p: p.kalshi_id)],
         "fees": {"version": FEE_VERSION, "kalshi_rate": KALSHI_RATE, "transfer": TRANSFER},
-        "screened": _screened(screened_rows),
-        "executable": _executable(edge_rows, episodes),
+        "screened": {**_screened(screened_rows), "scope": sc_scope},
+        "executable": {**_executable(edge_rows, episodes), "scope": ex_scope},
         "jurisdiction": {
             "all_episodes": len(episodes),
             "us_episodes": len(us),
@@ -188,9 +239,11 @@ def _chart_screened(sc: dict, path: Path) -> str:
     fig, ax = plt.subplots(figsize=(8, 4), facecolor=SURFACE)
     _axes(ax)
     if len(v):
-        lo, hi = np.percentile(v, 0.5), max(np.percentile(v, 99.5), MIN_EDGE + 0.01)
+        w = 0.005  # bin edges on a 0.005 grid, so 0 and the 0.01 threshold fall on bin edges
+        lo = np.floor(np.percentile(v, 0.5) / w) * w
+        hi = np.ceil(max(np.percentile(v, 99.5), MIN_EDGE + 0.01) / w) * w
         n_lo, n_hi = int((v < lo).sum()), int((v > hi).sum())
-        ax.hist(np.clip(v, lo, hi), bins=np.linspace(lo, hi, 90), color=BLUE, rwidth=0.85)
+        ax.hist(np.clip(v, lo, hi), bins=np.arange(lo, hi + w / 2, w), color=BLUE, rwidth=0.85)
         ax.set_yscale("log")
         for x, lab, ha in ((0, "0 ", "right"), (MIN_EDGE, f" {MIN_EDGE} threshold", "left")):
             ax.axvline(x, color=INK2, linewidth=1, linestyle="--")
@@ -205,8 +258,8 @@ def _chart_screened(sc: dict, path: Path) -> str:
     fig.savefig(path, dpi=150, facecolor=SURFACE)
     plt.close(fig)
     return (f"Screened tier. Distribution of `net_gap_top` over all {sc['rows']:,} rows. The x-axis is clipped to the "
-            "0.5th-99.5th percentile (threshold kept in view); rows outside are pooled into the end bins and "
-            "counted in the note under the plot. Log y-axis so the thin positive tail is visible.")
+            "0.5th-99.5th percentile, rounded out to the 0.005 bin grid (threshold kept in view); rows outside are "
+            "pooled into the end bins and counted in the chart's footer line. Log y-axis so the thin positive tail is visible.")
 
 
 def _chart_executable(ex: dict, path: Path) -> str:
@@ -245,6 +298,8 @@ def _chart_executable(ex: dict, path: Path) -> str:
             ax.tick_params(axis="x", labelrotation=30, labelsize=6, labelbottom=True)
         fig.suptitle("Executable tier: best edge per snapshot (dashed = 0.01 threshold)", color=INK, fontsize=10,
                      x=0.01, ha="left")
+        fig.supylabel(r"best_edge (\$ per \$1 contract, after fees)", color=INK2, fontsize=8)
+        fig.supxlabel("snapshot time (UTC)", color=INK2, fontsize=8)
         fig.tight_layout()
         caption = ("Executable tier. There are 0 opportunity episodes, so there are no episode snapshots to plot "
                    "capacity against. Shown instead: each pair's best edge (better of the two directions, after "
@@ -256,14 +311,26 @@ def _chart_executable(ex: dict, path: Path) -> str:
 
 
 def _tail(p: dict) -> list[str]:
-    """Tail risks are stored as text, usually a JSON list; one sub-bullet per clause."""
+    """Tail risks are stored as text: clauses joined with "; ", or a JSON list. One sub-bullet per clause; a "; "
+    is a clause break only before an uppercase letter, so a semicolon inside a clause survives."""
     t = p.get("tail_risks")
     try:
         items = json.loads(t) if t else []
     except ValueError:
-        items = [x.strip() for x in t.split("; ") if x.strip()]
+        items = [x.strip() for x in re.split(r"; (?=[A-Z])", t) if x.strip()]
     items = items if isinstance(items, list) else [str(items)]
-    return [f"- **{p['kalshi_id']}**" + ("" if items else ": none recorded")] + [f"  - {x}" for x in items]
+    flag = f" *(needs human review before v1-final: {NEEDS_REVIEW[p['kalshi_id']]})*" \
+        if p["kalshi_id"] in NEEDS_REVIEW else ""
+    return ([f"- **{p['kalshi_id']}**" + ("" if items else ": none recorded") + flag]
+            + [f"  - {x}" for x in items])
+
+
+def _scope_line(tier: str, sc: dict | None) -> str:
+    if sc is None:
+        return f"  - {tier}: no scope filter applied."
+    ex = "; ".join(f"{n} ({why})" for why, n in sorted(sc["excluded"].items())) or "none"
+    return (f"  - {tier}: {sc['pairs']} pairs in scope ({sc['eligible']} currently eligible, {sc['closed']} closed, "
+            f"{sc['other']} open but not currently eligible); excluded pairs with rows in the table: {ex}.")
 
 
 def render(summary: dict, out_dir: Path) -> Path:
@@ -298,10 +365,13 @@ def render(summary: dict, out_dir: Path) -> Path:
         "",
         "**Short answer so far** (each figure is restated with its source under Results):",
         "",
-        (f"- Executable tier: {ex['episodes']} opportunity episodes in {hours:.1f} h of snapshots; the largest "
-         f"top-of-book edge after fees was {_f(ex['best_edge_max'], 4)} per $1 against a {MIN_EDGE} threshold."),
+        (f"- Executable tier: {ex['episodes']} opportunity episodes in {hours:.1f} h of snapshots"
+         + (" (too short to conclude anything)" if hours < CONCLUSIVE_H else "")
+         + f"; the largest top-of-book edge after fees was {_f(ex['best_edge_max'], 4)} per $1 against a "
+         f"{MIN_EDGE} threshold."),
         (f"- Screened tier (history, not executable): median hourly net gap {_f(sc['p50'])}; "
-         f"{_f(sc['share_ge_001'], pct=True)} of rows reached {MIN_EDGE}, "
+         f"{_f(sc['share_ge_001'], pct=True)} of rows reached {MIN_EDGE} (a count that is conservative by up to "
+         "~$0.01 per contract, see Limits), "
          f"{_f(_share(sc['n_ge_001_early'], sc['n_ge_001']), pct=True)} of those in a pair's first {EARLY_DAYS} days."),
         "",
         "## Data and window",
@@ -315,6 +385,11 @@ def render(summary: dict, out_dir: Path) -> Path:
         f"({hours:.1f} h); {ex['snapshots']:,} aligned pair-snapshots ({ex['rows']:,} rows, one per direction) "
         f"over {ex['pairs']} pairs."
         + (f" Eligible pairs with no executable rows yet: {', '.join(no_books)}." if no_books else ""),
+        ("- Tier scope: both tiers keep every pair whose latest prompt-v2 adjudication is `exact` and that has no "
+         "`wrong`/`unsure` review, whether or not it is open now (a closed pair's history is still evidence). "
+         "Pairs are Kalshi-Polymarket market pairs."),
+        _scope_line("Screened", sc["scope"]),
+        _scope_line("Executable", ex["scope"]),
         "",
         "| Kalshi ticker | Polymarket market | LLM confidence | Human review | Closes |",
         "|---|---|---|---|---|",
@@ -364,7 +439,9 @@ def render(summary: dict, out_dir: Path) -> Path:
         f"- Rows (pair x hour x direction): {sc['rows']:,}.",
         f"- `net_gap_top` p50 {_f(sc['p50'])}, p90 {_f(sc['p90'])}, max {_f(sc['max'])}.",
         (f"- Rows with `net_gap_top > 0`: {sc['n_gt0']:,} ({_f(sc['share_gt0'], pct=True)}); "
-        f">= {MIN_EDGE}: {sc['n_ge_001']:,} ({_f(sc['share_ge_001'], pct=True)})."),
+        f">= {MIN_EDGE}: {sc['n_ge_001']:,} ({_f(sc['share_ge_001'], pct=True)}). Both counts are conservative: "
+        "the 1-contract Kalshi fee is ceiled to the cent, which can understate a net gap by up to ~$0.01 "
+        "(see Limits)."),
         (f"- Of the rows >= {MIN_EDGE}, {sc['n_ge_001_early']:,} ({_f(_share(sc['n_ge_001_early'], sc['n_ge_001']), pct=True)}) "
         f"fall in their pair's first {EARLY_DAYS} days of screened history, which hold "
         f"{_f(_share(sc['n_early'], sc['rows']), pct=True)} of all rows."),
@@ -391,7 +468,8 @@ def render(summary: dict, out_dir: Path) -> Path:
          if ex["episodes"] else "- Opportunity episodes: 0, so there are no durations, capacities or annualized "
          "edges to report."),
         (f"- Episodes still positive after the transfer assumption: {ex['episodes_net_of_transfer']} of "
-        f"{ex['episodes']} (upper bound: max edge x contracts at median capacity, against `transfer_cost_usd`)."),
+        f"{ex['episodes']} (approximate and optimistic: it credits each episode's maximum edge on all of its median "
+        "capacity, against `transfer_cost_usd`)."),
         "",
         "| Kalshi ticker | Snapshots | Max best_edge | Snapshots with capacity > 0 |",
         "|---|---|---|---|",
@@ -408,8 +486,9 @@ def render(summary: dict, out_dir: Path) -> Path:
         "",
         "### Contract-term differences (tail risk)",
         "",
-        ("Clauses the adjudicator recorded as rare edge cases that keep each pair exact (latest adjudication at "
-        "current versions):"),
+        ("Clauses the LLM adjudicator recorded as rare edge cases that keep each eligible pair exact (latest "
+        "adjudication at current versions). They are LLM-written, quoted verbatim, and not human-reviewed; "
+        "pairs whose clauses read like real differences or are muddled are flagged for review before v1-final."),
         "",
         *[line for p in s["pair_list"] for line in _tail(p)],
         "",
@@ -422,6 +501,10 @@ def render(summary: dict, out_dir: Path) -> Path:
         ("- Kalshi's 0.07 taker coefficient is secondhand and unverified (the fee-schedule PDF could not be fetched; "
         "`docs/venues.md`). Polymarket's fee rounding rule is unverified. Either could move edges by a fraction "
         "of a cent per contract."),
+        ("- The screened tier charges Kalshi's fee on one contract, ceiled to the cent (at 50c: 0.07 x 0.25 = "
+         "$0.0175, charged as $0.02), so screened net gaps are conservative by up to ~$0.01 per contract, the "
+         "same size as the 0.01 threshold. The executable tier rounds per order-book slice, where the cent is "
+         "spread over the slice's contracts."),
         ("- Polymarket price history is a traded/mid price, not an ask, so the screened tier overstates what was "
         "takeable; screened hours are never called arbitrage."),
         (f"- Few exact pairs ({pc['eligible']}), from Kalshi series {series}; nothing here generalizes to "
@@ -445,7 +528,8 @@ def render(summary: dict, out_dir: Path) -> Path:
         "```",
         "",
         ("Eligible pairs: `venue_arb/flows/exact_sql.py` (`ELIGIBLE_SQL`) filtered by `venue_arb/exact.py`; tail "
-        "risks: `ADJ_SQL` in `venue_arb/report/note.py`."),
+        "risks: `ADJ_SQL`; tier scope: `SCOPE_SQL`, both in `venue_arb/report/note.py`. Rows from the three "
+        "tier queries above are kept only for pairs in tier scope (`_scoped`)."),
         "",
     ]
     path = out_dir / NOTE
@@ -471,12 +555,15 @@ def main(out_dir: Path = Path("reports")) -> Path:
         episodes = rows(conn.execute(OPPS_SQL))
         adj = {(k, p): {"tail_risks": t, "prompt_version": v, "model": m} for k, p, t, v, m in
                conn.execute(ADJ_SQL, {"k": [p.kalshi_id for p in pairs]}).fetchall()}
+        scope = {(k, p): {"reason": None if rel == "exact" and not bad else
+                          ("wrong/unsure review" if bad else f"latest v2 relation '{rel}'"), "closed": closed}
+                 for k, p, rel, bad, closed in conn.execute(SCOPE_SQL).fetchall()}
     ch = db.ch()
     scr = [utc(dict(zip(("ts", "kalshi_id", "pm_id", "direction", "net_gap_top"), r, strict=True)))
            for r in ch.query(SCREENED_SQL).result_rows]
     edges = [utc(dict(zip(("ts", "kalshi_id", "pm_id", "direction", "best_edge", "capacity_usd"), r, strict=True)))
              for r in ch.query(EDGES_SQL).result_rows]
-    s = summarize(pairs, scr, edges, episodes, adjudications=adj, generated_at=datetime.now(UTC))
+    s = summarize(pairs, scr, edges, episodes, adjudications=adj, scope=scope, generated_at=datetime.now(UTC))
     path = render(s, out_dir)
     print(f"wrote {path}: pairs={s['pairs']} screened_rows={s['screened']['rows']} "
           f"snapshots={s['executable']['snapshots']} episodes={s['executable']['episodes']}")

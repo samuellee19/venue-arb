@@ -1,6 +1,6 @@
 # Do exact Kalshi-Polymarket matches carry arbitrage? Research note v1
 
-Generated 2026-10-19 21:36 UTC by `python -m venue_arb.report.note`. Every number below is computed from the tables named in Method at generation time; the queries are listed at the end. This is v1: the executable tier covers only the snapshots collected so far, and the note is re-run once about four weeks of snapshots exist.
+Generated 2026-10-19 21:42 UTC by `python -m venue_arb.report.note`. Every number below is computed from the tables named in Method at generation time; the queries are listed at the end. This is v1: the executable tier covers only the snapshots collected so far, and the note is re-run once about four weeks of snapshots exist.
 
 ## Question
 
@@ -8,8 +8,8 @@ When Kalshi and Polymarket list the same contract, do their prices leave money o
 
 **Short answer so far** (each figure is restated with its source under Results):
 
-- Executable tier: 0 opportunity episodes in 2.7 h of snapshots; the largest top-of-book edge after fees was 0.0020 per $1 against a 0.01 threshold.
-- Screened tier (history, not executable): median hourly net gap -0.032; 3.6% of rows reached 0.01, 30.7% of those in a pair's first 7 days.
+- Executable tier: 0 opportunity episodes in 2.7 h of snapshots (too short to conclude anything); the largest top-of-book edge after fees was 0.0020 per $1 against a 0.01 threshold.
+- Screened tier (history, not executable): median hourly net gap -0.032; 3.6% of rows reached 0.01 (a count that is conservative by up to ~$0.01 per contract, see Limits), 30.7% of those in a pair's first 7 days.
 
 ## Data and window
 
@@ -17,6 +17,9 @@ When Kalshi and Polymarket list the same contract, do their prices leave money o
 - Pairs: 9 eligible exact pairs at generation time (0 human-reviewed, 9 not), Kalshi series: `KXFEDDECISION`.
 - Screened tier: hourly, 2026-06-18 00:00 UTC to 2026-10-19 20:00 UTC; 27,011 rows (13,735 pair-hours, up to two directions each) over 9 pairs.
 - Executable tier: order-book snapshots at a 60 s cadence, 2026-10-19 18:33 UTC to 2026-10-19 21:17 UTC (2.7 h); 1,320 aligned pair-snapshots (2,640 rows, one per direction) over 8 pairs. Eligible pairs with no executable rows yet: KXFEDDECISION-27JAN-H26.
+- Tier scope: both tiers keep every pair whose latest prompt-v2 adjudication is `exact` and that has no `wrong`/`unsure` review, whether or not it is open now (a closed pair's history is still evidence). Pairs are Kalshi-Polymarket market pairs.
+  - Screened: 9 pairs in scope (9 currently eligible, 0 closed, 0 open but not currently eligible); excluded pairs with rows in the table: none.
+  - Executable: 8 pairs in scope (8 currently eligible, 0 closed, 0 open but not currently eligible); excluded pairs with rows in the table: none.
 
 | Kalshi ticker | Polymarket market | LLM confidence | Human review | Closes |
 |---|---|---|---|---|
@@ -53,7 +56,7 @@ When Kalshi and Polymarket list the same contract, do their prices leave money o
 
 - Rows (pair x hour x direction): 27,011.
 - `net_gap_top` p50 -0.032, p90 -0.006, max 0.323.
-- Rows with `net_gap_top > 0`: 1,685 (6.2%); >= 0.01: 974 (3.6%).
+- Rows with `net_gap_top > 0`: 1,685 (6.2%); >= 0.01: 974 (3.6%). Both counts are conservative: the 1-contract Kalshi fee is ceiled to the cent, which can understate a net gap by up to ~$0.01 (see Limits).
 - Of the rows >= 0.01, 299 (30.7%) fall in their pair's first 7 days of screened history, which hold 7.1% of all rows.
 
 | Kalshi ticker | First hour | Rows | p50 net | Max net | Rows >= 0.01 |
@@ -70,14 +73,14 @@ When Kalshi and Polymarket list the same contract, do their prices leave money o
 
 ![Screened net gap distribution](screened-net-gap.png)
 
-*Screened tier. Distribution of `net_gap_top` over all 27,011 rows. The x-axis is clipped to the 0.5th-99.5th percentile (threshold kept in view); rows outside are pooled into the end bins and counted in the note under the plot. Log y-axis so the thin positive tail is visible.*
+*Screened tier. Distribution of `net_gap_top` over all 27,011 rows. The x-axis is clipped to the 0.5th-99.5th percentile, rounded out to the 0.005 bin grid (threshold kept in view); rows outside are pooled into the end bins and counted in the chart's footer line. Log y-axis so the thin positive tail is visible.*
 
 ### Executable tier (order books)
 
 - Aligned pair-snapshots: 1,320; with capacity > 0 in either direction (marginal edge >= 0.01 at the top): 0 (0.0%).
 - `best_edge` (per row, both directions) p50 -0.0157, max 0.0020.
 - Opportunity episodes: 0, so there are no durations, capacities or annualized edges to report.
-- Episodes still positive after the transfer assumption: 0 of 0 (upper bound: max edge x contracts at median capacity, against `transfer_cost_usd`).
+- Episodes still positive after the transfer assumption: 0 of 0 (approximate and optimistic: it credits each episode's maximum edge on all of its median capacity, against `transfer_cost_usd`).
 
 | Kalshi ticker | Snapshots | Max best_edge | Snapshots with capacity > 0 |
 |---|---|---|---|
@@ -100,16 +103,16 @@ When Kalshi and Polymarket list the same contract, do their prices leave money o
 
 ### Contract-term differences (tail risk)
 
-Clauses the adjudicator recorded as rare edge cases that keep each pair exact (latest adjudication at current versions):
+Clauses the LLM adjudicator recorded as rare edge cases that keep each eligible pair exact (latest adjudication at current versions). They are LLM-written, quoted verbatim, and not human-reviewed; pairs whose clauses read like real differences or are muddled are flagged for review before v1-final.
 
-- **KXFEDDECISION-26DEC-C25**
+- **KXFEDDECISION-26DEC-C25** *(needs human review before v1-final: says Kalshi's rules do not define the rate variable precisely, which reads like a real resolution difference rather than a rare edge case)*
   - If the December 2026 FOMC meeting is cancelled, Kalshi resolves 'Fed maintains rate' to Yes while Polymarket resolves to 'No change', which is the same outcome mapping but depends on bracket wording.
   - A non-25bp move (e.g. 12.5bp) is rounded up to the 25bp bracket on Polymarket, while Kalshi's rules describe bracket resolution only by exact move size.
   - Polymarket measures the change in the upper bound of the target range, while Kalshi's rules do not define the rate variable precisely.
 - **KXFEDDECISION-26DEC-H0**
   - If the December FOMC meeting is cancelled, Kalshi resolves Yes while Polymarket's rules say to resolve to the 'No change' bracket, which also pays Yes, so both agree.
   - Non-standard target moves are rounded to the nearest 25 bps bracket on Polymarket, which Kalshi's bracket structure does not explicitly address.
-- **KXFEDDECISION-26DEC-H25**
+- **KXFEDDECISION-26DEC-H25** *(needs human review before v1-final: the cancelled-meeting clause is muddled about which side resolves how)*
   - If the December FOMC meeting is cancelled, Kalshi resolves Yes only on 'Fed maintains rate' while Polymarket resolves No, since no hike occurs and the 'No change' bracket would apply only if no statement is released by the next meeting end date.
   - A non-standard change (e.g. 12.5bp) is rounded up to 25bp on Polymarket, which would resolve Polymarket Yes where Kalshi's bracket logic may differ.
   - Kalshi's Yes outcome is a 'Hike 25bps' bracket while Polymarket measures the change in the upper bound, so a 50bp hike resolves No on both but the bracket mapping must match.
@@ -133,14 +136,14 @@ Clauses the adjudicator recorded as rare edge cases that keep each pair exact (l
 - **KXFEDDECISION-27JAN-H26**
   - If the January 2027 FOMC meeting is cancelled, Kalshi resolves 'Fed maintains rate' to Yes while Polymarket's 'No change' bracket would resolve to Yes, so both would still map to a no-hike outcome.
   - A non-25bp move (e.g. 12.5bps) is rounded up to the nearest 25bp bracket on Polymarket, which could differ from Kalshi's bracket treatment for odd-sized moves.
-  - Kalshi's Yes is 'Hike >25bps' and Polymarket's Yes is '50+ bps'
-  - a 37.5bp move would count as 50 on Polymarket's rounding rule but as more than 25 on Kalshi, so both resolve Yes.
+  - Kalshi's Yes is 'Hike >25bps' and Polymarket's Yes is '50+ bps'; a 37.5bp move would count as 50 on Polymarket's rounding rule but as more than 25 on Kalshi, so both resolve Yes.
 
 ## Limits
 
 - 60 s sampling misses gaps that open and close within a minute; the executable tier can only undercount those.
 - The executable window is 2.7 hours long. Zero or few episodes over hours says little about weeks; v1-final re-runs this after about four weeks of snapshots.
 - Kalshi's 0.07 taker coefficient is secondhand and unverified (the fee-schedule PDF could not be fetched; `docs/venues.md`). Polymarket's fee rounding rule is unverified. Either could move edges by a fraction of a cent per contract.
+- The screened tier charges Kalshi's fee on one contract, ceiled to the cent (at 50c: 0.07 x 0.25 = $0.0175, charged as $0.02), so screened net gaps are conservative by up to ~$0.01 per contract, the same size as the 0.01 threshold. The executable tier rounds per order-book slice, where the cent is spread over the slice's contracts.
 - Polymarket price history is a traded/mid price, not an ask, so the screened tier overstates what was takeable; screened hours are never called arbitrage.
 - Few exact pairs (9), from Kalshi series `KXFEDDECISION`; nothing here generalizes to other categories.
 - Matches were adjudicated by an LLM, claude-haiku-5-5 (prompt v2); no human review sitting has happened yet: 0 of 9 eligible pairs reviewed, 9 unreviewed.
@@ -161,4 +164,4 @@ SELECT ts, kalshi_id, pm_id, direction, best_edge, capacity_usd FROM venue_arb.e
 SELECT kalshi_id, pm_id, direction, start_ts, end_ts, snapshots, max_edge, median_capacity_usd, annualized, us_executable, transfer_cost_usd FROM venue_arb.opportunities
 ```
 
-Eligible pairs: `venue_arb/flows/exact_sql.py` (`ELIGIBLE_SQL`) filtered by `venue_arb/exact.py`; tail risks: `ADJ_SQL` in `venue_arb/report/note.py`.
+Eligible pairs: `venue_arb/flows/exact_sql.py` (`ELIGIBLE_SQL`) filtered by `venue_arb/exact.py`; tail risks: `ADJ_SQL`; tier scope: `SCOPE_SQL`, both in `venue_arb/report/note.py`. Rows from the three tier queries above are kept only for pairs in tier scope (`_scoped`).

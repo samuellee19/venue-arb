@@ -75,3 +75,33 @@ def test_render_sections_and_tiers_labeled(tmp_path):
               "Contract-term differences (tail risk)", "k_price < 1", "Cancelled meeting resolves No"):
         assert h in text, h
     assert (tmp_path / "screened-net-gap.png").exists() and (tmp_path / "executable-edge.png").exists()
+
+
+def test_screened_early_life_concentration():
+    sc = note.summarize([pair()], [screened(h=0, net=0.02), screened(h=24 * 8, net=0.02),
+                                   screened(h=24 * 8 + 1, net=-0.03)], [], [])["screened"]
+    assert sc["n_ge_001"] == 2 and sc["n_ge_001_early"] == 1 and sc["n_early"] == 1
+
+
+def test_tail_parser_keeps_lowercase_semicolons():
+    lines = note._tail({"kalshi_id": "K", "tail_risks": "If cancelled, Kalshi pays; then Polymarket follows; "
+                                                       "A 12.5bp move rounds up"})
+    assert lines[1:] == ["  - If cancelled, Kalshi pays; then Polymarket follows", "  - A 12.5bp move rounds up"]
+    assert note._tail({"kalshi_id": "K", "tail_risks": None}) == ["- **K**: none recorded"]
+
+
+def test_episode_survives_transfer():
+    # 0.05 * 500 / 0.95 = 26.3 > 10.5
+    assert note.summarize([pair()], [], [], [episode(edge=0.05)])["executable"]["episodes_net_of_transfer"] == 1
+
+
+def test_scope_filters_tiers_and_counts():
+    scope = {("K-1", "0xpm"): {"reason": None, "closed": False},
+             ("K-2", "0xpm"): {"reason": None, "closed": True},
+             ("K-3", "0xpm"): {"reason": "wrong/unsure review", "closed": False}}
+    s = note.summarize([pair()], [screened(k) for k in ("K-1", "K-2", "K-3", "K-4")],
+                       [edge("K-3")], [], scope=scope)
+    assert s["screened"]["rows"] == 2
+    assert s["screened"]["scope"] == {"pairs": 2, "eligible": 1, "closed": 1, "other": 0, "excluded": {
+        "wrong/unsure review": 1, "no prompt-v2 adjudication": 1}}
+    assert s["executable"]["rows"] == 0 and s["executable"]["scope"]["excluded"] == {"wrong/unsure review": 1}
