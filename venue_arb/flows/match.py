@@ -81,6 +81,8 @@ def match_flow(limit: int = 500) -> dict:
                 "VALUES ('kalshi', %s, 'polymarket', %s, %s, %s) "
                 "ON CONFLICT (a_venue, a_id, b_venue, b_id) DO UPDATE SET score = EXCLUDED.score, "
                 "source = EXCLUDED.source", [(a, b, s, src) for a, b, s, src in cands])
+            # ponytail: pairs past the error cap still take `limit` slots (run() skips them for free); exclude them
+            # here if they ever crowd out new pairs
             done = set(conn.execute("SELECT a_id, a_version, b_id, b_version FROM venue_arb.adjudications").fetchall())
             pairs = unadjudicated(cands, {r["market_id"]: r for r in rows if r["venue"] == "kalshi"},
                                   {r["market_id"]: r for r in rows if r["venue"] == "polymarket"}, done, limit)
@@ -93,6 +95,7 @@ def match_flow(limit: int = 500) -> dict:
                 "JOIN venue_arb.listings lb ON lb.venue = d.b_venue AND lb.market_id = d.b_id AND lb.version = d.b_version"
             ).fetchone()
         results.append(checks.expect_rows(n, TARGET))
+        results += [checks.Result(**r, target=TARGET) for r in adjudicate.run_checks(out)]
         results += sql.run_all(pattern="adjudications_*.sql", directory=SQL_CHECKS)
         checks.enforce(results)
         log.info("match ok: %s", out)

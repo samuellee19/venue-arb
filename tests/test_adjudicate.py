@@ -1,9 +1,13 @@
 from datetime import date
 
+import anthropic
+import httpx
 import pytest
 from pydantic import ValidationError
 
 from venue_arb.matching.adjudicate import (
+    EST_CALL_USD,
+    MAX_CONSECUTIVE_ERRORS,
     PRICES,
     Verdict,
     adjudicate,
@@ -11,6 +15,7 @@ from venue_arb.matching.adjudicate import (
     month_spend,
     prompt_for,
     run,
+    run_checks,
     today_spend,
 )
 
@@ -36,16 +41,24 @@ class Cur:
 
 
 class FakeConn:
-    def __init__(self, cached=()):
+    def __init__(self, cached=(), errors=()):
         self.cached = set(cached)  # (a_id, a_version, b_id, b_version)
-        self.inserts = []
+        self.inserts = []  # adjudications rows
+        self.attempts = [{"pair": k, "outcome": "error", "error_type": "X", "cost": 0.0} for k in errors]
 
     def execute(self, sql, params=()):
-        if sql.lstrip().upper().startswith("SELECT"):
-            if "sum(cost_usd)" in sql:
-                return Cur((1.5,))
-            return Cur((1,) if tuple(params[i] for i in (1, 2, 4, 5)) in self.cached else None)
-        self.inserts.append(params)
+        pair = tuple(params[i] for i in (1, 2, 4, 5)) if params else None
+        if "sum(cost_usd)" in sql:
+            assert "venue_arb.llm_attempts" in sql  # spend comes from the ledger, not adjudications
+            return Cur((1.5,))
+        if "count(*) FROM venue_arb.llm_attempts" in sql:
+            return Cur((sum(a["pair"] == pair and a["outcome"] == "error" for a in self.attempts),))
+        if sql.startswith("SELECT 1 FROM venue_arb.adjudications"):
+            return Cur((1,) if pair in self.cached else None)
+        if sql.startswith("INSERT INTO venue_arb.llm_attempts"):
+            self.attempts.append({"pair": pair, "outcome": params[7], "error_type": params[8], "cost": params[9]})
+        else:
+            self.inserts.append(params)
         return Cur(None)
 
 
@@ -99,9 +112,7 @@ def test_error_isolated_and_counted():
 
     def flaky(prompt):
         n[0] += 1
-        if n[0] == 1:
-            Verdict.model_validate({"relation": "maybe"})
-        return V, 1000, 0
+        return ({"relation": "maybe"} if n[0] == 1 else V), 1000, 0
 
     pairs = [(listing(f"k{i}", "v"), listing(f"p{i}", "w")) for i in range(2)]
     out = run(FakeConn(), pairs, 0.0, call=flaky)
@@ -132,3 +143,77 @@ def test_daily_budget_zero_once_allowance_used():
 
 def test_daily_budget_last_day_takes_all_remaining():
     assert daily_budget(15, 1, date(2026, 10, 31)) == pytest.approx(5.0)  # 20 - 14 spent before today - 1 spent today
+
+
+def test_ok_attempt_recorded_in_ledger():
+    conn = FakeConn()
+    run(conn, [(listing("k1", "v"), listing("p1", "w"))], 0.0, call=FakeCall())
+    assert [(a["outcome"], a["cost"]) for a in conn.attempts] == [("ok", pytest.approx(0.002))]
+
+
+def test_api_error_attempt_recorded_with_estimate():
+    def down(prompt):
+        raise anthropic.APIConnectionError(request=httpx.Request("POST", "https://api.anthropic.com"))
+
+    conn = FakeConn()
+    out = run(conn, [(listing("k1", "v"), listing("p1", "w"))], 0.0, call=down)
+    assert out["errors"] == 1 and conn.inserts == []
+    assert conn.attempts == [{"pair": ("k1", "v", "p1", "w"), "outcome": "error",
+                              "error_type": "APIConnectionError", "cost": EST_CALL_USD}]
+
+
+def test_validation_failure_records_real_cost():
+    conn = FakeConn()
+    out = run(conn, [(listing("k1", "v"), listing("p1", "w"))], 0.0,
+              call=lambda prompt: ({"relation": "maybe"}, 5_000, 0))  # billed: 5k tokens = $0.0005
+    assert out["errors"] == 1 and out["spend"] == pytest.approx(0.0005)
+    assert [(a["outcome"], a["error_type"], a["cost"]) for a in conn.attempts] == [
+        ("error", "ValidationError", pytest.approx(0.0005))]
+
+
+def test_no_tool_call_records_real_cost():
+    conn = FakeConn()
+    run(conn, [(listing("k1", "v"), listing("p1", "w"))], 0.0, call=lambda prompt: (None, 5_000, 0))
+    assert conn.attempts[0]["outcome"] == "error" and conn.attempts[0]["cost"] == pytest.approx(0.0005)
+
+
+def test_pair_skipped_after_three_errors():
+    conn, call = FakeConn(errors=[("k1", "v", "p1", "w")] * 3), FakeCall()
+    pairs = [(listing("k1", "v"), listing("p1", "w")), (listing("k1", "v2"), listing("p1", "w"))]
+    out = run(conn, pairs, 0.0, call=call)
+    assert out["skipped_failing"] == 1 and call.n == 1 and out["adjudicated"] == 1  # new version is retried
+
+
+def test_consecutive_errors_stop_the_run():
+    pairs = [(listing(f"k{i}", "v"), listing(f"p{i}", "w")) for i in range(10)]
+    out = run(FakeConn(), pairs, 0.0, call=lambda prompt: (None, 0, 0))
+    assert out["errors"] == MAX_CONSECUTIVE_ERRORS
+
+
+def base_out(**kw):
+    return {"adjudicated": 0, "cached": 0, "skipped_budget": 0, "skipped_failing": 0, "errors": 0, "spend": 0.0} | kw
+
+
+def by_check(out):
+    return {r["check"]: r for r in run_checks(out)}
+
+
+def test_run_checks_all_pass():
+    rs = by_check(base_out(adjudicated=5))
+    assert set(rs) == {"adjudication_errors", "skipped_budget", "skipped_failing"}
+    assert all(r["passed"] for r in rs.values())
+
+
+def test_run_checks_error_ratio():
+    severe = by_check(base_out(adjudicated=2, errors=3))["adjudication_errors"]
+    assert not severe["passed"] and severe["severity"] == "error" and severe["observed"] == 0.6
+    few = by_check(base_out(adjudicated=0, errors=4))["adjudication_errors"]  # attempted < 5
+    assert not few["passed"] and few["severity"] == "warn"
+    half = by_check(base_out(adjudicated=5, errors=5))["adjudication_errors"]  # ratio 0.5, not > 0.5
+    assert half["severity"] == "warn"
+
+
+def test_run_checks_skips_warn():
+    rs = by_check(base_out(skipped_budget=3, skipped_failing=1))
+    assert [(rs[k]["passed"], rs[k]["severity"], rs[k]["observed"]) for k in ("skipped_budget", "skipped_failing")] \
+        == [(False, "warn", 3), (False, "warn", 1)]
