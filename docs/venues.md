@@ -17,6 +17,15 @@ did not settle when fetched is marked "unverified". Re-check before relying on a
 - Whether unauthenticated callers fall under the Basic budget: unverified (the page speaks of authenticated requests).
   This project stays well under 20 requests/s regardless.
 
+### Hourly candlesticks (2026-10-19)
+- `GET /series/{series}/markets/{ticker}/candlesticks?period_interval=60` (settled markets: `/historical/markets/
+  {ticker}/candlesticks`). `end_period_ts` is the "Unix timestamp for the inclusive end of the candlestick period";
+  `yes_bid.close_dollars` / `yes_ask.close_dollars` are the "Offer price on the market at the end of the candlestick
+  period". So a candle's close quote applies at `end_period_ts`, and the screened tier keys it there (not at the
+  period start). Source: <https://docs.kalshi.com/api-reference/market/get-market-candlesticks>
+- Polymarket `/prices-history` prints land a few seconds past each hour; the screened tier pairs each Kalshi close
+  with the print nearest that instant within 30 minutes (`venue_arb/screened.py`).
+
 ### Taker/maker fee formula (2026-10-19)
 - From the fee schedule as summarized by search (the PDF itself returned HTTP 429 when fetched, so this is
   secondhand): taker fee = `0.07 x C x P x (1 - P)`, maker fee = `0.0175 x C x P x (1 - P)` where it applies, both

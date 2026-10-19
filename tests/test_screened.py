@@ -1,5 +1,5 @@
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from venue_arb.exact import ExactPair
@@ -21,7 +21,7 @@ def test_kalshi_candles_parse_and_historical_fallback():
         return load("kalshi_candles.json")
 
     out = kalshi.fetch_candles("S", "S-T", 1792270000, 1792281600, get=live)
-    assert out[0] == {"ts": datetime.fromtimestamp(1792274400 - 3600, UTC), "yes_bid": 0.86, "yes_ask": 0.87}
+    assert out[0] == {"ts": datetime.fromtimestamp(1792274400, UTC), "yes_bid": 0.86, "yes_ask": 0.87}
     assert out[2]["yes_bid"] is None and out[2]["yes_ask"] is None
     assert len(out) == 3 and calls == [f"{kalshi.API}/series/S/markets/S-T/candlesticks"]
 
@@ -33,7 +33,7 @@ def test_kalshi_candles_parse_and_historical_fallback():
 
     out = kalshi.fetch_candles("S", "S-T", 1787180000, 1787190000, get=hist)
     assert calls == [f"{kalshi.API}/series/S/markets/S-T/candlesticks", f"{kalshi.API}/historical/markets/S-T/candlesticks"]
-    assert out == [{"ts": datetime.fromtimestamp(1787183220 - 3600, UTC).replace(minute=0, second=0),
+    assert out == [{"ts": datetime.fromtimestamp(1787183220, UTC),
                     "yes_bid": None, "yes_ask": None}]
 
 
@@ -106,3 +106,22 @@ def test_kalshi_candles_fall_back_on_empty_live_page():
         return {"candlesticks": []} if "/series/" in url else load("kalshi_candles_historical.json")
 
     assert len(kalshi.fetch_candles("S", "T", 1787180000, 1787190000, get=fake)) == 1
+
+
+def test_gaps_pair_kalshi_close_with_nearest_pm_print():
+    # Kalshi's close for the hour ending H1 is the quote AT H1; Polymarket prints land ~27 s past each hour. The old
+    # hour-floor pairing put that close at H0 against the H0:00:27 print (0.40); it must meet the H1:00:27 one (0.60).
+    h1 = int(H[1].timestamp())
+    k = kalshi.fetch_candles("S", "T", h1 - 3600, h1, get=lambda *a, **kw: {"candlesticks": [
+        {"end_period_ts": h1, "yes_bid": {"close_dollars": "0.30"}, "yes_ask": {"close_dollars": "0.40"}}]})
+    pm = [{"ts": H[0].replace(second=27), "price": 0.40}, {"ts": H[1].replace(second=27), "price": 0.60}]
+    r = {g["direction"]: g for g in gaps(pair(), k, pm, FEE)}
+    assert r["k_no_pm_yes"]["ts"] == H[1] and r["k_no_pm_yes"]["pm_price"] == 0.60
+
+
+def test_gaps_nearest_print_within_30_min():
+    k = [{"ts": H[1], "yes_bid": 0.3, "yes_ask": 0.4}]
+    near = lambda m, p: {"ts": H[1] + timedelta(minutes=m), "price": p}
+    assert gaps(pair(), k, [near(-50, 0.1), near(25, 0.2)], FEE)[0]["pm_price"] == 0.8  # k_yes_pm_no buys pm No
+    assert gaps(pair(), k, [near(-30, 0.1), near(30, 0.2)], FEE)[0]["pm_price"] == 0.9  # tie: earlier print
+    assert gaps(pair(), k, [near(-31, 0.1), near(31, 0.2)], FEE) == []

@@ -33,7 +33,7 @@ NEEDS_REVIEW = {
 }
 
 # Queries main() runs; quoted verbatim in the note so every number traces to a table.
-SCREENED_SQL = ("SELECT ts, kalshi_id, pm_id, direction, net_gap_top FROM venue_arb.screened FINAL "
+SCREENED_SQL = ("SELECT ts, kalshi_id, pm_id, direction, net_gap_top FROM venue_arb.screened_v2 FINAL "
                 "WHERE k_price < 1")
 EDGES_SQL = "SELECT ts, kalshi_id, pm_id, direction, best_edge, capacity_usd FROM venue_arb.edges FINAL"
 OPPS_SQL = ("SELECT kalshi_id, pm_id, direction, start_ts, end_ts, snapshots, max_edge, median_capacity_usd, "
@@ -409,12 +409,13 @@ def render(summary: dict, out_dir: Path) -> Path:
         "",
         "**Two tiers, never combined.**",
         "",
-        ("- *Screened* (`venue_arb.screened`): per hour present on both venues, Kalshi's hourly candle ask (Yes ask, "
-        "or 1 - Yes bid for No) against Polymarket's price history for the opposite leg, minus one contract's "
-        "taker fee on each leg: `net_gap_top = 1 - k_price - pm_price - fees`. Polymarket history is a "
-        "traded/mid price, not an ask, so this tier says where gaps tended to appear, not that they were "
-        "executable. The query filters `k_price < 1`: an earlier run wrote empty-book sentinel rows with "
-        "`k_price = 1`, which are left in place (no deletes) and excluded here."),
+        ("- *Screened* (`venue_arb.screened_v2`): Kalshi's hourly candle close ask (Yes ask, or 1 - Yes bid for No), "
+        "taken at the candle's `end_period_ts`, the instant Kalshi documents the close quote for, against the "
+        "Polymarket price-history print nearest that instant (within 30 minutes; none, no row) for the opposite "
+        "leg, minus one contract's taker fee on each leg: `net_gap_top = 1 - k_price - pm_price - fees`. Hours "
+        "where Kalshi's book side was empty give no row. Polymarket history is a traded/mid price, not an ask, so "
+        "this tier says where gaps tended to appear, not that they were executable. (`venue_arb.screened`, v1, "
+        "paired each Kalshi close with the Polymarket print about an hour earlier and is no longer read.)"),
         ("- *Executable* (`venue_arb.edges`, `venue_arb.opportunities`): our own order-book snapshots. A Kalshi "
         f"snapshot is aligned with the nearest Polymarket snapshot within {ALIGN_S} s. Both ask ladders are walked "
         "together; `best_edge` is the top-of-book edge after fees and `capacity_usd` the dollars spent on both "

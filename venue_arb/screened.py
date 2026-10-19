@@ -1,23 +1,34 @@
 """Screened tier (pure): hourly price gaps from history. Polymarket history is a traded/mid price, not an ask, so
 nothing here is executable and it must never be mixed with the executable edges."""
+from bisect import bisect_left
+from datetime import timedelta
+
 from venue_arb.exact import ExactPair
 from venue_arb.fees import kalshi_taker_fee, polymarket_taker_fee
 
+MAX_SKEW = timedelta(minutes=30)  # a Polymarket print further than this from the Kalshi close instant: no row
 
-def _hour(ts):
-    return ts.replace(minute=0, second=0, microsecond=0)
+
+def _nearest(pm: list[dict], times: list, ts) -> dict | None:
+    """The print nearest `ts` within MAX_SKEW (ties go to the earlier print); `pm` sorted, `times` its timestamps."""
+    i = bisect_left(times, ts)
+    near = min(pm[max(i - 1, 0):i + 1], key=lambda r: abs(r["ts"] - ts), default=None)
+    return near if near and abs(near["ts"] - ts) <= MAX_SKEW else None
 
 
 def gaps(pair: ExactPair, k: list[dict], pm: list[dict], series_fee: dict) -> list[dict]:
-    """One row per hour present on both sides and direction. An hour missing on either side gives no row."""
-    pms = {_hour(r["ts"]): r["price"] for r in pm}  # last print in the hour wins
+    """One row per Kalshi candle close instant and direction, against the Polymarket print nearest that instant
+    (within MAX_SKEW). A candle without a print that close, or with an empty book, gives no row."""
+    pm = sorted(pm, key=lambda r: r["ts"])
+    times = [r["ts"] for r in pm]
     fee_type, mult = series_fee["fee_type"], series_fee["fee_multiplier"]
     out = []
     for c in k:
-        ts = _hour(c["ts"])
-        if ts not in pms:
+        ts = c["ts"]
+        near = _nearest(pm, times, ts)
+        if near is None:
             continue
-        pm_yes = pms[ts]
+        pm_yes = near["price"]
         pm_legs = {"k_yes_pm_no": 1 - pm_yes, "k_no_pm_yes": pm_yes}  # price of the Polymarket token bought
         if pair.yes_maps_to == "no":  # Kalshi yes is Polymarket no: the Polymarket leg flips
             pm_legs = {"k_yes_pm_no": pm_yes, "k_no_pm_yes": 1 - pm_yes}

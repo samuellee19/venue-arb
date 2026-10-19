@@ -80,7 +80,8 @@ def _quote(side: dict | None, empty: float) -> float | None:
 
 
 def fetch_candles(series: str, ticker: str, start_ts: int, end_ts: int, get=http.get_json) -> list[dict]:
-    """Hourly yes bid/ask closes, keyed by the candle's period start (UTC, truncated to the hour)."""
+    """Hourly yes bid/ask closes, keyed by `end_period_ts`: Kalshi documents a candle's close as the offer "at the
+    end of the candlestick period" (docs/venues.md), so that is the instant the quote applies."""
     out = []
     for lo in range(start_ts, end_ts, CHUNK_S):
         params = {"start_ts": lo, "end_ts": min(lo + CHUNK_S, end_ts), "period_interval": 60}
@@ -88,6 +89,6 @@ def fetch_candles(series: str, ticker: str, start_ts: int, end_ts: int, get=http
         if not page or not page.get("candlesticks"):  # 404 or empty: settled before the live cutoff
             page = get(f"{API}/historical/markets/{ticker}/candlesticks", params=params)
         for c in page.get("candlesticks") or []:
-            ts = datetime.fromtimestamp(c["end_period_ts"] - 3600, UTC).replace(minute=0, second=0, microsecond=0)
+            ts = datetime.fromtimestamp(c["end_period_ts"], UTC)
             out.append({"ts": ts, "yes_bid": _quote(c.get("yes_bid"), 0.0), "yes_ask": _quote(c.get("yes_ask"), 1.0)})
     return out

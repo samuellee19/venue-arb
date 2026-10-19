@@ -16,10 +16,15 @@ secrets uv run python -m venue_arb.flows.catalog      # listings from both venue
 secrets uv run python -m venue_arb.flows.match        # candidates + LLM adjudication (re-judges pairs stored under an older prompt version)
 secrets uv run python -m venue_arb.flows.review_cli   # hand review of adjudicated matches
 secrets uv run python -m venue_arb.flows.score        # exact pairs: executable edges (ClickHouse) + opportunity episodes (Postgres)
+secrets uv run python -m venue_arb.flows.screened     # screened tier: hourly history gaps -> venue_arb.screened_v2 (by hand)
 secrets uv run python -m venue_arb.report.note  # research note v1 -> reports/research-note-v1.md + PNGs (re-run after ~4 weeks of snapshots for v1-final)
 secrets uv run python -m venue_arb.collect            # order-book snapshot collector (runs forever)
 secrets uv run python -m db.migrate                   # apply migrations
 ```
+
+`venue_arb.screened` (v1) is superseded by `venue_arb.screened_v2`: v1 paired each Kalshi candle close with the
+Polymarket print about an hour earlier. Nothing reads v1 any more; Sam can drop it by hand
+(`DROP TABLE venue_arb.screened`, not done by a migration, since migrations are additive only).
 
 LLM spend is capped at $20/month (`MONTHLY_LLM_BUDGET_USD`) and paced daily, so a backlog is worked off over
 the month instead of in one day.

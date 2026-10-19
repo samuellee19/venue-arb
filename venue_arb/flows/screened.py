@@ -20,7 +20,7 @@ from venue_arb.flows.exact_sql import load_eligible
 from venue_arb.sources import kalshi, polymarket
 
 PIPELINE = f"{PIPELINE_PREFIX}_screened"
-TABLE = "venue_arb.screened"
+TABLE = "venue_arb.screened_v2"  # v1 `venue_arb.screened` paired the venues ~1 h apart
 CONTRACT = {"ts": "datetime", "kalshi_id": "str", "pm_id": "str", "direction": "str", "k_price": "float",
             "pm_price": "float", "gross_gap": "float", "net_gap_top": "float"}
 COLUMNS = list(CONTRACT)
@@ -70,7 +70,7 @@ def screened_flow(end: datetime | None = None) -> dict:
         ch = db.ch()
         if rows:
             ch.insert(TABLE, [[r[c] for c in COLUMNS] for r in rows], column_names=COLUMNS)
-            # k_price < 1 excludes the empty-book sentinel rows an earlier version wrote (no deletes allowed)
+            # guard: gaps() never emits the empty-book sentinel (k_price = 1); this keeps a regression from counting
             (stored,) = ch.query(
                 f"SELECT count() FROM {TABLE} FINAL WHERE k_price < 1 "
                 "AND (kalshi_id, pm_id) IN {ids:Array(Tuple(String, String))}",
