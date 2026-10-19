@@ -1,6 +1,5 @@
 [Unit]
 Description=venue-arb order-book snapshot collector
-After=network-online.target
 
 [Service]
 WorkingDirectory=%h/projects/venue-arb

@@ -1,0 +1,14 @@
+[Unit]
+Description=venue-arb flow server (catalog and match schedules)
+
+[Service]
+WorkingDirectory=%h/projects/venue-arb
+Environment=BWS_PROJECT_ID=42f2b924-cf96-49c8-85a3-b4e4001765b4
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+Environment=PYTHONPATH=%h/platform
+ExecStart=%h/.local/bin/secrets %h/.local/bin/uv run python -m venue_arb.flows.serve
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=default.target
