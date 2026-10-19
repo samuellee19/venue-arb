@@ -80,3 +80,9 @@ def test_walk_multi_level_partial_carry():
     best, cap, usd, avg = edges.walk([L("yes", 0.40, 500)], pm, zero, zero)
     assert best == pytest.approx(0.05) and cap == 250 and usd == pytest.approx(239.0)
     assert avg == pytest.approx(0.044)
+
+
+def test_score_applies_pair_fees():
+    p = ExactPair("K", "P", "tok", "yes", None, "KXS", {"rate": 0.05, "exponent": 1}, True, 0.9, False)
+    out = edges.score(p, [L("yes", 0.40, 100)], [L("no", 0.55, 100)], NOFEE)
+    assert out[0].best_edge == pytest.approx(0.05 - 0.05 * 0.55 * 0.45)
