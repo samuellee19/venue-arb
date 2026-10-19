@@ -1,8 +1,10 @@
+import threading
+import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from types import SimpleNamespace
 
-from venue_arb.collect import flush, tick
+from venue_arb.collect import WATCH_SQL, flush, tick
 from venue_arb.models import Level
 
 WATCH = [("kalshi", "K1", None), ("polymarket", "P1", "T1")]
@@ -26,12 +28,12 @@ FAKE_CHECKS = SimpleNamespace(
 )
 
 
-def run(fetchers, load, max_buffer=1000):
+def run(fetchers, load, max_buffer=1000, watch=WATCH, **kw):
     buf = {"kalshi": [], "polymarket": []}
-    stats = {"kalshi": [0, 0], "polymarket": [0, 0]}
-    tick(WATCH, fetchers, buf, datetime.now(UTC), stats)
+    stats = {"kalshi": [0, 0, 0], "polymarket": [0, 0, 0]}
+    tick(watch, fetchers, buf, stats)
     recorded = []
-    flush(buf, {"kalshi", "polymarket"}, load, recorded.extend, list, FAKE_CHECKS, stats, max_buffer)
+    flush(buf, {"kalshi", "polymarket"}, load, recorded.extend, list, FAKE_CHECKS, stats, max_buffer, **kw)
     return buf, stats, recorded
 
 
@@ -48,9 +50,9 @@ def test_collect_one_venue_down():
 
     assert [r["venue"] for rows in loaded for r in rows] == ["kalshi", "kalshi"]
     failed = {(r.check, r.target) for r in recorded if not r.passed}
-    assert failed == {("expect_rows", "venue_arb.book_levels:polymarket"),
-                      ("fetch_errors", "venue_arb.book_levels:polymarket")}
-    assert buf == {"kalshi": [], "polymarket": []} and stats["polymarket"] == [0, 0]
+    assert failed == {("expect_rows", "venue_arb.book_levels_v2:polymarket"),
+                      ("fetch_errors", "venue_arb.book_levels_v2:polymarket")}
+    assert buf == {"kalshi": [], "polymarket": []} and stats["polymarket"] == [0, 0, 0]
 
 
 def test_load_failure_recorded_other_venue_loads_buffer_bounded():
@@ -62,6 +64,74 @@ def test_load_failure_recorded_other_venue_loads_buffer_bounded():
         loaded.append(rows)
 
     buf, _, recorded = run({"kalshi": kalshi_ok, "polymarket": kalshi_ok}, load, max_buffer=1)
-    assert [(r.check, r.target) for r in recorded if not r.passed] == [("load", "venue_arb.book_levels:kalshi")]
+    assert [(r.check, r.target) for r in recorded if not r.passed] == [("load", "venue_arb.book_levels_v2:kalshi")]
     assert "ConnectionError" in next(r for r in recorded if r.check == "load").detail
     assert len(loaded) == 1 and len(buf["kalshi"]) == 1 and buf["polymarket"] == []
+
+
+def test_empty_book_counted_and_warned():
+    loaded = []
+    _, _, recorded = run({"kalshi": kalshi_ok, "polymarket": lambda token: []}, loaded.append)
+    empty = {r.target: r for r in recorded if r.check == "empty_books"}
+    assert empty["venue_arb.book_levels_v2:polymarket"].observed == 1
+    assert not empty["venue_arb.book_levels_v2:polymarket"].passed
+    assert empty["venue_arb.book_levels_v2:polymarket"].severity == "warn"
+    assert empty["venue_arb.book_levels_v2:kalshi"].passed
+    fetch = {r.target: r for r in recorded if r.check == "fetch_errors"}
+    assert fetch["venue_arb.book_levels_v2:polymarket"].passed  # empty is not an error
+
+
+def test_rows_stamped_per_fetch():
+    def slow(mid):
+        time.sleep(0.02)
+        return kalshi_ok(mid)
+
+    watch = [("kalshi", f"K{i}", None) for i in range(3)]
+    loaded = []
+    before = datetime.now(UTC)
+    run({"kalshi": slow, "polymarket": slow}, loaded.append, watch=watch)
+    stamps = sorted({r["ts"] for rows in loaded for r in rows})
+    assert len(stamps) == 3 and stamps[0] > before  # one stamp per book, taken after its fetch
+
+
+def test_concurrent_fetch_accounting():
+    seen, lock = set(), threading.Lock()
+
+    def flaky(mid):
+        with lock:
+            seen.add(threading.get_ident())
+        time.sleep(0.01)
+        if int(mid[1:]) % 3 == 0:
+            raise TimeoutError
+        return [] if int(mid[1:]) % 3 == 1 else kalshi_ok(mid)
+
+    watch = [("kalshi", f"K{i}", None) for i in range(30)]
+    buf, stats = {"kalshi": [], "polymarket": []}, {"kalshi": [0, 0, 0], "polymarket": [0, 0, 0]}
+    tick(watch, {"kalshi": flaky}, buf, stats, workers=8)
+    assert stats["kalshi"] == [30, 10, 10] and len(buf["kalshi"]) == 20 and len(seen) > 1
+
+
+def test_cycle_duration_recorded():
+    _, _, recorded = run({"kalshi": kalshi_ok, "polymarket": kalshi_ok}, lambda rows: None,
+                         cycles=[40.0, 75.5], interval_s=60)
+    cyc = next(r for r in recorded if r.check == "cycle_seconds")
+    assert (cyc.passed, cyc.observed, cyc.severity) == (False, 75.5, "warn")
+    _, _, ok = run({"kalshi": kalshi_ok, "polymarket": kalshi_ok}, lambda rows: None, cycles=[30.0], interval_s=60)
+    assert next(r for r in ok if r.check == "cycle_seconds").passed
+
+
+def test_watchlist_sql_keeps_live_markets_at_current_versions():
+    sql = " ".join(WATCH_SQL.split())
+    for leg in ("la", "lb"):
+        assert f"{leg}.last_seen > now() - INTERVAL '2 hours'" in sql and f"{leg}.close_time > now()" in sql
+    assert "a_version = la.version" in sql and "b_version = lb.version" in sql
+
+
+def test_default_fetchers_skip_polite_delay(monkeypatch):
+    from venue_arb import collect, http
+
+    calls = []
+    monkeypatch.setattr(http, "get_json", lambda url, params=None, **kw: calls.append(kw) or {})
+    f = collect.default_fetchers()
+    assert f["kalshi"]("K1") == [] and f["polymarket"]("T1") == []
+    assert calls == [{"delay": 0}, {"delay": 0}]

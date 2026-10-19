@@ -54,6 +54,10 @@ cd ~/platform && docker compose exec postgres psql -U postgres -d app -c \
   "SELECT usename, count(*) FROM pg_stat_activity WHERE datname = 'app' GROUP BY 1"   # expect venue_arb, not postgres
 ```
 
+Snapshots land in ClickHouse `venue_arb.book_levels_v2` (daily partitions, 90-day TTL). The original
+`venue_arb.book_levels` (unpartitioned, never written to) is left in place; drop it by hand when convenient:
+`DROP TABLE venue_arb.book_levels`.
+
 ## Schwab
 
 Schwab data is not used yet. The Trader API app has the Market Data product only, and its refresh token needs a
