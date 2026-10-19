@@ -21,7 +21,8 @@ class Edge:
 
 
 def walk(k_asks: list[Level], pm_asks: list[Level], fee_k: Fee, fee_pm: Fee, min_edge: float = 0.01):
-    """Returns (best_edge, capacity_contracts, capacity_usd, avg_edge). Ladders are best-first."""
+    """Returns (best_edge, capacity_contracts, capacity_usd, avg_edge). Ladders are best-first.
+    capacity_usd is money spent on both legs, excluding fees."""
     if not k_asks or not pm_asks:
         return None, 0.0, 0.0, None
     i = j = 0

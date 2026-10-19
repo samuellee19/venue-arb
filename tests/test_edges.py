@@ -14,7 +14,7 @@ def zero(p, q):
 
 
 def pair(maps="yes"):
-    return ExactPair("K", "P", "tok", maps, None, "KXS", {"rate": 0.05, "exponent": 1}, True, 0.9, False)
+    return ExactPair("K", "P", "tok", maps, None, "KXS", None, False, 0.9, False)
 
 
 def test_walk_single_level():
@@ -38,8 +38,7 @@ def test_directions_swap_when_yes_maps_to_no():
     k = [L("yes", 0.40, 100), L("no", 0.90, 100)]
     pm = [L("yes", 0.55, 100), L("no", 0.99, 100)]
     out = {e.direction: e for e in edges.score(pair("no"), k, pm, {"fee_type": "quadratic", "fee_multiplier": 0})}
-    # pm_fees on but 5% fee applies; just check which PM side was used
-    assert out["k_yes_pm_no"].best_edge == pytest.approx(0.05 - 0.05 * 0.55 * 0.45)
+    assert out["k_yes_pm_no"].best_edge == pytest.approx(0.05)
     assert out["k_no_pm_yes"].best_edge < 0
 
 
@@ -50,3 +49,34 @@ def test_fees_reduce_edge():
     fp = lambda p, q: polymarket_taker_fee(p, q, {"rate": 0.05, "exponent": 1}, True)
     best, *_ = edges.walk([L("yes", 0.40, 100)], [L("no", 0.55, 100)], fk, fp)
     assert best == pytest.approx(0.05 - 0.029175)
+
+
+NOFEE = {"fee_type": "quadratic", "fee_multiplier": 0}
+
+
+def test_leg_mapping_yes_maps_to_yes():
+    k = [L("yes", 0.40, 100), L("no", 0.90, 100)]
+    pm = [L("no", 0.55, 100), L("yes", 0.99, 100)]
+    out = {e.direction: e for e in edges.score(pair("yes"), k, pm, NOFEE)}
+    assert out["k_yes_pm_no"].best_edge == pytest.approx(0.05)  # Kalshi yes + PM no
+    assert out["k_no_pm_yes"].best_edge < 0
+    k = [L("yes", 0.90, 100), L("no", 0.40, 100)]
+    pm = [L("yes", 0.55, 100), L("no", 0.99, 100)]
+    out = {e.direction: e for e in edges.score(pair("yes"), k, pm, NOFEE)}
+    assert out["k_no_pm_yes"].best_edge == pytest.approx(0.05)  # Kalshi no + PM yes
+    assert out["k_yes_pm_no"].best_edge < 0
+
+
+def test_leg_mapping_yes_maps_to_no():
+    k = [L("yes", 0.90, 100), L("no", 0.40, 100)]
+    pm = [L("no", 0.55, 100), L("yes", 0.99, 100)]
+    out = {e.direction: e for e in edges.score(pair("no"), k, pm, NOFEE)}
+    assert out["k_no_pm_yes"].best_edge == pytest.approx(0.05)  # Kalshi no + PM no
+    assert out["k_yes_pm_no"].best_edge < 0
+
+
+def test_walk_multi_level_partial_carry():
+    pm = [L("no", 0.55, 100, 0), L("no", 0.56, 150, 1), L("no", 0.60, 1000, 2)]
+    best, cap, usd, avg = edges.walk([L("yes", 0.40, 500)], pm, zero, zero)
+    assert best == pytest.approx(0.05) and cap == 250 and usd == pytest.approx(239.0)
+    assert avg == pytest.approx(0.044)
