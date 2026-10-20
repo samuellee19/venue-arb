@@ -79,3 +79,30 @@ def test_flow_survives_collector_down(monkeypatch):
         assert time.monotonic() - t0 < 120  # exporter timeouts bound the cost; no hang, no exception
     finally:
         runtime._reset()
+
+@pytest.mark.integration
+def test_flow_loaded_by_entrypoint_reports():
+    """Mirrors the Prefect runner: the flow file is loaded by path, so venue_arb/flows/__init__.py never runs."""
+    import obs
+    from obs import runtime
+    from opentelemetry.sdk._logs.export import InMemoryLogRecordExporter
+    from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+    from prefect.flows import load_flow_from_entrypoint
+    from qa.checks import DataQualityError
+    runtime._reset()
+    try:
+        logs = InMemoryLogRecordExporter()
+        obs.init("venue-arb", environment="test", exporters=(InMemorySpanExporter(), logs))
+        flow = load_flow_from_entrypoint("venue_arb/flows/score.py:score_flow")
+        try:
+            flow()
+        except DataQualityError:
+            pass  # the live data may fail its own QA; the wiring is what is under test
+        runtime.flush()
+        ev = [r.log_record for r in logs.get_finished_logs() if r.log_record.event_name]
+        started = [e for e in ev if e.event_name == "workflow.run.started"]
+        terminal = [e for e in ev if e.event_name in ("workflow.run.completed", "workflow.run.failed")]
+        assert len(started) == 1 and len(terminal) == 1
+        assert started[0].attributes["job.name"] == terminal[0].attributes["job.name"] == "venue-arb.score"
+    finally:
+        runtime._reset()
