@@ -54,3 +54,4 @@ def test_edge_row_and_opportunity_row():
     assert opp["us_executable"] is False  # Polymarket is geoblocked for US persons
     assert opp["transfer_cost_usd"] == pytest.approx(10.0 + 285.0 * 10 / 1e4)
     assert (opp["start_ts"], opp["end_ts"], opp["snapshots"], opp["max_edge"]) == (ep.start, ep.end, 2, 0.05)
+    assert opp["source"] == "pair" and scoring.opportunity_row(ep, source="ladder")["source"] == "ladder"

@@ -121,3 +121,9 @@ def test_score_applies_plan2_fees():
 def test_score_rejects_unknown_direction():
     with pytest.raises(ValueError):
         le.score_spread("k_no_pm_yes", [], [], NOFEE, None, False)
+
+
+def test_classify():
+    assert le.classify(80_000, 80_152, 182, 152) == ("arb", ["k_yes_pm_no"])
+    assert le.classify(81_499.99, 81_500, 182, 152) == ("near_exact", ["k_yes_pm_no", "pm_yes_k_no"])
+    assert le.classify(81_400, 81_500, 182, 152) is None  # cross-strike inside the basis band, not same strike

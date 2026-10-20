@@ -7,7 +7,7 @@ from venue_arb.exact import ExactPair
 from venue_arb.fees import kalshi_taker_fee, polymarket_taker_fee
 from venue_arb.models import Level
 
-Direction = Literal["k_yes_pm_no", "k_no_pm_yes"]
+Direction = Literal["k_yes_pm_no", "k_no_pm_yes", "pm_yes_k_no"]  # pm_yes_k_no: ladder spreads only
 Fee = Callable[[float, float], float]  # (price, contracts) -> dollars
 
 

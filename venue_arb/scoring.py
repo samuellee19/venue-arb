@@ -36,9 +36,9 @@ def edge_row(pair: ExactPair, ts: datetime, e: Edge, fee_version: str) -> dict:
             "avg_edge": e.avg_edge, "fee_version": fee_version}
 
 
-def opportunity_row(ep: Episode) -> dict:
+def opportunity_row(ep: Episode, source: str = "pair") -> dict:
     return {"kalshi_id": ep.kalshi_id, "pm_id": ep.pm_id, "direction": ep.direction, "start_ts": ep.start,
             "end_ts": ep.end, "snapshots": ep.snapshots, "max_edge": ep.max_edge,
             "median_capacity_usd": ep.median_capacity_usd, "annualized": ep.annualized,
             "us_executable": US_EXECUTABLE["kalshi"] and US_EXECUTABLE["polymarket"],
-            "transfer_cost_usd": transfer_cost(ep.median_capacity_usd)}
+            "transfer_cost_usd": transfer_cost(ep.median_capacity_usd), "source": source}
