@@ -27,9 +27,8 @@ secrets uv run python -m venue_arb.collect            # order-book snapshot coll
 secrets uv run python -m db.migrate                   # apply migrations
 ```
 
-`venue_arb.screened` (v1) is superseded by `venue_arb.screened_v2`: v1 paired each Kalshi candle close with the
-Polymarket print about an hour earlier. Nothing reads v1 any more; Sam can drop it by hand
-(`DROP TABLE venue_arb.screened`, not done by a migration, since migrations are additive only).
+`venue_arb.screened` (v1, paired each Kalshi candle close with the Polymarket print about an hour earlier) was
+dropped by hand on 2026-10-20; `venue_arb.screened_v2` is the only screened table.
 
 LLM spend is capped at $20/month (`MONTHLY_LLM_BUDGET_USD`) and paced daily, so a backlog is worked off over
 the month instead of in one day.
@@ -75,9 +74,8 @@ cd ~/platform && docker compose exec postgres psql -U postgres -d app -c \
   "SELECT usename, count(*) FROM pg_stat_activity WHERE datname = 'app' GROUP BY 1"   # expect venue_arb, not postgres
 ```
 
-Snapshots land in ClickHouse `venue_arb.book_levels_v2` (daily partitions, 90-day TTL). The original
-`venue_arb.book_levels` (unpartitioned, never written to) is left in place; drop it by hand when convenient:
-`DROP TABLE venue_arb.book_levels`.
+Snapshots land in ClickHouse `venue_arb.book_levels_v2` (daily partitions, 90-day TTL). The original unpartitioned
+`venue_arb.book_levels` was never written to and was dropped by hand on 2026-10-20.
 
 ## Schwab
 
