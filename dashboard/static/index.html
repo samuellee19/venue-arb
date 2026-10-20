@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>venue-arb · pair explorer</title>
+<link rel="stylesheet" href="/static/styles.css">
+<script>try { const t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch {}</script>
+</head>
+<body>
+<div class="banner" id="stale" hidden></div>
+<div class="banner" id="usban" hidden></div>
+<header>
+  <h1>venue-arb <span>· cross-venue arbitrage monitor</span></h1>
+  <div class="live"><span class="dot" id="dot"></span> <span id="clock">loading…</span></div>
+  <div class="filters">
+    <span id="cats"></span>
+    <span class="seg" id="unit" title="Edge unit"><button data-u="c" class="on">¢ per contract</button><button data-u="bps">bps of cost</button></span>
+    <label class="size" id="sizebox">size <input id="size" type="number" min="1" step="1" value="1000" inputmode="numeric"> contracts</label>
+    <span class="size">Executable from: <span class="seg" id="where"><button data-w="any" class="on">anywhere</button><button data-w="us">US</button></span></span>
+    <button class="chip" id="theme" title="Switch light / dark">theme</button>
+  </div>
+</header>
+<section class="kpis" id="kpis"></section>
+<main>
+  <aside class="pane list">
+    <div class="hd"><input class="search" id="q" type="search" placeholder="⌕ search pairs" aria-label="search pairs"></div>
+    <div id="rows"></div>
+  </aside>
+  <section class="pane detail" id="detail"><div class="empty">Loading the live bundle…</div></section>
+</main>
+<footer id="foot"></footer>
+<script src="/static/plotly-basic.min.js"></script>
+<script type="module" src="/static/app.js"></script>
+</body>
+</html>
