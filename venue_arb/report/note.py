@@ -2,22 +2,26 @@
 
     secrets uv run python -m venue_arb.report.note      # writes reports/research-note-v1.md + PNGs
 
-`summarize` and `render` are pure (no qa); `main` loads from the DB. The screened tier (hourly history) and the
-executable tier (our own order-book snapshots) are summarized from separate inputs into separate keys and are never
-combined into one number.
+`summarize` and `render` are pure (no qa); `main` loads from the DB. The screened tier (hourly history), the
+executable pair tier (our own order-book snapshots of exact pairs) and the same-instant ladder tier (order-book spreads
+across two crypto ladders) are summarized from separate inputs into separate keys and are never combined into one number.
 """
 import json
+import math
 import re
 from collections import Counter, defaultdict
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from statistics import median
+from statistics import mean, median
 
 import numpy as np
 
+from venue_arb.basis import bounds as basis_bounds
+from venue_arb.config import LADDER_MIN_BASIS
 from venue_arb.episodes import ALIGN_S, MAX_GAP_S, MIN_EDGE
 from venue_arb.exact import MIN_CONFIDENCE, ExactPair
 from venue_arb.fees import FEE_VERSION, KALSHI_RATE, TRANSFER, US_EXECUTABLE
+from venue_arb.ladder_edges import K_NEAREST, NEAR_EXACT_TOL
 from venue_arb.matching.adjudicate import PROMPT_VERSION
 from venue_arb.matching.fed_rule import RULE_MODEL
 
@@ -36,8 +40,26 @@ NEEDS_REVIEW: dict[str, dict[int, str]] = {}  # none now: every current pair is 
 SCREENED_SQL = ("SELECT ts, kalshi_id, pm_id, direction, net_gap_top FROM venue_arb.screened_v2 FINAL "
                 "WHERE k_price < 1")
 EDGES_SQL = "SELECT ts, kalshi_id, pm_id, direction, best_edge, capacity_usd FROM venue_arb.edges FINAL"
-OPPS_SQL = ("SELECT kalshi_id, pm_id, direction, start_ts, end_ts, snapshots, max_edge, median_capacity_usd, "
-            "annualized, us_executable, transfer_cost_usd FROM venue_arb.opportunities")
+_OPPS = ("SELECT kalshi_id, pm_id, direction, start_ts, end_ts, snapshots, max_edge, median_capacity_usd, "
+         "annualized, us_executable, transfer_cost_usd FROM venue_arb.opportunities ")
+OPPS_SQL = _OPPS + "WHERE source = 'pair'"
+# Ladder tier. ZZTEST- ids are the integration test's synthetic ladder (it deletes its own rows; this guards a crash).
+LADDER_OPPS_SQL = _OPPS + "WHERE source = 'ladder' AND kalshi_id NOT LIKE 'ZZTEST-%'"
+# one row per strike pair, direction and the bounds the rows were scored under (ladder_edges is too long to read raw)
+LADDER_SQL = """
+SELECT asset, instant, k_id, pm_id, direction, kind, a, b, basis_up, basis_down, count() AS snapshots,
+       countIf(capacity_usd > 0) AS n_capacity_gt0, max(best_edge) AS best_edge_max, min(ts) AS first_ts,
+       max(ts) AS last_ts
+FROM venue_arb.ladder_edges FINAL WHERE k_id NOT LIKE 'ZZTEST-%'
+GROUP BY asset, instant, k_id, pm_id, direction, kind, a, b, basis_up, basis_down
+"""
+# the 30-day window ladder_score reads (flows/ladder_score.BASIS_SQL), as of generation time
+BASIS_SQL = "SELECT asset, diff, binance FROM venue_arb.basis FINAL WHERE instant > now() - INTERVAL 30 DAY"
+# check denominator: ladder_score records every admissible (a, b, direction) x aligned snapshot per run, not stored
+ADMISSIBLE_SQL = """
+SELECT count(*), coalesce(sum(observed), 0) FROM qa.check_results
+WHERE pipeline = 'venue_arb_ladder_score' AND check_name = 'ladder_admissible_checks' AND checked_at >= %(since)s
+"""
 # Tier scope (Ruling 11): pairs whose latest adjudication at the current prompt version (%(pv)s) is 'exact' and that
 # carry no wrong/unsure review made at that prompt version, whether or not they are open now (a closed pair's history
 # is still evidence). A review made against an older prompt's verdict judged a different verdict and is ignored.
@@ -153,6 +175,64 @@ def _executable(edge_rows: list[dict], episodes: list[dict]) -> dict:
     }
 
 
+def _basis(rows: list) -> dict:
+    """Per asset over (asset, diff = BRTI - Binance, binance): n, directional bounds (None below LADDER_MIN_BASIS rows,
+    as in ladder_score), extremes and the mean in bps of the Binance price."""
+    by = defaultdict(list)
+    for asset, diff, px in rows:
+        if diff is not None and math.isfinite(diff) and px:
+            by[asset].append((diff, diff / px * 1e4))
+    out = {}
+    for a, v in sorted(by.items()):
+        d = [x for x, _ in v]
+        up, down = basis_bounds(d) if len(d) >= LADDER_MIN_BASIS else (None, None)
+        out[a] = {"n": len(d), "up": up, "down": down, "min": min(d), "max": max(d),
+                  "mean": mean(d), "mean_bps": mean(b for _, b in v)}
+    return out
+
+
+def _ladder(groups: list[dict], episodes: list[dict], basis_rows: list, admissible: dict | None) -> dict:
+    """groups: LADDER_SQL rows (one per strike pair x direction x stored bounds). A check = one strike pair, one
+    direction, one aligned snapshot. 'Positive' = capacity_usd > 0, i.e. the top-of-book edge after fees >= MIN_EDGE."""
+    arb = [g for g in groups if g["kind"] == "arb"]
+    near = [g for g in groups if g["kind"] == "near_exact"]
+    scored, pos = sum(g["snapshots"] for g in arb), sum(g["n_capacity_gt0"] for g in arb)
+    checks = admissible["checks"] if admissible and admissible["runs"] else None
+    start = min((g["first_ts"] for g in groups), default=None)
+    end = max((g["last_ts"] for g in groups), default=None)
+    dur = [(e["end_ts"] - e["start_ts"]).total_seconds() / 60 for e in episodes]
+    cap = [e["median_capacity_usd"] for e in episodes]
+    best = [g["best_edge_max"] for g in arb if g["best_edge_max"] is not None]
+    ladders = {(g["asset"], g["instant"]) for g in groups}
+    return {
+        "groups": len(groups),
+        "ladders": len(ladders),
+        "ladders_by_asset": dict(sorted(Counter(a for a, _ in ladders).items())),
+        "kalshi_strikes": len({g["k_id"] for g in groups}),
+        "pm_strikes": len({g["pm_id"] for g in groups}),
+        "start": start, "end": end,
+        "hours": (end - start).total_seconds() / 3600 if start else 0.0,
+        "arb_checks_scored": scored, "arb_checks_pos": pos, "share_scored": _share(pos, scored) if scored else None,
+        "admissible_runs": admissible["runs"] if admissible else 0, "admissible_checks": checks,
+        "share_admissible": _share(pos, checks) if checks else None,
+        "best_edge_max": max(best, default=None),
+        "bounds_stored": sorted({(g["asset"], g["basis_up"], g["basis_down"]) for g in groups}),
+        "episodes": len(episodes),
+        "duration_min_median": median(dur) if dur else None, "duration_min_max": max(dur, default=None),
+        "capacity_usd_median": median(cap) if cap else None, "capacity_usd_max": max(cap, default=None),
+        "near_exact_checks": sum(g["snapshots"] for g in near),
+        "near_exact_pos": sum(g["n_capacity_gt0"] for g in near),
+        # exposure: width ($) of the settle band where both legs pay 0 (k_yes_pm_no: BRTI <= a < b < Binance, so up to
+        # `down` wide; pm_yes_k_no: up to `up` wide)
+        "near_exact": sorted(({**{k: g[k] for k in ("asset", "instant", "k_id", "pm_id", "direction", "a", "b",
+                                                     "snapshots", "n_capacity_gt0", "best_edge_max")},
+                               "exposure": g["basis_down"] if g["direction"] == "k_yes_pm_no" else g["basis_up"]}
+                              for g in near),
+                             key=lambda r: (r["best_edge_max"] is None, -(r["best_edge_max"] or 0), r["k_id"])),
+        "basis": _basis(basis_rows),
+    }
+
+
 def _scoped(rows: list[dict], scope: dict | None, eligible_keys: set) -> tuple[list[dict], dict | None]:
     """Keep rows of in-scope pairs; count pairs by status. scope: {(kalshi_id, pm_id): {"reason", "closed"}},
     reason None = in scope. A pair with no current-prompt adjudication is out of scope."""
@@ -174,9 +254,13 @@ def _scoped(rows: list[dict], scope: dict | None, eligible_keys: set) -> tuple[l
 
 def summarize(pairs: list[ExactPair], screened_rows: list[dict], edge_rows: list[dict], episodes: list[dict],
               *, adjudications: dict | None = None, scope: dict | None = None,
-              generated_at: datetime | None = None) -> dict:
+              generated_at: datetime | None = None, ladder_rows: list[dict] | None = None,
+              ladder_episodes: list[dict] | None = None, basis_rows: list | None = None,
+              admissible: dict | None = None) -> dict:
     """Pure. `adjudications`: {(kalshi_id, pm_id): {"tail_risks", "model", "prompt_version"}} for eligible pairs.
-    `scope`: see `_scoped`; None keeps every row (no scope filter)."""
+    `scope`: see `_scoped`; None keeps every row (no scope filter). Ladder tier (its own key, never scoped by the pair
+    scope): `ladder_rows` LADDER_SQL rows, `ladder_episodes` source-'ladder' opportunities, `basis_rows`
+    (asset, diff, binance), `admissible` {"runs", "checks"} from ADMISSIBLE_SQL."""
     adj = adjudications or {}
     ek = {(p.kalshi_id, p.pm_id) for p in pairs}
     screened_rows, sc_scope = _scoped(screened_rows, scope, ek)
@@ -202,6 +286,7 @@ def summarize(pairs: list[ExactPair], screened_rows: list[dict], edge_rows: list
                        f"(US_EXECUTABLE = {US_EXECUTABLE}, docs/venues.md geoblock entry), so no pair has both "
                        "legs executable from the US." if not US_EXECUTABLE["polymarket"] else ""),
         },
+        "ladder": _ladder(ladder_rows or [], ladder_episodes or [], basis_rows or [], admissible),
     }
 
 
@@ -337,6 +422,158 @@ def _scope_line(tier: str, sc: dict | None) -> str:
             f"{sc['other']} open but not currently eligible); excluded pairs with rows in the table: {ex}.")
 
 
+def _usd(x) -> str:
+    return "n/a" if x is None else f"{'-' if x < 0 else '+'}${abs(x):,.2f}"
+
+
+def _ladder_text(lad: dict) -> dict[str, list[str]]:
+    """The ladder tier's lines for each section of the note (short answer, data, method, results, limits)."""
+    b = lad["basis"]
+    have = lad["groups"] > 0
+    adm = lad["admissible_checks"]
+    span = (f"{lad['hours']:.1f} h of ladder snapshots" + (" (too short to conclude anything)"
+                                                            if lad["hours"] < CONCLUSIVE_H else ""))
+    by_asset = ", ".join(f"{a} {n}" for a, n in lad["ladders_by_asset"].items())
+    if not have:
+        short = ("- Same-instant crypto ladders (model-free, a separate tier): no ladder snapshots yet. Nothing has "
+                 "been scored, so this tier has no result in either direction.")
+        data = ("- Ladder tier: no ladder snapshots yet. The live collector snapshots same-instant ladders only "
+                "from Plan 3's deployment on; `venue_arb.ladder_edges` holds no rows.")
+    else:
+        of = (f"{lad['arb_checks_pos']:,} of {adm:,} admissible cross-strike checks "
+              f"({_f(lad['share_admissible'], pct=True)}, a lower bound, see Results)" if adm else
+              f"{lad['arb_checks_pos']:,} of {lad['arb_checks_scored']:,} scored cross-strike checks "
+              "(admissible-check count not recorded)")
+        short = (f"- Same-instant crypto ladders (model-free, a separate tier): {of} had an executable edge >= "
+                 f"{MIN_EDGE} after fees with the strikes at least the basis bound apart; {lad['episodes']} "
+                 f"episodes in {span}; largest top-of-book edge {_f(lad['best_edge_max'], 4)} per $1.")
+        data = (f"- Ladder tier: order-book snapshots of same-instant crypto ladders at a 60 s cadence, "
+                f"{_t(lad['start'])} to {_t(lad['end'])} ({lad['hours']:.1f} h); {lad['ladders']} ladders "
+                f"({by_asset}), {lad['kalshi_strikes']} Kalshi and {lad['pm_strikes']} Polymarket strikes with "
+                "scored rows.")
+    brows = [f"| {a} | {v['n']:,} | {_f(v['up'], 0) if v['up'] is not None else 'none (too few hours)'} | "
+             f"{_f(v['down'], 0) if v['down'] is not None else 'none (too few hours)'} | {_usd(v['mean'])} "
+             f"({v['mean_bps']:+.1f} bps) | {_usd(v['min'])} | {_usd(v['max'])} |" for a, v in b.items()]
+    below = [a for a, v in b.items() if v["mean_bps"] < 0]
+    avg = ", ".join(f"{a} {_usd(b[a]['mean'])} ({b[a]['mean_bps']:+.1f} bps)" for a in below)
+    lean = (f"On average BRTI sits below Binance at the settle ({avg}), so the two venues' settle prices differ "
+            "even when nothing moves; that is why same-strike pairs are not arbitrage." if below else "")
+    method = [
+        ("**Same-instant crypto ladders (model-free).** A third tier, scored from our own order books like the "
+         "executable tier and never combined with it."),
+        "",
+        ("- *Same-instant rule.* Kalshi `KXBTCD`/`KXETHD` \"$X or above\" contracts are paired with Polymarket "
+         "\"Bitcoin/Ethereum above X\" contracts (hourly ladders, and the daily ladder at noon ET) only when both "
+         "settle at the same instant H (Kalshi's `close_time` is its settlement instant). Pairs whose settlement "
+         "instants differ (gapped pairs) are excluded: whether they pay in every state depends on how far the price "
+         "can move between the two instants, which needs a volatility model, and a reader can reject a model. They "
+         "cannot serve as proof, so they are not scored here."),
+        ("- *Settlement sources.* Kalshi: the simple average of the 60 seconds of CF Benchmarks' BRTI before H. "
+         "Polymarket hourly: the close of the Binance BTC/USDT (ETH/USDT) 1 hour candle ending at H; Polymarket "
+         "daily: the Binance 1 minute candle closing at 12:00 ET (the same close as the 1 hour candle ending then)."),
+        ("- *Threshold normalization* (from the rule text, `venue_arb/matching/crypto_rule.py`). Kalshi \"$X or "
+         "above\" is Yes iff BRTI > X - 0.01 (ticker `T{X-0.01}`), so its strike is a = X - 0.01. Polymarket hourly "
+         "and daily \"above X\" are Yes iff the Binance close > X (strict), so b = X. Polymarket daily \"greater "
+         "than X\" is the top bracket of a range ladder whose boundary values go to the higher bracket, so it is Yes "
+         "iff the close >= X and is normalized to b = X - 0.01 like Kalshi."),
+        ("- *Why a spread can pay in every state.* On one index, P(S > a) >= P(S > b) whenever a <= b. Here the "
+         "legs settle on two indices; let diff = BRTI - Binance at H. `k_yes_pm_no` (buy Kalshi Yes at a and "
+         "Polymarket No at b) pays $0 only if BRTI <= a and Binance > b, which needs Binance - BRTI > b - a. "
+         "`pm_yes_k_no` (Polymarket Yes at b and Kalshi No at a) pays $0 only if Binance <= b and BRTI > a, which "
+         "needs BRTI - Binance > a - b. In every other state at least one leg pays $1."),
+        ("- *Basis bounds* (`venue_arb.basis`: one row per asset and hour with BRTI's settle and the Binance candle "
+         "close). Directional: `up` = how far BRTI rose above Binance, `down` = how far it fell below, each the "
+         "0.999 nearest-rank quantile of the trailing 30 days of hourly diffs, rounded up to $1. An asset with fewer "
+         f"than {LADDER_MIN_BASIS} hours has no bound and its ladders are not scored. The scoring flow computes the "
+         "bounds as of each run, so stored rows can carry slightly different bounds from the table below, which is "
+         "as of generation time:"),
+        "",
+        "| Asset | Hours (n) | up ($) | down ($) | Mean diff | Min diff | Max diff |",
+        "|---|---|---|---|---|---|---|",
+        *(brows or ["| (no basis rows) | 0 | n/a | n/a | n/a | n/a | n/a |"]),
+        "",
+        *([lean, ""] if lean else []),
+        ("- *Admissible checks.* A cross-strike check counts only if the strikes are far enough apart that the $0 "
+         "state needs a basis move beyond the bound: `k_yes_pm_no` needs b - a >= down, `pm_yes_k_no` needs a - b "
+         ">= up. These are stored as `kind = 'arb'`."),
+        (f"- *Near-exact same-strike pairs* (|a - b| <= ${NEAR_EXACT_TOL:.0f} after normalization, e.g. Kalshi "
+         "`T81499.99` vs Polymarket \"above 81,500\") are classified first, scored in both directions and stored as "
+         "`kind = 'near_exact'`. Both legs lose if the settle falls between the two indices, a band up to `down` "
+         "(`k_yes_pm_no`) or `up` (`pm_yes_k_no`) dollars wide, so they are reported separately with that exposure "
+         "and never as arbitrage, and they form no episodes."),
+        (f"- *Pruning and the denominator.* Per Kalshi strike and direction only the {K_NEAREST} nearest admissible "
+         "Polymarket strikes are scored and stored: the cost is Kalshi Yes(a) + Polymarket No(b), and No(b) rises "
+         "with b, so the nearest admissible strike is the cheapest when books are monotone (the second is margin "
+         "for books that are not). Every admissible check, scored or pruned, is counted by the scoring flow and "
+         "recorded as the `ladder_admissible_checks` qa result; that count is the denominator. A check is one "
+         "strike pair, one direction, one aligned snapshot."),
+        (f"- *Execution rules* are the executable tier's: ask ladders walked together with taker fees on both legs, "
+         f"snapshots aligned within {ALIGN_S} s, edge threshold {MIN_EDGE}, the same episode definition. Only "
+         "snapshots strictly before H count (from H on, the outcome is being fixed). Episodes are stored in "
+         "`venue_arb.opportunities` with `source = 'ladder'`; every pair-tier query reads `source = 'pair'` only."),
+        ("- *Reading `venue_arb.ladder_edges` directly:* rows keep the bounds they were scored under "
+         "(`basis_up`, `basis_down`), so filter by `kind` and by those stored bounds, not by today's bounds."),
+        "",
+    ]
+    if not have:
+        results = [
+            ("**No ladder snapshots yet.** `venue_arb.ladder_edges` has no rows: the live collector starts "
+             "snapshotting same-instant ladders only when Plan 3 is deployed, so there are no checks, no episodes "
+             "and no near-exact pairs to report. This is an absence of data, not a negative result."),
+            "",
+        ]
+    else:
+        stored = "; ".join(f"{a} up {_f(u, 0)} / down {_f(d, 0)}" for a, u, d in lad["bounds_stored"])
+        results = [
+            (f"- Ladders with scored rows: {lad['ladders']} ({by_asset}); snapshots {_t(lad['start'])} to "
+             f"{_t(lad['end'])} ({lad['hours']:.1f} h); {lad['kalshi_strikes']} Kalshi strikes, "
+             f"{lad['pm_strikes']} Polymarket strikes."),
+            ("- Admissible cross-strike checks: "
+             + (f"{adm:,}, summed over {lad['admissible_runs']} `ladder_score` runs. Each run scores a 3-hour window "
+                "and runs hourly, so a snapshot is counted in up to three runs: the sum overstates distinct checks by "
+                "up to about 3x and the share below is a lower bound." if adm else "not recorded.")),
+            (f"- Scored (the {K_NEAREST} nearest per Kalshi strike and direction): {lad['arb_checks_scored']:,}; with "
+             f"an executable edge >= {MIN_EDGE} (capacity > 0): {lad['arb_checks_pos']:,} "
+             f"({_f(lad['share_scored'], pct=True)} of scored"
+             + (f", {_f(lad['share_admissible'], pct=True)} of admissible" if adm else "") + ")."),
+            f"- Largest top-of-book `best_edge` on an admissible check: {_f(lad['best_edge_max'], 4)} per $1.",
+            (f"- Episodes (`source = 'ladder'`): {lad['episodes']}. Duration median "
+             f"{_f(lad['duration_min_median'], 1)} min, max {_f(lad['duration_min_max'], 1)} min; median capacity "
+             f"${_f(lad['capacity_usd_median'], 0)}, max ${_f(lad['capacity_usd_max'], 0)}." if lad["episodes"] else
+             "- Episodes (`source = 'ladder'`): 0, so there are no durations or capacities to report."),
+            f"- Basis bounds the stored rows were scored under: {stored}.",
+            "",
+            (f"**Near-exact same-strike pairs (not arbitrage).** {lad['near_exact_checks']:,} checks over "
+             f"{len(lad['near_exact'])} pair-directions; {lad['near_exact_pos']:,} with an edge >= {MIN_EDGE}, each of "
+             "which pays $0 on both legs if the settle lands inside its exposure band. Top 20 by largest edge:"),
+            "",
+            ("| Asset | Instant | Kalshi strike a | PM strike b | Direction | Snapshots | Max best_edge | Snapshots "
+             "with capacity > 0 | Exposure band ($) |"),
+            "|---|---|---|---|---|---|---|---|---|",
+            *[f"| {r['asset']} | {_t(r['instant'])} | {r['a']:,.2f} | {r['b']:,.2f} | `{r['direction']}` | "
+              f"{r['snapshots']:,} | {_f(r['best_edge_max'], 4)} | {r['n_capacity_gt0']:,} | {_f(r['exposure'], 0)} |"
+              for r in lad["near_exact"][:20]],
+            "",
+        ]
+    tails = "; ".join(f"{a} {_usd(v['min'])} to {_usd(v['max'])}" for a, v in b.items()) or "none recorded"
+    # nearest rank ceil(0.999 n) = n below 1,000 observations: the bound is then the window's largest move
+    at_max = [a for a, v in b.items() if v["up"] is not None and v["n"] < 1000]
+    limits = [
+        ("- Ladder tier: \"pays in every state\" holds only inside the measured basis range. The bound is the 0.999 "
+         "quantile of 30 days of hourly settles; a basis move beyond it breaks the guarantee for any spread whose "
+         f"strike gap it exceeds. Observed diff range over the window: {tails}."
+         + (f" With fewer than 1,000 hours ({', '.join(at_max)}), the 0.999 nearest-rank quantile is the largest "
+            "observed move, so each bound is set by a single hour, rounded up to $1: one larger hour, which a "
+            "30-day window gives no reason to rule out, breaks it." if at_max else "")),
+        ("- Ladder tier: only Kalshi strikes inside Polymarket's range (padded by the basis bound) are snapshotted, "
+         "at most 60 per ladder, and only the nearest admissible strikes are scored; a violation that shows only "
+         "at a farther strike in a non-monotone book is missed (the positive counts can only undercount)."),
+        (f"- Ladder tier window: {lad['hours']:.1f} hours of ladder snapshots"
+         + (", i.e. none yet." if not have else ".")),
+    ]
+    return {"short": [short], "data": [data], "method": method, "results": results, "limits": limits}
+
+
 def render(summary: dict, out_dir: Path) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     s, sc, ex, j, pc = summary, summary["screened"], summary["executable"], summary["jurisdiction"], summary["pairs"]
@@ -353,6 +590,7 @@ def render(summary: dict, out_dir: Path) -> Path:
     fee_pm = ", ".join(f"`{x}`" for x in sorted({p["pm_fee"] for p in s["pair_list"]})) or "n/a"
     no_books = [p["kalshi_id"] for p in s["pair_list"] if p["kalshi_id"] not in {r["kalshi_id"] for r in ex["per_pair"]}]
     hours = (ex["end"] - ex["start"]).total_seconds() / 3600 if ex["start"] else 0.0
+    lt = _ladder_text(s["ladder"])
     L = [
         "# Do exact Kalshi-Polymarket matches carry arbitrage? Research note v1",
         "",
@@ -382,6 +620,7 @@ def render(summary: dict, out_dir: Path) -> Path:
          f"{_f(sc['share_ge_001'], pct=True)} of rows reached {MIN_EDGE} (a count biased in both directions: the "
          "1-contract fee ceiling pushes it down, the mid/last Polymarket price pushes it up; see Limits), "
          f"{_f(_share(sc['n_ge_001_early'], sc['n_ge_001']), pct=True)} of those in a pair's first {EARLY_DAYS} days."),
+        *lt["short"],
         "",
         "## Data and window",
         "",
@@ -394,7 +633,8 @@ def render(summary: dict, out_dir: Path) -> Path:
         f"({hours:.1f} h); {ex['snapshots']:,} aligned pair-snapshots ({ex['rows']:,} rows, one per direction) "
         f"over {ex['pairs']} pairs."
         + (f" Eligible pairs with no executable rows yet: {', '.join(no_books)}." if no_books else ""),
-        (f"- Tier scope: both tiers keep every pair whose latest prompt-{PROMPT_VERSION} adjudication is `exact` and that has no "
+        *lt["data"],
+        (f"- Tier scope: both pair tiers keep every pair whose latest prompt-{PROMPT_VERSION} adjudication is `exact` and that has no "
          "`wrong`/`unsure` review of that verdict (reviews made against an older prompt's verdict are ignored), "
          "whether or not it is open now (a closed pair's history is still evidence). "
          "Pairs are Kalshi-Polymarket market pairs."),
@@ -423,7 +663,7 @@ def render(summary: dict, out_dir: Path) -> Path:
         "or `unsure` review excludes the pair. The adjudication must be at the current prompt version, and only "
         "reviews made of that verdict count. Both listings must be open and seen in the last 2 hours."),
         "",
-        "**Two tiers, never combined.**",
+        "**Two pair tiers, never combined** (the ladder tier below is a third, also kept apart).",
         "",
         ("- *Screened* (`venue_arb.screened_v2`): Kalshi's hourly candle close ask (Yes ask, or 1 - Yes bid for No), "
         "taken at the candle's `end_period_ts`, the instant Kalshi documents the close quote for, against the "
@@ -449,6 +689,7 @@ def render(summary: dict, out_dir: Path) -> Path:
         f"{tr['conversion_bps']:.0f} bps per round trip of capital between venues. It is reported as a "
         "sensitivity count, not subtracted from the headline edge."),
         "",
+        *lt["method"],
         "## Results",
         "",
         "### Screened tier (history; not arbitrage)",
@@ -514,15 +755,18 @@ def render(summary: dict, out_dir: Path) -> Path:
         "",
         *[line for p in s["pair_list"] for line in _tail(p)],
         "",
+        "### Same-instant crypto ladders (model-free)",
+        "",
+        *lt["results"],
         "## Limits",
         "",
-        ("- 60 s sampling misses gaps that open and close within a minute; the executable tier can only "
-        "undercount those."),
+        ("- 60 s sampling misses gaps that open and close within a minute; the executable and ladder tiers can "
+        "only undercount those."),
         (f"- The executable window is {hours:.1f} hours long. Zero or few episodes over hours says little about "
         "weeks; v1-final re-runs this after about four weeks of snapshots."),
         ("- Kalshi's 0.07 taker coefficient is secondhand and unverified (the fee-schedule PDF could not be fetched; "
         "`docs/venues.md`). Polymarket's fee rounding rule is unverified. Either could move edges by up to about "
-        "a cent per contract at mid prices."),
+        "a cent per contract at mid prices, in the executable and ladder tiers alike."),
         ("- The screened tier charges Kalshi's fee on one contract, ceiled to the cent (at 50c: 0.07 x 0.25 = "
          "$0.0175, charged as $0.02), so screened net gaps can be understated by up to ~$0.01 per contract, the "
          "same size as the 0.01 threshold. The executable tier rounds per order-book slice, where the cent is "
@@ -538,11 +782,12 @@ def render(summary: dict, out_dir: Path) -> Path:
         f"{pc['reviewed']} of {pc['eligible']} eligible pairs reviewed, {pc['unreviewed']} unreviewed."),
         ("- No execution latency, fill risk, partial fills, or capital lock-up costs beyond the annualized figure "
         "are modeled. The transfer cost is an assumption, reported as a sensitivity only."),
+        *lt["limits"],
         "",
         "## Next",
         "",
-        ("Plan 3: add Polymarket US (makes the US cut meaningful), crypto near-matches priced with the "
-        "option-implied distribution, and perp-vs-spot basis."),
+        ("Later plans: gapped-settlement crypto pairs (these need a volatility model, so they would be a separate, "
+        "model-based tier), Polymarket US (makes the US cut meaningful), and perp-vs-spot basis."),
         "",
         "## Queries",
         "",
@@ -550,11 +795,16 @@ def render(summary: dict, out_dir: Path) -> Path:
         f"-- screened tier\n{SCREENED_SQL}",
         f"-- executable tier: edges\n{EDGES_SQL}",
         f"-- executable tier: episodes (Postgres)\n{OPPS_SQL}",
+        f"-- ladder tier: spreads, one row per strike pair x direction x stored bounds{LADDER_SQL.rstrip()}",
+        f"-- ladder tier: episodes (Postgres)\n{LADDER_OPPS_SQL}",
+        f"-- ladder tier: basis window (bounds via venue_arb.basis.bounds)\n{BASIS_SQL}",
+        f"-- ladder tier: admissible-check denominator (Postgres; since = first ladder row){ADMISSIBLE_SQL.rstrip()}",
         "```",
         "",
         ("Eligible pairs: `venue_arb/flows/exact_sql.py` (`ELIGIBLE_SQL`) filtered by `venue_arb/exact.py`; tail "
-        "risks: `ADJ_SQL`; tier scope: `SCOPE_SQL`, both in `venue_arb/report/note.py`. Rows from the three "
-        "tier queries above are kept only for pairs in tier scope (`_scoped`)."),
+        "risks: `ADJ_SQL`; tier scope: `SCOPE_SQL`, both in `venue_arb/report/note.py`. Rows from the screened "
+        "and executable queries above are kept only for pairs in tier scope (`_scoped`); ladder rows are not "
+        "pair-scoped."),
         "",
     ]
     path = out_dir / NOTE
@@ -588,10 +838,22 @@ def main(out_dir: Path = Path("reports")) -> Path:
            for r in ch.query(SCREENED_SQL).result_rows]
     edges = [utc(dict(zip(("ts", "kalshi_id", "pm_id", "direction", "best_edge", "capacity_usd"), r, strict=True)))
              for r in ch.query(EDGES_SQL).result_rows]
-    s = summarize(pairs, scr, edges, episodes, adjudications=adj, scope=scope, generated_at=datetime.now(UTC))
+    lcols = ("asset", "instant", "k_id", "pm_id", "direction", "kind", "a", "b", "basis_up", "basis_down",
+             "snapshots", "n_capacity_gt0", "best_edge_max", "first_ts", "last_ts")
+    ladder = [utc(dict(zip(lcols, r, strict=True))) for r in ch.query(LADDER_SQL).result_rows]
+    basis_rows = ch.query(BASIS_SQL).result_rows
+    admissible = None
+    with db.pg() as conn:
+        lad_eps = rows(conn.execute(LADDER_OPPS_SQL))
+        if ladder:  # runs before the first real ladder row are the integration test's synthetic ladder only
+            n, total = conn.execute(ADMISSIBLE_SQL, {"since": min(g["first_ts"] for g in ladder)}).fetchone()
+            admissible = {"runs": n, "checks": int(total)}
+    s = summarize(pairs, scr, edges, episodes, adjudications=adj, scope=scope, generated_at=datetime.now(UTC),
+                  ladder_rows=ladder, ladder_episodes=lad_eps, basis_rows=basis_rows, admissible=admissible)
     path = render(s, out_dir)
     print(f"wrote {path}: pairs={s['pairs']} screened_rows={s['screened']['rows']} "
-          f"snapshots={s['executable']['snapshots']} episodes={s['executable']['episodes']}")
+          f"snapshots={s['executable']['snapshots']} episodes={s['executable']['episodes']} "
+          f"ladder_groups={s['ladder']['groups']} ladder_episodes={s['ladder']['episodes']}")
     return path
 
 
