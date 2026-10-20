@@ -113,3 +113,14 @@ def test_fill_empty_ladder_and_bad_size():
     assert fill([], [Level("no", 1, 0.58, 400)], lambda p, q: 0.0, lambda p, q: 0.0, 10).filled == 0
     with pytest.raises(ValueError):
         fill([], [], lambda p, q: 0.0, lambda p, q: 0.0, 0)
+
+
+def test_fill_fees_use_each_slices_own_count():
+    from math import ceil
+
+    fk = lambda p, q: ceil(100 * 0.07 * q * p * (1 - p)) / 100  # nonlinear: cent rounding per slice
+    k = [Level("yes", 1, 0.41, 120), Level("yes", 2, 0.45, 300)]; pm = [Level("no", 1, 0.58, 400)]
+    f = fill(k, pm, fk, zero, 250)  # slices: 120 @ 0.41, then 130 @ 0.45 (cut)
+    assert f.filled == 250
+    assert f.fees_usd == pytest.approx(fk(0.41, 120) + fk(0.45, 130))
+    assert f.fees_usd != pytest.approx(fk(0.41, 250))

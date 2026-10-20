@@ -20,28 +20,18 @@ class Edge:
     avg_edge: float | None
 
 
-def walk(k_asks: list[Level], pm_asks: list[Level], fee_k: Fee, fee_pm: Fee, min_edge: float = 0.01):
-    """Returns (best_edge, capacity_contracts, capacity_usd, avg_edge). Ladders are best-first.
-    capacity_usd is money spent on both legs, excluding fees."""
-    if not k_asks or not pm_asks:
-        return None, 0.0, 0.0, None
+def _slices(k_asks: list[Level], pm_asks: list[Level], limit: float | None = None):
+    """Yield (k_price, pm_price, q) slices walking two best-first ladders; q is capped so the total is <= limit."""
     i = j = 0
-    rk, rp = k_asks[0].size, pm_asks[0].size
-    best = None
-    cap = usd = total = 0.0
-    while i < len(k_asks) and j < len(pm_asks):
-        pk, pp = k_asks[i].price, pm_asks[j].price
-        q = min(rk, rp)
+    rk = k_asks[0].size if k_asks else 0
+    rp = pm_asks[0].size if pm_asks else 0
+    left = limit
+    while i < len(k_asks) and j < len(pm_asks) and (left is None or left > 0):
+        q = min(rk, rp) if left is None else min(rk, rp, left)
         if q > 0:
-            # fees per slice with the slice's own count: Kalshi's cent rounding per slice is conservative
-            edge = 1 - pk - pp - (fee_k(pk, q) + fee_pm(pp, q)) / q
-            if best is None:
-                best = edge
-            if edge < min_edge:
-                break
-            cap += q
-            usd += q * (pk + pp)
-            total += q * edge
+            yield k_asks[i].price, pm_asks[j].price, q
+            if left is not None:
+                left -= q
         rk -= q
         rp -= q
         if rk <= 0:
@@ -50,6 +40,23 @@ def walk(k_asks: list[Level], pm_asks: list[Level], fee_k: Fee, fee_pm: Fee, min
         if rp <= 0:
             j += 1
             rp = pm_asks[j].size if j < len(pm_asks) else 0
+
+
+def walk(k_asks: list[Level], pm_asks: list[Level], fee_k: Fee, fee_pm: Fee, min_edge: float = 0.01):
+    """Returns (best_edge, capacity_contracts, capacity_usd, avg_edge). Ladders are best-first.
+    capacity_usd is money spent on both legs, excluding fees."""
+    best = None
+    cap = usd = total = 0.0
+    for pk, pp, q in _slices(k_asks, pm_asks):
+        # fees per slice with the slice's own count: Kalshi's cent rounding per slice is conservative
+        edge = 1 - pk - pp - (fee_k(pk, q) + fee_pm(pp, q)) / q
+        if best is None:
+            best = edge
+        if edge < min_edge:
+            break
+        cap += q
+        usd += q * (pk + pp)
+        total += q * edge
     return best, cap, usd, (total / cap if cap else None)
 
 
@@ -70,26 +77,12 @@ def fill(k_asks: list[Level], pm_asks: list[Level], fee_k: Fee, fee_pm: Fee, con
     """Walk both best-first ladders to `contracts`, through negative slices; fees per slice as in `walk`."""
     if contracts <= 0:
         raise ValueError("contracts must be positive")
-    i = j = 0
-    rk = k_asks[0].size if k_asks else 0
-    rp = pm_asks[0].size if pm_asks else 0
     filled = k_usd = pm_usd = fees = 0.0
-    while i < len(k_asks) and j < len(pm_asks) and filled < contracts:
-        pk, pp = k_asks[i].price, pm_asks[j].price
-        q = min(rk, rp, contracts - filled)
-        if q > 0:
-            filled += q
-            k_usd += q * pk
-            pm_usd += q * pp
-            fees += fee_k(pk, q) + fee_pm(pp, q)
-        rk -= q
-        rp -= q
-        if rk <= 0:
-            i += 1
-            rk = k_asks[i].size if i < len(k_asks) else 0
-        if rp <= 0:
-            j += 1
-            rp = pm_asks[j].size if j < len(pm_asks) else 0
+    for pk, pp, q in _slices(k_asks, pm_asks, contracts):
+        filled += q
+        k_usd += q * pk
+        pm_usd += q * pp
+        fees += fee_k(pk, q) + fee_pm(pp, q)
     cost = k_usd + pm_usd + fees
     return Fill(contracts, filled, filled < contracts,
                 k_usd / filled if filled else None, pm_usd / filled if filled else None, fees, cost,
