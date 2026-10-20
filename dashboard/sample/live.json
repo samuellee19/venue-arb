@@ -71,8 +71,8 @@
       "net_edge_cents": 5.35
     },
     "checks_window": [
-      "2026-10-13T15:30:00Z",
-      "2026-10-20T15:30:00Z"
+      "2026-10-20T14:00:00Z",
+      "2026-10-20T15:00:00Z"
     ],
     "episodes_7d": 1,
     "pairs_live": {
@@ -381,7 +381,7 @@
             "status": "ok"
           },
           {
-            "detail": "net +5.3¢ on the first slice; fees 1.7¢",
+            "detail": "net +5.4¢ on the first slice; fees 1.7¢",
             "name": "fees_depth",
             "status": "ok"
           },
@@ -391,7 +391,7 @@
             "status": "partial"
           }
         ],
-        "label": "Executable edge · +5.3¢ · $1,129 before transfer · $1,118 after"
+        "label": "Executable edge · +5.4¢ · $1,129 before transfer · $1,118 after"
       }
     },
     {

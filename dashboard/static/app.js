@@ -1,9 +1,10 @@
 // venue-arb pair explorer: fetch + DOM over the dashboard API (dashboard/api/app.py); Plotly is the vendored global.
 // No edge, fee or basis logic here: every number comes from the bundle, /history, /snapshot or /api/walk.
 const REPO = "https://github.com/samuellee19/venue-arb";
-const POLL_MS = 30000, TICK_S = 60, STALE_S = 120, DEAD_S = 3600;
+const POLL_MS = 30000, TICK_S = 60, STALE_S = 120, DEAD_S = 3600, BOOKS_S = 300;  // BOOKS_S = bundle.LIVE_MAX_AGE_S
 const US_BANNER = "No pair is executable from the US: Polymarket rejects US orders (docs/venues.md). Gaps shown for reference.";
 const STALE_BANNER = "last update {n} min ago";
+const NO_BOOKS = "no books in 5 min";
 const NOT_US = "Not executable from the US";
 const NO_WALK = "size re-walk needs published books";
 // verdict label (prefix) -> badge tone; the labels venue_arb/bundle.verdict writes, plus the client-side US one
@@ -101,9 +102,13 @@ function tick() {
   if (!S.bundle) return;
   const age = S.age + (Date.now() - S.fetchedAt) / 1000;
   const next = Math.round((Date.parse(S.bundle.computed_at) + TICK_S * 1000 - now()) / 1000);
-  const t = new Date(S.bundle.computed_at).toLocaleTimeString("en-US", {timeZone: "America/Los_Angeles", hour12: false});
-  $("clock").textContent = `live · books ${t} PT · ${next > 0 ? `next tick in ${next} s` : "next tick due"}`;
-  $("dot").classList.toggle("stale", age > STALE_S);
+  // the collector's newest snapshot, not computed_at: the publisher keeps ticking when the collector stops
+  const books = S.bundle.collector_last_snapshot_at;
+  const noBooks = !books || Date.parse(S.bundle.computed_at) - Date.parse(books) > BOOKS_S * 1000;
+  const t = noBooks ? NO_BOOKS
+    : `live · books ${new Date(books).toLocaleTimeString("en-US", {timeZone: "America/Los_Angeles", hour12: false})} PT`;
+  $("clock").textContent = `${t} · ${next > 0 ? `next tick in ${next} s` : "next tick due"}`;
+  $("dot").classList.toggle("stale", noBooks || age > STALE_S);
   $("stale").hidden = age <= STALE_S;
   $("stale").textContent = STALE_BANNER.replace("{n}", num(Math.round(age / 60)));
   $("kpis").classList.toggle("stale", age > DEAD_S);
@@ -205,7 +210,7 @@ function buildDetail() {
     + `<div class="chart"><div class="tools"><h4>Net edge after fees · ¢ per contract · UTC</h4>`
     + `<span class="seg" id="range">${ranges.join("")}</span><button class="chip${S.ann ? " on" : ""}" id="ann">annotations</button></div>`
     + `<div id="plot"></div><div class="legend"><span>dashed red: +1¢ episode threshold</span><span>dotted: settlement · listing · basis change</span>`
-    + `<span>shaded: collector gap</span><span>▲ episode</span><span>hover for the books · click a point to load that snapshot</span></div></div>`
+    + `<span>shaded: collector gap</span><span>▲ episode</span><span>${S.bundle.show_books ? "hover for the books" : "hover for the row's values"} · click a point to load that snapshot</span></div></div>`
     + `<div class="why" id="why"></div>`;
   $("range").onclick = e => {
     if (!e.target.dataset.r) return;
@@ -384,7 +389,12 @@ function drawChart() {
     let n = 0;
     const tag = (x, text, color = mut) => notes.push({x, y: 1 - 0.08 * (n++ % 4), xref: "x", yref: "paper", showarrow: false,
       text: esc(text.length > 34 ? text.slice(0, 33) + "…" : text), hovertext: esc(text), xanchor: "left", yanchor: "top", font: {size: 10, color}});
-    for (const a of S.bundle.annotations.filter(a => a.key == null || keys.includes(a.key))) {
+    // global notes (key null) only where they apply: settlement at this pair's instant, basis change on its ladder's asset
+    const p = byKey(S.sel), asset = p.ladder?.split("~")[0];
+    const mine = a => a.key != null ? keys.includes(a.key)
+      : a.kind === "settlement" ? Date.parse(a.at) === Date.parse(p.settles_at)
+      : a.kind === "basis_change" ? asset != null && a.label.startsWith(`${asset} `) : true;
+    for (const a of S.bundle.annotations.filter(mine)) {
       const at = pz(a.at), until = pz(a.until ?? a.at);
       if (until < x0 || at > x1) continue;
       if (a.kind === "collector_gap") {
@@ -406,6 +416,7 @@ function drawChart() {
     hoverlabel: {bgcolor: css("--panel"), bordercolor: css("--on-line"), font: {color: css("--txt")}},
     xaxis: {type: "date", gridcolor: grid, linecolor: grid, range: [x0, x1]},
     yaxis: {gridcolor: grid, zerolinecolor: grid, ticksuffix: "¢"}, shapes, annotations: notes,
+    uirevision: S.sel + S.range,  // the minute re-render keeps the user's zoom
   }, {displayModeBar: false, responsive: true});
   if (!el.dataset.bound) {
     el.dataset.bound = "1";

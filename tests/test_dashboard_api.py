@@ -79,6 +79,15 @@ def test_history_without_history_dir_is_empty(tmp_path):
     assert Store(tmp_path).history(CPI_KEY, "all") == {}
 
 
+def test_corrupt_history_file_is_empty_not_500(monkeypatch, tmp_path):
+    shutil.copytree(SAMPLE, tmp_path, dirs_exist_ok=True)
+    next((tmp_path / "history").glob("pairs-*.parquet")).write_bytes(b"not a parquet file")
+    c = _client(monkeypatch, tmp_path)
+    r = c.get(f"/api/pair/{_p(CPI_KEY)}/history?range=24h")
+    assert r.status_code == 200 and r.json() == {}
+    assert c.get(f"/api/pair/{_p(CPI_KEY)}/snapshot?ts=2026-10-20T15:00:00Z").status_code == 404
+
+
 def test_snapshot_nearest(client):
     r = client.get(f"/api/pair/{_p(CPI_KEY)}/snapshot", params={"ts": "2026-10-20T15:10:40Z"})
     assert r.status_code == 200 and r.json()["ts"] == "2026-10-20T15:11:00Z"

@@ -31,31 +31,34 @@ if ! command -v uv >/dev/null; then
   curl -fsSL https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin UV_NO_MODIFY_PATH=1 sh
 fi
 
-# service user: locked password (key login only), and bash because sshd runs the forced rrsync command via the
-# login shell (nologin would refuse it); the authorized_keys line below is what confines the key
-id venue-arb >/dev/null 2>&1 || useradd --system --create-home --home-dir "$BASE" --shell /bin/bash venue-arb
-install -d -o venue-arb -g venue-arb "$BASE" "$BASE/bundle" "$BASE/bundle/history" "$BASE/app"
+# push user: locked password (key login only), and bash because sshd runs the forced rrsync command via the
+# login shell (nologin would refuse it); the root-owned authorized_keys line below is what confines the key
+id venue-arb >/dev/null 2>&1 || useradd --system --home-dir "$BASE" --shell /bin/bash venue-arb
+# web user: runs uvicorn, no shell, no home; reads the root-owned app and the 0755/0644 bundle, writes nothing
+id venue-arb-web >/dev/null 2>&1 || useradd --system --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin venue-arb-web
+install -d -m 755 -o root -g root "$BASE" "$BASE/app"
+install -d -m 755 -o venue-arb -g venue-arb "$BASE/bundle" "$BASE/bundle/history"
+# everything under $BASE but the bundle is root's (a re-run converts a checkout, venv or uv dirs the push user owned)
+find "$BASE" -mindepth 1 -maxdepth 1 ! -name bundle -exec chown -R root:root {} +
 
-# publisher key: rsync only, confined to the bundle dir, no deletes
-install -d -m 700 -o venue-arb -g venue-arb "$BASE/.ssh"
-printf '%s\n' "command=\"/usr/bin/rrsync -no-del $BASE/bundle\",no-pty,no-port-forwarding,no-agent-forwarding,no-X11-forwarding $PUBKEY" \
-  >"$BASE/.ssh/authorized_keys"
-chown venue-arb:venue-arb "$BASE/.ssh/authorized_keys"
+# publisher key: rsync only, confined to the bundle dir, no deletes; root-owned so the push user cannot rewrite it
+install -d -m 700 -o root -g root "$BASE/.ssh"
+printf '%s\n' "restrict,command=\"/usr/bin/rrsync -munge -no-del $BASE/bundle\" $PUBKEY" >"$BASE/.ssh/authorized_keys"
+chown root:root "$BASE/.ssh/authorized_keys"
 chmod 600 "$BASE/.ssh/authorized_keys"
 
-# app checkout + pipeline-free venv (the repo is not pip-installable; the unit sets PYTHONPATH)
+# app checkout + pipeline-free venv, as root (the repo is not pip-installable; the unit sets PYTHONPATH)
 if [[ ! -d $BASE/app/dashboard ]]; then   # skipped when the checkout was copied in by hand
   : "${REPO_URL:?first run needs REPO_URL=<git url>}"
-  runuser -u venue-arb -- git clone --branch "$BRANCH" "$REPO_URL" "$BASE/app"
+  (cd / && git clone --branch "$BRANCH" "$REPO_URL" "$BASE/app")
 fi
-chown -R venue-arb:venue-arb "$BASE/app"
-runuser -u venue-arb -- env HOME="$BASE" bash -euo pipefail -c '
+(cd / && env HOME="$BASE" bash -euo pipefail -c '
   cd /srv/venue-arb/app
   uv python install 3.14
   [ -x .venv/bin/python ] || uv venv --python 3.14 .venv
-  uv pip install --python .venv/bin/python fastapi uvicorn duckdb pyarrow pydantic
+  uv pip install --exclude-newer 2026-10-05T00:00:00Z --python .venv/bin/python fastapi uvicorn duckdb pydantic
   PYTHONPATH=. .venv/bin/python -c "import venue_arb.edges, venue_arb.bundle, dashboard.api.app"
-'
+')
 
 # units, cron, Caddy
 install -m 644 "$BASE/app/deploy/server/venue-arb-web.service" /etc/systemd/system/venue-arb-web.service

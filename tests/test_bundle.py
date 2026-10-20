@@ -174,6 +174,14 @@ def test_verdict_without_first_slice():
     assert v.checks[2].detail == "net +2.0¢ on the first slice" and v.label.startswith("Executable edge · +2.0¢")
 
 
+def test_verdict_label_rounds_half_up_like_the_client():
+    # 100 * 0.0535 is published as 5.35; toLocaleString shows +5.4¢ and $151 (Python's .1f/.0f say 5.3 and 150)
+    v = verdict("exact", "k_yes_pm_no", Edge("k_yes_pm_no", 0.0535, 1000, 150.5, 0.05), a=None, b=None, up=None,
+                down=None, us_executable=True, both_live=True)
+    assert v.label == "Executable edge · +5.4¢ · $151 before transfer · $140 after"
+    assert v.checks[2].detail == "net +5.4¢ on the first slice"
+
+
 def test_market_urls():
     assert market_url("kalshi", {"market_id": "KXBTCD-26OCT2011-T85999.99", "raw": {"event": {"series_ticker": "KXBTCD", "event_ticker": "KXBTCD-26OCT2011"}}}) == "https://kalshi.com/markets/kxbtcd/market/kxbtcd-26oct2011"
     assert market_url("polymarket", {"raw": {"event": {"slug": "bitcoin-above-86000-on-october-20-12pm-et"}}}) == "https://polymarket.com/event/bitcoin-above-86000-on-october-20-12pm-et"

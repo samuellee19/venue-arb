@@ -187,7 +187,7 @@ def build(out: Path) -> None:
             Annotation(kind="collector_gap", at=datetime(2026, 10, 20, 14, 41, tzinfo=UTC),
                        until=datetime(2026, 10, 20, 14, 47, tzinfo=UTC), key=None, label="Collector gap: 6 min"),
             Annotation(kind="threshold", at=BUMP_FROM, until=None, key=EXEC_KEY, label="Net edge crossed 1¢")],
-        kpi_inputs={"checks_window": [NOW - timedelta(days=7), NOW], "admissible_checks": 1200, "violations": 0,
+        kpi_inputs={"checks_window": [HOURS[0], HOURS[1]], "admissible_checks": 1200, "violations": 0,
                     "screened_share_ge_1c": 0.004, "screened_hours": 3100},
         attribution=["Order books: Kalshi public market-data API (kalshi.com)",
                      "Order books: Polymarket public CLOB API (polymarket.com)"],

@@ -58,6 +58,8 @@ did not settle when fetched is marked "unverified". Re-check before relying on a
 ### Public data terms (2026-10-20)
 - **Decision: `DASHBOARD_SHOW_BOOKS = False`. Kalshi's Data Terms of Use prohibit public display without written
   authorization, and the Developer Agreement (which governs the API) could not be read. Sam to review.**
+- `capacity_contracts` (contracts fillable at ≥ 1¢ net across both books after fees) is published as a derived
+  quantity, not a quote (controller Ruling 10; Sam to confirm with the terms).
 - The Developer Agreement <https://kalshi.com/developer-agreement> returned HTTP 429 (Vercel checkpoint) to curl and
   WebFetch today; in a browser the page loaded but its body was empty. Not read. Not bypassed.
 - The same page's footer links "Data Terms of Service"
@@ -68,7 +70,7 @@ did not settle when fetched is marked "unverified". Re-check before relying on a
   Whether it reaches API data is the Developer Agreement's question; on its face it forbids a public quote page.
 - Attribution text required: none found (neither document was read in full for the API terms).
 - To flip to `True`: obtain Kalshi's written permission, or read the Developer Agreement and find an explicit
-  display allowance.
+  display allowance; then re-run `python -m venue_arb.publish history --hours 168` and regenerate `dashboard/sample`.
 
 ### Kalshi fee schedule source (2026-10-20, Task 1)
 - Still unverified. <https://kalshi.com/fee-schedule> and the PDF both return HTTP 429; the S3 guess

@@ -34,4 +34,4 @@ def test_server_unit_has_no_db_env():
     env = unit_env(ROOT / "deploy" / "server" / "venue-arb-web.service")
     assert env["BUNDLE_DIR"] == "/srv/venue-arb/bundle"
     assert not [k for k in env if k.startswith(("PG", "CLICKHOUSE_", "BWS_", "PREFECT_"))]
-    assert "User=venue-arb" in text
+    assert "User=venue-arb-web" in text and "ProtectSystem=strict" in text  # not the rsync push user

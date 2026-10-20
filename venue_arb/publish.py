@@ -164,7 +164,7 @@ def write_atomic(path: Path, data: bytes) -> None:
 def push(src_dir: Path, dest: str, rsync=subprocess.run) -> bool:
     """rsync the bundle dir outbound (no --delete: the server prunes its own history). False on failure."""
     try:
-        r = rsync(["rsync", "-az", "--timeout=30", "--partial", f"{src_dir}/", dest], capture_output=True,
+        r = rsync(["rsync", "-az", "--timeout=30", f"{src_dir}/", dest], capture_output=True,
                   timeout=PUSH_TIMEOUT_S)
     except subprocess.TimeoutExpired:
         log.error("push timed out after %ss", PUSH_TIMEOUT_S)
@@ -401,7 +401,8 @@ def tick(state: dict, readers: dict, now: datetime) -> LiveBundle:
     ladder = [r for (asset, instant), lad in state["ladders"].items()
               for r in bundle.ladder_pair_rows(asset, instant, lad, books, state["basis"][asset].up,
                                                state["basis"][asset].down, k_fee, pm_fee, titles, ctx["sparks"], now)]
-    # one settlement line per instant, key None (ladder rows share instants; the client matches pair.settles_at)
+    # one settlement line per instant, key None (ladder rows share instants); the client draws it only on pairs whose
+    # settles_at equals it, and a basis_change only on ladder pairs of the asset its label names
     notes = ctx["annotations"] + [Annotation(kind="settlement", at=t, until=None, key=None, label="settles")
                                   for t in sorted({p.settles_at for p in exact + ladder})]
     notes += [a for p in exact + ladder for a in _listing_note(p, titles, now)]

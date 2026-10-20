@@ -7,6 +7,7 @@ config.DASHBOARD_SHOW_BOOKS is True, read at call time (tests monkeypatch it); o
 """
 from collections.abc import Callable
 from datetime import datetime, timedelta
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
@@ -139,6 +140,12 @@ def market_url(venue: str, listing: dict) -> str:
     return f"https://polymarket.com/event/{ev['slug']}"
 
 
+def _half_up(x: float, q: str) -> Decimal:
+    """x at the 4 dp it is published with, rounded half-up to q ("0.1", "1"), as the client's toLocaleString shows it
+    (f"{5.35:.1f}" is "5.3": Python rounds the binary float, which sits just below 5.35)."""
+    return Decimal(str(round(x, 4))).quantize(Decimal(q), ROUND_HALF_UP)
+
+
 def verdict(kind: str, direction: str, edge: Edge | None, *, a: float | None, b: float | None,
             up: float | None, down: float | None, us_executable: bool, both_live: bool,
             first: tuple[float, float] | None = None) -> Verdict:
@@ -160,7 +167,7 @@ def verdict(kind: str, direction: str, edge: Edge | None, *, a: float | None, b:
         checks.append(Check(name="fees_depth", status="fail",
                             detail="not walked: " + ("no asks on one side" if edge else "a leg is stale")))
     else:
-        detail = f"net {100 * best:+.1f}¢"
+        detail = f"net {_half_up(100 * best, '0.1'):+}¢"
         if first is None:
             detail += " on the first slice"
         elif config.DASHBOARD_SHOW_BOOKS:
@@ -180,8 +187,8 @@ def verdict(kind: str, direction: str, edge: Edge | None, *, a: float | None, b:
         label = "Not an arbitrage · basis exposure"
     elif executable:
         cap = edge.capacity_usd
-        label = (f"Executable edge · +{100 * best:.1f}¢ · ${cap:,.0f} before transfer · "
-                 f"${cap - transfer_cost(cap):,.0f} after")
+        label = (f"Executable edge · +{_half_up(100 * best, '0.1')}¢ · ${_half_up(cap, '1'):,} before transfer · "
+                 f"${_half_up(cap - transfer_cost(cap), '1'):,} after")
     else:
         label = "Exact match · no edge" if kind == "exact" else "Spread · within basis bound · no edge"
     return Verdict(label=label, checks=checks)

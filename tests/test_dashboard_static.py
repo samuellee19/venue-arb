@@ -7,7 +7,7 @@ VERDICTS = ("Exact match · no edge", "Executable edge", "Not an arbitrage · ba
             "Spread · within basis bound · no edge", "No asks on one side", "Stale · a leg has no snapshot in 5 min",
             "Not executable from the US")
 BANNERS = ("No pair is executable from the US: Polymarket rejects US orders (docs/venues.md). Gaps shown for reference.",
-           "last update {n} min ago")
+           "last update {n} min ago", "no books in 5 min")
 ALLOWED_URL = re.compile(r"https://(kalshi\.com|polymarket\.com|github\.com/samuellee19/venue-arb)(/|$)")
 URL = re.compile(r"https?://[^\s'\"`)]+")
 

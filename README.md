@@ -35,7 +35,7 @@ note is re-run once about four weeks of snapshots exist.
   cadence. 3 opportunity episodes (median duration 121 min, median capacity $834); the largest top-of-book edge
   after fees was 0.0192 per $1 against the 0.01 threshold. 0 of the 3 are executable within the US, because
   Polymarket International blocks US trading. 16 hours says little about weeks.
-- **Screened tier** (hourly history, not executable). Median net gap -0.032; 3.5% of 27,043 pair-hour rows reached
+- **Screened tier** (hourly history, not executable). Median net gap -0.032; 3.5% of 27,043 rows reached
   0.01, and 31.4% of those fall in a pair's first 7 days. The count is biased in both directions (the one-contract
   fee ceiling pushes it down, the Polymarket mid/last price pushes it up).
 - **Ladders.** No ladder snapshots existed at generation time, so no spread has been scored: an absence of data,
@@ -48,7 +48,8 @@ note is re-run once about four weeks of snapshots exist.
 ## Live dashboard
 
 `https://<server>` (placeholder, filled in at deploy). While the venues' data terms are unresolved the page does
-not show quotes: it shows edges, capacities, episodes and the basis, and the book columns are empty.
+not show quotes: it shows edges, capacities and episodes, and the per-leg book boxes collapse to one derived cost
+panel.
 
 ## Architecture
 
@@ -58,7 +59,7 @@ OptiPlex (home, outbound only)                      Oracle Always Free VM (publi
 │ collector (60 s books)          │ ─────────────▶ │ /srv/venue-arb/bundle/live.json  │
 │ Prefect flows (hourly scoring)  │   every 60 s   │ /srv/venue-arb/bundle/history/   │
 │ publish loop:                   │   + hourly     │   pairs-YYYYMMDDHH.parquet       │
-│   live bundle (≈200 KB JSON)    │                │ app: FastAPI + DuckDB + static   │
+│   live bundle (≈460 KB JSON)    │                │ app: FastAPI + DuckDB + static   │
 │   history Parquet (hourly)      │                │ Caddy (auto-HTTPS) → :443        │
 └─────────────────────────────────┘                └──────────────────────────────────┘
 ```
@@ -158,7 +159,8 @@ cd ~/platform && docker compose exec postgres psql -U postgres -d app -c \
 hour, then pushes them outbound with rsync to `VENUE_ARB_PUBLISH_DEST` (`venue-arb@host:./`; rrsync on the server takes the path relative to the bundle dir, so an absolute path would land in `bundle/srv/...`). The value
 in `mise.toml [env]` and the three units is the placeholder `venue-arb@SERVER_IP:./` (a shared
 env var; only the publisher reads it, and `tests/test_deploy.py` needs it identical everywhere). Once the server
-exists (Deploy step), set the real IP on the box in both `mise.toml` and the unit, then `daemon-reload` and restart.
+exists, set the real host on the box in both `mise.toml` and the unit (the `venue-arb-push-host` ssh alias of
+`deploy/server/README.md` step 4), then `daemon-reload` and restart.
 
 Backfill history (oldest hour first, idempotent; pushes at the end when a destination is set):
 

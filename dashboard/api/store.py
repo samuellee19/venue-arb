@@ -58,14 +58,19 @@ class Store:
         if not any(hist.glob("pairs-*.parquet")):
             return None
         glob = str(hist / "pairs-*.parquet").replace("'", "''")
-        # ts as naive UTC: cursors do not inherit a session TimeZone, and TIMESTAMPTZ formats in local time
-        return f"(SELECT * REPLACE (timezone('UTC', ts) AS ts) FROM read_parquet('{glob}'))"
+        # ts as naive UTC: cursors do not inherit a session TimeZone, and TIMESTAMPTZ formats in local time;
+        # union_by_name: an hour file written before a column was added still reads (the missing column is null)
+        return f"(SELECT * REPLACE (timezone('UTC', ts) AS ts) FROM read_parquet('{glob}', union_by_name=true))"
 
     def _query(self, sql: str, params: list) -> tuple[list[str], list[tuple]]:
+        """No rows on a DuckDB error (a truncated or corrupt hour file): history() -> {}, snapshot() -> None, not 500."""
         cur = self._con.cursor()  # a cursor per call: the connection is shared by the server's worker threads
         try:
             rows = cur.execute(sql, params).fetchall()
             return [d[0] for d in cur.description], rows
+        except duckdb.Error:
+            log.exception("history query failed; serving no rows")
+            return [], []
         finally:
             cur.close()
 

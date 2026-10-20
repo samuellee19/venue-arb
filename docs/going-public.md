@@ -22,4 +22,6 @@ Before the repo's visibility changes (Sam's action, after every box is ticked). 
 - [ ] **Confirm the GitHub repo URL** matches `REPO` in `dashboard/static/app.js` and the allow-list in
   `tests/test_dashboard_static.py` (both pin `https://github.com/samuellee19/venue-arb`, a guess until the repo exists).
 - [ ] **Page footer links the repo** (done in `app.js`; verify after deploy that the link opens the public repo).
+- [ ] **Serve from a domain or `<ip>.sslip.io`** (Let's Encrypt) before linking from a resume: a bare IP shows a
+  self-signed warning.
 - [ ] **Repo links the page.** Replace the `https://<server>` placeholder under "Live dashboard" in `README.md` with the deployed URL, and check that it opens.

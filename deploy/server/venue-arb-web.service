@@ -4,7 +4,8 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-User=venue-arb
+# not the push user: rsync writes the bundle as venue-arb, the web process only reads it
+User=venue-arb-web
 WorkingDirectory=/srv/venue-arb/app
 Environment=BUNDLE_DIR=/srv/venue-arb/bundle
 # the repo is not pip-installable (flat layout); venue_arb and dashboard import from the checkout
@@ -12,6 +13,11 @@ Environment=PYTHONPATH=/srv/venue-arb/app
 ExecStart=/srv/venue-arb/app/.venv/bin/uvicorn dashboard.api.app:app --host 127.0.0.1 --port 8000
 Restart=always
 RestartSec=5
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadOnlyPaths=/srv/venue-arb/app /srv/venue-arb/bundle
 
 [Install]
 WantedBy=multi-user.target
