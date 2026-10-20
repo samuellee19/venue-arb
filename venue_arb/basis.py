@@ -25,22 +25,23 @@ def by_end(asset: str, candles: list[dict], seconds: int) -> dict[tuple[str, dat
     return {(asset, c["open"] + timedelta(seconds=seconds)): c["close"] for c in candles}
 
 
-def join(brti: dict, h1: dict, m1: dict) -> list[dict]:
-    """Rows for instants with BRTI and the 1h candle (the one Polymarket's hourly rules name -> `binance`, `diff`);
-    the 1m candle (the daily noon-ET rule) is carried alongside, NaN when its day is missing."""
-    out = []
-    for (asset, t), b in sorted(brti.items()):
-        if (asset, t) not in h1:
-            continue
-        x = m1.get((asset, t), math.nan)
-        out.append({"instant": t, "asset": asset, "brti": b, "binance": h1[(asset, t)], "diff": b - h1[(asset, t)],
-                    "binance_1m": x, "diff_1m": b - x})
-    return out
+def join(brti: dict, h1: dict) -> list[dict]:
+    """Rows for instants with BRTI and the 1h candle ending there (`binance`, `diff`). The 1m columns are no longer
+    populated (NaN): the 1m candle closing at H has the same close as the 1h candle ending at H."""
+    nan = math.nan
+    return [{"instant": t, "asset": a, "brti": b, "binance": h1[(a, t)], "diff": b - h1[(a, t)],
+             "binance_1m": nan, "diff_1m": nan} for (a, t), b in sorted(brti.items()) if (a, t) in h1]
 
 
-def bound(diffs: list[float], q: float = 0.999) -> float:
-    """Basis bound B: nearest-rank q-quantile of |diff|, rounded up to $1."""
-    if not diffs:
+def _rank_up(xs: list[float], q: float) -> float:
+    """Nearest-rank q-quantile of xs, floored at 0, rounded up to $1."""
+    if not xs:
         raise ValueError("no basis observations")
-    s = sorted(abs(d) for d in diffs)
-    return float(math.ceil(s[math.ceil(q * len(s)) - 1] - 1e-9))
+    s = sorted(xs)
+    return float(max(0, math.ceil(s[math.ceil(round(q * len(s), 9)) - 1] - 1e-9)))
+
+
+def bounds(diffs: list[float], q: float = 0.999) -> tuple[float, float]:
+    """Directional basis bounds (up, down) for diff = BRTI - Binance: BRTI exceeds Binance by at most `up`, falls short
+    by at most `down`, each at quantile q, rounded up to $1."""
+    return _rank_up(diffs, q), _rank_up([-d for d in diffs], q)

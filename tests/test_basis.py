@@ -1,5 +1,6 @@
 import hashlib
 import io
+import math
 import zipfile
 from datetime import UTC, date, datetime
 
@@ -69,10 +70,9 @@ def test_brti_by_instant_dedupes_and_skips():
 def test_join_on_instant():
     brti = {("BTC", H): 81393.93, ("BTC", datetime(2026, 10, 20, 10, tzinfo=UTC)): 1.0}
     h1 = {("BTC", H): 81400.0}  # keyed by candle END
-    m1 = {("BTC", H): 81395.0}
-    rows = basis.join(brti, h1, m1)
-    assert rows == [{"instant": H, "asset": "BTC", "brti": 81393.93, "binance": 81400.0, "diff": pytest.approx(-6.07),
-                     "binance_1m": 81395.0, "diff_1m": pytest.approx(-1.07)}]
+    (r,) = basis.join(brti, h1)
+    assert (r["instant"], r["asset"], r["binance"], r["diff"]) == (H, "BTC", 81400.0, pytest.approx(-6.07))
+    assert math.isnan(r["diff_1m"])
 
 
 def test_candle_ends():
@@ -80,11 +80,22 @@ def test_candle_ends():
     assert basis.by_end("BTC", c, 3600) == {("BTC", H): 7.0}
 
 
-def test_bound_rounds_up_to_dollar():
-    diffs = [-0.5, 1.0, 2.0, 3.5, -4.2] + [0.1] * 995
-    assert basis.bound(diffs) == 4.0  # nearest-rank 99.9th of 1000 is 3.5 -> $4
-    assert basis.bound(diffs, q=1.0) == 5.0
-    assert basis.bound([0.0, 0.0]) == 0.0
-    assert basis.bound([3.0] * 10) == 3.0
+def test_bounds_directional():
+    diffs = [-50.0] * 990 + [-120.4] * 9 + [3.2]  # BRTI nearly always below Binance
+    assert basis.bounds(diffs) == (0.0, 121.0)  # up floors at 0; down is the 99.9th of 50 x990, 120.4 x9
+    assert basis.bounds(diffs, q=1.0) == (4.0, 121.0)
+    assert basis.bounds([3.0] * 10) == (3.0, 0.0)
+    assert basis.bounds([0.0, 0.0]) == (0.0, 0.0)
     with pytest.raises(ValueError):
-        basis.bound([])
+        basis.bounds([])
+
+
+def test_bounds_float_overshoot():
+    assert 0.07 * 100 > 7  # float overshoot: ceil would pick rank 8
+    assert basis.bounds([float(i) for i in range(1, 101)], q=0.07)[0] == 7.0
+
+
+def test_empty_checksum_is_checksum_error():
+    blob = zipped([row(1, "5")])
+    with pytest.raises(RuntimeError, match="checksum"):
+        binance_archive.klines("BTCUSDT", "1h", date(2026, 10, 18), get=lambda u: b"" if u.endswith("CHECKSUM") else blob)

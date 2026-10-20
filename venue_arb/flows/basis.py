@@ -1,9 +1,14 @@
-"""Basis flow: Kalshi BRTI settles vs Binance candles -> venue_arb.basis (ClickHouse) and the bound B, via qa.
+"""Basis flow: Kalshi BRTI settles vs Binance candles -> venue_arb.basis (ClickHouse) and the bounds (up, down), via qa.
 
     secrets uv run python -m venue_arb.flows.basis
 
-Incremental and idempotent: re-reads from 3 h before the newest stored instant (or `days` back on a first run) and
-rewrites the same (asset, instant) keys. Binance days the archive has not published yet are skipped until a later run.
+Incremental and idempotent: re-reads the trailing REREAD_DAYS days every run (or `days` on an empty table) and
+rewrites the same (asset, instant) keys.
+
+Candle (verified 2026-10-20 in venue_arb.listings.rules): Polymarket hourly = the BTC/USDT 1 hour candle ending at the
+hour; Polymarket daily = "the Binance 1 minute candle for BTC/USDT closing at 12:00 in the ET timezone (noon) ... final
+'Close' price". The 1m candle closing at H and the 1h candle ending at H share one close (the last trade before H), as the
+first live run showed in every row, so only the 1h zips are downloaded and binance_1m/diff_1m are left NaN. Binance days the archive has not published yet are skipped until a later run.
 """
 
 import logging
@@ -20,6 +25,7 @@ from venue_arb.sources import binance_archive, kalshi
 
 PIPELINE = f"{PIPELINE_PREFIX}_basis"
 TABLE = "venue_arb.basis"
+REREAD_DAYS = 3
 SERIES = {"KXBTCD": ("BTC", "BTCUSDT"), "KXETHD": ("ETH", "ETHUSDT")}
 CONTRACT = {"instant": "datetime", "asset": "str", "brti": "float", "binance": "float", "diff": "float",
             "binance_1m": "float", "diff_1m": "float"}
@@ -45,10 +51,8 @@ def basis_flow(days: int = 30) -> dict:
     results: list[checks.Result] = []
     try:
         ch = db.ch()
-        since = datetime.now(UTC) - timedelta(days=days)
-        (newest,) = ch.query(f"SELECT max(instant) FROM {TABLE}").result_rows[0]
-        if newest.year > 1970:
-            since = max(since, newest.replace(tzinfo=UTC) - timedelta(hours=3))
+        (n,) = ch.query(f"SELECT count() FROM {TABLE}").result_rows[0]
+        since = datetime.now(UTC) - timedelta(days=REREAD_DAYS if n else days)
         brti = {}
         for series in SERIES:
             brti |= basis.brti_by_instant(kalshi.fetch_settled(series, int(since.timestamp())))
@@ -56,7 +60,7 @@ def basis_flow(days: int = 30) -> dict:
         for series, (asset, symbol) in SERIES.items():
             ts = sorted(t for a, t in brti if a == asset)
             rows += basis.join({k: v for k, v in brti.items() if k[0] == asset},
-                               candles(symbol, "1h", asset, 3600, ts), candles(symbol, "1m", asset, 60, ts))
+                               candles(symbol, "1h", asset, 3600, ts))
         pre = [checks.expect_schema(rows, CONTRACT, TABLE)]
         if brti:
             pre.append(checks.expect_rows(len(rows), TABLE))
@@ -66,7 +70,7 @@ def basis_flow(days: int = 30) -> dict:
             ch.insert(TABLE, [[r[c] for c in COLUMNS] for r in rows], column_names=COLUMNS)
         results += sql.run_all(pattern="basis_*.sql", directory=SQL_CHECKS)
         checks.enforce(results)
-        out = {"brti_instants": len(brti), "rows": len(rows), "bound": bounds(ch, days)}
+        out = {"brti_instants": len(brti), "rows": len(rows), "bounds": bounds(ch, days)}
         log.info("basis ok: %s", out)
         return out
     except checks.DataQualityError as e:
@@ -81,11 +85,11 @@ def basis_flow(days: int = 30) -> dict:
             store.record(conn, PIPELINE, run_id, results)
 
 
-def bounds(ch, days: int = 30) -> dict[str, float]:
-    """B per asset from the stored last `days` days (hourly-rule 1h diffs)."""
+def bounds(ch, days: int = 30) -> dict[str, tuple[float, float]]:
+    """(up, down) per asset from the stored last `days` days."""
     rs = ch.query(f"SELECT asset, groupArray(diff) FROM {TABLE} FINAL "
                   "WHERE instant >= now() - INTERVAL {d:UInt32} DAY GROUP BY asset", parameters={"d": days}).result_rows
-    return {a: basis.bound(d) for a, d in rs}
+    return {a: basis.bounds(d) for a, d in rs}
 
 
 if __name__ == "__main__":

@@ -31,6 +31,7 @@ def klines(symbol: str, interval: str, day: date, get=http.get_bytes) -> list[di
     if blob is None:
         return None
     sums = get(url + ".CHECKSUM")
-    if sums is None or hashlib.sha256(blob).hexdigest() != sums.decode().split()[0]:
+    want = sums.decode().split()[:1] if sums else []
+    if want != [hashlib.sha256(blob).hexdigest()]:
         raise RuntimeError(f"checksum mismatch for {symbol}-{interval}-{day}")
     return parse_zip(blob)
