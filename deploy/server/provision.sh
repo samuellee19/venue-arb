@@ -41,11 +41,12 @@ install -d -m 755 -o venue-arb -g venue-arb "$BASE/bundle" "$BASE/bundle/history
 # everything under $BASE but the bundle is root's (a re-run converts a checkout, venv or uv dirs the push user owned)
 find "$BASE" -mindepth 1 -maxdepth 1 ! -name bundle -exec chown -R root:root {} +
 
-# publisher key: rsync only, confined to the bundle dir, no deletes; root-owned so the push user cannot rewrite it
-install -d -m 700 -o root -g root "$BASE/.ssh"
+# publisher key: rsync only, confined to the bundle dir, no deletes; root-owned so the push user cannot rewrite it,
+# and world-readable because sshd opens authorized_keys as the logging-in user
+install -d -m 755 -o root -g root "$BASE/.ssh"
 printf '%s\n' "restrict,command=\"/usr/bin/rrsync -munge -no-del $BASE/bundle\" $PUBKEY" >"$BASE/.ssh/authorized_keys"
 chown root:root "$BASE/.ssh/authorized_keys"
-chmod 600 "$BASE/.ssh/authorized_keys"
+chmod 644 "$BASE/.ssh/authorized_keys"
 
 # app checkout + pipeline-free venv, as root (the repo is not pip-installable; the unit sets PYTHONPATH)
 if [[ ! -d $BASE/app/dashboard ]]; then   # skipped when the checkout was copied in by hand

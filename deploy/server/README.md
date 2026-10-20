@@ -69,6 +69,6 @@ For a code-only change, `sudo systemctl restart venue-arb-web` is enough.
   copy at 8, so they never fight).
 - The `venue-arb` (push) user has a bash shell only because sshd runs the forced `rrsync` command through it; its key
   is confined by `restrict,command="rrsync -munge -no-del ..."`, and `~venue-arb/.ssh` and `authorized_keys` are
-  root-owned (700/600) so the user cannot rewrite them. It owns only `/srv/venue-arb/bundle` (0755; files arrive 0644).
+  root-owned (755/644: sshd reads them as the user) so the user cannot rewrite them. It owns only `/srv/venue-arb/bundle` (0755; files arrive 0644).
 - `venue-arb-web` (no shell, no home) runs uvicorn under `NoNewPrivileges`, `ProtectSystem=strict`, `ProtectHome` and
   `PrivateTmp`, with the app and bundle read-only; `/srv/venue-arb/app` and its venv are root's.
