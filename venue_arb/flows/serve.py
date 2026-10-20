@@ -2,6 +2,7 @@
 
 from prefect import serve
 
+from venue_arb.flows.basis import basis_flow
 from venue_arb.flows.catalog import catalog_flow
 from venue_arb.flows.match import match_flow
 from venue_arb.flows.score import score_flow
@@ -12,5 +13,6 @@ if __name__ == "__main__":
     serve(
         catalog_flow.to_deployment("catalog", cron="5 * * * *", concurrency_limit=1),
         match_flow.to_deployment("match", cron="20 * * * *", concurrency_limit=1),
+        basis_flow.to_deployment("basis", cron="35 * * * *", concurrency_limit=1),
         score_flow.to_deployment("score", cron="40 * * * *", concurrency_limit=1),
     )
