@@ -21,8 +21,11 @@ dependencies = [
     "structlog>=26.1.0",
 ]
 
+[project.optional-dependencies]
+dashboard = ["fastapi>=0.115", "uvicorn>=0.30", "duckdb>=1.1"]  # the public server (dashboard/api); no pipeline deps
+
 [dependency-groups]
-dev = ["pytest>=9", "ruff>=0.15"]
+dev = ["pytest>=9", "ruff>=0.15", "fastapi>=0.115", "uvicorn>=0.30", "duckdb>=1.1"]
 
 [tool.uv]
 exclude-newer = "2026-10-05T00:00:00Z"   # supply-chain rule (platform): nothing newer than ~2 weeks; bump deliberately
