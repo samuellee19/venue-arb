@@ -11,8 +11,6 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from functools import partial
 
-import obs
-
 from venue_arb import basis, http
 from venue_arb.books import to_rows, watchlist
 from venue_arb.config import (
@@ -184,6 +182,7 @@ def flush(buf, venues, load, record, run_sql, checks, stats, max_buffer: int = M
 
 
 def run_forever(interval_s: int = SNAPSHOT_INTERVAL_S, flush_every: int = 5) -> None:
+    import obs
     from qa import checks, db, sql, store
 
     obs.init(service="venue-arb")
