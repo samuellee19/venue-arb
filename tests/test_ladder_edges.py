@@ -77,11 +77,10 @@ def test_inadmissible_pair_fails_in_some_state():
 
 
 def test_near_exact():
-    assert le.is_near_exact(81_499.99, 81_500, 182, 152)  # Kalshi T81499.99 vs PM above 81500
-    assert le.is_near_exact(81_500, 81_500, 6, 7)
-    assert not le.is_near_exact(81_000, 81_500, 182, 152)  # cross-strike, inadmissible: neither
-    assert not le.is_near_exact(81_500, 81_500, 0, 0)  # zero basis: genuine arbitrage, not near-exact
-    assert not le.is_near_exact(81_499.99, 81_500, 0, 0.01)  # admissible k_yes_pm_no
+    assert le.is_near_exact(81_499.99, 81_500)  # Kalshi T81499.99 vs PM above 81500
+    assert le.is_near_exact(81_500, 81_500)
+    assert le.is_near_exact(81_501, 81_500)  # exactly the $1 tolerance
+    assert not le.is_near_exact(81_000, 81_500)
 
 
 def test_score_hand_computed_two_level_walk():
@@ -127,3 +126,33 @@ def test_classify():
     assert le.classify(80_000, 80_152, 182, 152) == ("arb", ["k_yes_pm_no"])
     assert le.classify(81_499.99, 81_500, 182, 152) == ("near_exact", ["k_yes_pm_no", "pm_yes_k_no"])
     assert le.classify(81_400, 81_500, 182, 152) is None  # cross-strike inside the basis band, not same strike
+    # Ruling 8: same strike is near-exact before admissibility, even when a zero basis would admit it
+    assert le.classify(81_500, 81_500, 0, 0) == ("near_exact", ["k_yes_pm_no", "pm_yes_k_no"])
+    assert le.classify(81_499.99, 81_500, 0, 0.01)[0] == "near_exact"
+
+
+def test_select_pairs_keeps_two_nearest_admissible_per_direction():
+    from types import SimpleNamespace as S
+
+    ps = [S(level=x) for x in (79_000, 79_700, 79_800, 79_850, 80_000, 80_160, 80_200, 80_300, 81_000)]
+    a, up, down = 79_999.99, 182, 152
+    plan, adm = le.select_pairs(a, ps, up, down)
+    lv = {d: [p.level for p in xs] for d, xs in adm.items()}
+    # every admissible strike is counted ...
+    assert lv == {"k_yes_pm_no": [80_160, 80_200, 80_300, 81_000], "pm_yes_k_no": [79_000, 79_700, 79_800]}
+    # ... but only the 2 nearest per direction are scored, plus the near-exact strike (80,000)
+    assert [(p.level, kind, dirs) for p, kind, dirs in plan] == [
+        (80_000, "near_exact", ["k_yes_pm_no", "pm_yes_k_no"]),
+        (80_160, "arb", ["k_yes_pm_no"]), (80_200, "arb", ["k_yes_pm_no"]),
+        (79_800, "arb", ["pm_yes_k_no"]), (79_700, "arb", ["pm_yes_k_no"])]
+
+
+def test_aligned_count():
+    from datetime import UTC, datetime, timedelta
+
+    t0 = datetime(2026, 10, 20, tzinfo=UTC)
+    k = [t0 + timedelta(seconds=s) for s in (0, 60, 120, 180)]
+    pm = [t0 + timedelta(seconds=s) for s in (5, 95, 300)]
+    assert le.aligned_count(k, pm) == 2  # 0 (5 s off) and 120 (25 s); 60 is 35 s from 95, 180 has nothing near
+    assert le.aligned_count(k, [t0 + timedelta(seconds=s) for s in (-30, 70, 150)]) == 4  # 120 & 180 both near 150
+    assert le.aligned_count(k, []) == 0

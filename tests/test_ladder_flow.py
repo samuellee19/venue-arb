@@ -37,7 +37,8 @@ def test_score_ladder_rows_kinds_and_episodes():
              for key, (y, n) in asks.items()}
     rows, eps, stats = le.score_ladder("ETH", instant, ladder, snaps, 6.0, 7.0, lambda _: NOFEE,
                                        lambda _: (None, False), "v")
-    assert stats == {"kalshi_strikes_booked": 2, "pm_strikes_booked": 2, "pairs_scored": 4}
+    # admissible: KA/PB k_yes_pm_no, KB/PA and KB/PB pm_yes_k_no (KA/PA is near-exact) x 3 snapshots before the instant
+    assert stats == {"kalshi_strikes_booked": 2, "pm_strikes_booked": 2, "pairs_scored": 4, "admissible_checks": 9}
     got = {(r["k_id"], r["pm_id"], r["direction"], r["kind"]) for r in rows}
     assert got == {("KA", "PA", "k_yes_pm_no", "near_exact"), ("KA", "PA", "pm_yes_k_no", "near_exact"),
                    ("KA", "PB", "k_yes_pm_no", "arb"), ("KB", "PA", "pm_yes_k_no", "arb"),
@@ -50,14 +51,56 @@ def test_score_ladder_rows_kinds_and_episodes():
     assert any(r["kind"] == "near_exact" and r["capacity_contracts"] > 0 for r in rows)
 
 
+# Synthetic ladder for the integration test. Ids start with ZZTEST-; the instant (Mar 15, 2027 noon ET) has no real
+# ladder, and last_seen is 3 h old so the collector, matcher and exact-pair readers (last_seen > now() - 2 h) skip them.
+INSTANT = datetime(2027, 3, 15, 16, tzinfo=UTC)
+K_ID, PM_NEAR, PM_ARB = "ZZTEST-KXBTCD-T79999.99", "ZZTEST-PM-80000", "ZZTEST-PM-80200"
+
+
+def _seed(end):
+    import json
+
+    from qa import db
+
+    def pm(mid, x):
+        return ("polymarket", mid, None, "crypto_price", f"Will the price of Bitcoin be above ${x:,} on March 15?",
+                "Yes", INSTANT, mid + "-yes", json.dumps({"market": {"feeSchedule": None, "feesEnabled": False}}))
+
+    listings = [("kalshi", K_ID, "KXBTCD-ZZTEST", "crypto_price", "ZZTEST", "$80,000 or above", INSTANT, None,
+                 json.dumps({"event": {"series_ticker": "KXBTCD"}})), pm(PM_NEAR, 80_000), pm(PM_ARB, 80_200)]
+    with db.pg() as conn:
+        conn.cursor().executemany(
+            "INSERT INTO venue_arb.listings (venue, market_id, event_id, category, title, yes_label, close_time, "
+            "yes_token, raw, first_seen, last_seen) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, "
+            "now() - interval '3 hours', now() - interval '3 hours')", listings)
+    # Kalshi Yes 0.40 + PM(80,200) No 0.50, 500 deep, every minute for 6 minutes: one k_yes_pm_no episode
+    asks = {("kalshi", K_ID): (0.40, 0.62), ("polymarket", PM_NEAR): (0.60, 0.45), ("polymarket", PM_ARB): (0.55, 0.50)}
+    rows = [[end - timedelta(minutes=m, seconds=5 * (v == "polymarket")), v, mid, side, 0, price, 500.0]
+            for m in range(1, 7) for (v, mid), (y, n) in asks.items() for side, price in (("yes", y), ("no", n))]
+    db.ch().insert("venue_arb.book_levels_v2", rows,
+                   column_names=["ts", "venue", "market_id", "side", "level", "price", "size"])
+
+
+def _cleanup():
+    from qa import db
+
+    ch = db.ch()
+    ch.command("DELETE FROM venue_arb.book_levels_v2 WHERE market_id LIKE 'ZZTEST-%'")
+    ch.command("DELETE FROM venue_arb.ladder_edges WHERE k_id LIKE 'ZZTEST-%'")
+    with db.pg() as conn:
+        conn.execute("DELETE FROM venue_arb.opportunities WHERE source = 'ladder' AND kalshi_id LIKE 'ZZTEST-%'")
+        conn.execute("DELETE FROM venue_arb.listings WHERE market_id LIKE 'ZZTEST-%'")
+
+
 def counts():
     from qa import db
 
     (edges,) = db.ch().query("SELECT count() FROM venue_arb.ladder_edges FINAL").result_rows[0]
     (late,) = db.ch().query("SELECT count() FROM venue_arb.ladder_edges WHERE ts >= instant").result_rows[0]
+    (mine,) = db.ch().query("SELECT count() FROM venue_arb.ladder_edges FINAL WHERE k_id LIKE 'ZZTEST-%'").result_rows[0]
     with db.pg() as conn:
         (opps,) = conn.execute("SELECT count(*) FROM venue_arb.opportunities WHERE source = 'ladder'").fetchone()
-    return edges, late, opps
+    return edges, late, mine, opps
 
 
 @pytest.mark.integration
@@ -65,9 +108,16 @@ def test_ladder_flow_idempotent():
     from venue_arb.flows.ladder_score import ladder_score_flow
 
     end = datetime.now(UTC).replace(second=0, microsecond=0) - timedelta(minutes=10)
-    first = ladder_score_flow(window_hours=2, end=end)  # raises if any error check fails
-    after_first = counts()
-    second = ladder_score_flow(window_hours=2, end=end)
-    print(f"first={first} second={second} counts={after_first}")
-    assert first == second and first["ladders"] > 0
-    assert counts() == after_first and after_first[1] == 0
+    _cleanup()  # a previous aborted run
+    try:
+        _seed(end)
+        first = ladder_score_flow(window_hours=2, end=end)  # raises if any error check fails
+        after_first = counts()
+        second = ladder_score_flow(window_hours=2, end=end)
+        print(f"first={first} second={second} counts={after_first}")
+        assert first == second and first["ladders"] > 0
+        assert counts() == after_first and after_first[1] == 0
+        # synthetic ladder: near-exact 80,000 (both directions) + arb 80,200 (k_yes_pm_no), 6 snapshots each
+        assert after_first[2] == 3 * 6 and first["edge_rows"] >= 18 and first["episodes"] >= 1
+    finally:
+        _cleanup()
