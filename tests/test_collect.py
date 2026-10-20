@@ -135,3 +135,49 @@ def test_default_fetchers_skip_polite_delay(monkeypatch):
     f = collect.default_fetchers()
     assert f["kalshi"]("K1") == [] and f["polymarket"]("T1") == []
     assert calls == [{"delay": 0}, {"delay": 0}]
+
+
+def _listing(venue, mid, label, close, event="KXBTCD-26OCT2004", title="t", token=None):
+    return (venue, mid, event, "crypto_price", title, label, close, token)
+
+
+class _Conn:
+    def __init__(self, listings, fail=False):
+        self.listings, self.fail = listings, fail
+
+    def execute(self, sql):
+        if "venue_arb.listings WHERE category" in sql:
+            if self.fail:
+                raise RuntimeError("boom")
+            return SimpleNamespace(fetchall=lambda: self.listings)
+        return SimpleNamespace(description=[], fetchall=list)  # no candidate pairs
+
+
+class _Ch:
+    def __init__(self, rows):
+        self.rows = rows
+
+    def query(self, sql):
+        return SimpleNamespace(result_rows=self.rows)
+
+
+def _ladder_listings():
+    t = datetime(2026, 10, 20, 8, tzinfo=UTC)  # 4 AM EDT
+    k = [_listing("kalshi", f"K{x}", f"${x:,} or above", t) for x in (79000, 80000, 81000, 90000)]
+    p = [_listing("polymarket", f"P{x}", "Yes", t, f"e{x}", f"Bitcoin above {x:,} on October 20, 4AM ET?", f"T{x}")
+         for x in (80000, 81000)]
+    return k + p
+
+
+def test_load_watchlist_adds_clipped_ladders_with_basis_pad():
+    from venue_arb.collect import load_watchlist
+    wl = load_watchlist(_Conn(_ladder_listings()), _Ch([("BTC", 30.0)] * 30))  # bounds 30 -> pad 30
+    assert {m for _, m, _ in wl} == {"K80000", "K81000", "P80000", "P81000"}  # 79000 < 80000-30, 90000 too far
+    wl = load_watchlist(_Conn(_ladder_listings()), _Ch([]))  # < 24 rows: default pad 50
+    assert {m for _, m, _ in wl} == {"K80000", "K81000", "P80000", "P81000"}
+    assert ("polymarket", "P80000", "T80000") in wl and ("kalshi", "K80000", None) in wl
+
+
+def test_load_watchlist_ladder_failure_falls_back():
+    from venue_arb.collect import load_watchlist
+    assert load_watchlist(_Conn(_ladder_listings(), fail=True), _Ch([])) == []

@@ -12,3 +12,6 @@ LLM_MODEL = os.environ.get("VENUE_ARB_LLM_MODEL", "claude-haiku-5-5")
 SNAPSHOT_INTERVAL_S = 60
 SNAPSHOT_MAX_MARKETS = 300
 BOOK_DEPTH = 10
+LADDER_CAP = 60  # snapshot strikes per same-instant ladder, nearest to the Polymarket range midpoint
+LADDER_PAD_DEFAULT = 50.0  # USD clip pad when an asset has < LADDER_MIN_BASIS basis rows
+LADDER_MIN_BASIS = 24

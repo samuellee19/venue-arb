@@ -10,9 +10,17 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from functools import partial
 
-from venue_arb import http
+from venue_arb import basis, http
 from venue_arb.books import to_rows, watchlist
-from venue_arb.config import BOOK_DEPTH, PIPELINE_PREFIX, SNAPSHOT_INTERVAL_S, SQL_CHECKS
+from venue_arb.config import (
+    BOOK_DEPTH,
+    LADDER_MIN_BASIS,
+    LADDER_PAD_DEFAULT,
+    PIPELINE_PREFIX,
+    SNAPSHOT_INTERVAL_S,
+    SQL_CHECKS,
+)
+from venue_arb.matching import crypto_rule
 from venue_arb.sources import kalshi, polymarket
 
 # qa is imported lazily in run_forever: unit tests (and CI) run without the platform checkout.
@@ -53,10 +61,43 @@ def default_fetchers() -> dict:
     }
 
 
-def load_watchlist(conn) -> list[tuple[str, str, str | None]]:
+LISTING_COLS = ("venue", "market_id", "event_id", "category", "title", "yes_label", "close_time", "yes_token")
+LISTINGS_SQL = (f"SELECT {', '.join(LISTING_COLS)} FROM venue_arb.listings WHERE category = 'crypto_price' "
+                "AND last_seen > now() - INTERVAL '2 hours' AND close_time > now()")
+BASIS_SQL = "SELECT asset, diff FROM venue_arb.basis WHERE instant > now() - INTERVAL 30 DAY"
+
+
+def ladder_pads(basis_rows) -> dict[str, float]:
+    """Clip pad per asset: max(up, down) of the 30-day basis bounds; LADDER_PAD_DEFAULT with < LADDER_MIN_BASIS rows."""
+    diffs: dict[str, list[float]] = {}
+    for asset, diff in basis_rows:
+        diffs.setdefault(asset, []).append(diff)
+    return {a: max(basis.bounds(d)) if len(d) >= LADDER_MIN_BASIS else LADDER_PAD_DEFAULT for a, d in diffs.items()}
+
+
+def load_ladders(conn, ch) -> list[dict]:
+    """Same-instant crypto ladders from current listings, Kalshi side clipped to Polymarket's range +- the basis pad."""
+    cur = conn.execute(LISTINGS_SQL)
+    found = crypto_rule.ladders([dict(zip(LISTING_COLS, r, strict=True)) for r in cur.fetchall()])
+    try:
+        pads = ladder_pads(ch.query(BASIS_SQL).result_rows)
+    except Exception as e:  # noqa: BLE001 — no basis history: fall back to the default pad
+        log.warning("basis read failed, default ladder pad error=%s", type(e).__name__)
+        pads = {}
+    return [crypto_rule.clip(lad, pads.get(asset, LADDER_PAD_DEFAULT)) for (asset, _), lad in found.items()]
+
+
+def load_watchlist(conn, ch=None) -> list[tuple[str, str, str | None]]:
     cur = conn.execute(WATCH_SQL)
     cols = [c.name for c in cur.description]
-    return watchlist([dict(zip(cols, r, strict=True)) for r in cur.fetchall()])
+    rows = [dict(zip(cols, r, strict=True)) for r in cur.fetchall()]
+    ladders = []
+    if ch is not None:
+        try:
+            ladders = load_ladders(conn, ch)
+        except Exception as e:  # noqa: BLE001 — ladders are additive; the Fed pairs must keep flowing
+            log.warning("ladder load failed, watchlist without ladders error=%s", type(e).__name__)
+    return watchlist(rows, ladders)
 
 
 def _fetch(fetchers: dict, venue: str, market_id: str, yes_token: str | None):
@@ -149,7 +190,7 @@ def run_forever(interval_s: int = SNAPSHOT_INTERVAL_S, flush_every: int = 5) -> 
         try:
             if n % 10 == 0:
                 with db.pg() as conn:
-                    watch = load_watchlist(conn)
+                    watch = load_watchlist(conn, db.ch())
             n += 1
             tick(watch, fetchers, buf, stats)
             cycles.append(time.monotonic() - started)
