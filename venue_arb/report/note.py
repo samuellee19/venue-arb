@@ -18,6 +18,7 @@ import numpy as np
 from venue_arb.episodes import ALIGN_S, MAX_GAP_S, MIN_EDGE
 from venue_arb.exact import MIN_CONFIDENCE, ExactPair
 from venue_arb.fees import FEE_VERSION, KALSHI_RATE, TRANSFER, US_EXECUTABLE
+from venue_arb.matching.adjudicate import PROMPT_VERSION
 
 NOTE = "research-note-v1.md"
 SCREENED_PNG = "screened-net-gap.png"
@@ -163,13 +164,13 @@ def _executable(edge_rows: list[dict], episodes: list[dict]) -> dict:
 
 def _scoped(rows: list[dict], scope: dict | None, eligible_keys: set) -> tuple[list[dict], dict | None]:
     """Keep rows of in-scope pairs; count pairs by status. scope: {(kalshi_id, pm_id): {"reason", "closed"}},
-    reason None = in scope. A pair with no prompt-v2 adjudication is out of scope."""
+    reason None = in scope. A pair with no current-prompt adjudication is out of scope."""
     if scope is None:
         return rows, None
     keys = {(r["kalshi_id"], r["pm_id"]) for r in rows}
 
     def why(k):
-        return scope[k]["reason"] if k in scope else "no prompt-v2 adjudication"
+        return scope[k]["reason"] if k in scope else f"no prompt-{PROMPT_VERSION} adjudication"
 
     kept = {k for k in keys if why(k) is None}
     closed = {k for k in kept - eligible_keys if scope[k]["closed"]}
@@ -398,7 +399,7 @@ def render(summary: dict, out_dir: Path) -> Path:
         f"({hours:.1f} h); {ex['snapshots']:,} aligned pair-snapshots ({ex['rows']:,} rows, one per direction) "
         f"over {ex['pairs']} pairs."
         + (f" Eligible pairs with no executable rows yet: {', '.join(no_books)}." if no_books else ""),
-        ("- Tier scope: both tiers keep every pair whose latest prompt-v2 adjudication is `exact` and that has no "
+        (f"- Tier scope: both tiers keep every pair whose latest prompt-{PROMPT_VERSION} adjudication is `exact` and that has no "
          "`wrong`/`unsure` review of that verdict (reviews made against an older prompt's verdict are ignored), "
          "whether or not it is open now (a closed pair's history is still evidence). "
          "Pairs are Kalshi-Polymarket market pairs."),
@@ -412,10 +413,15 @@ def render(summary: dict, out_dir: Path) -> Path:
         "",
         "## Method",
         "",
-        "**What counts as exact.** Same event, same outcome, same decision date and same resolving authority. "
-        "Trading close times and the wording of the source pages do not count as differences. Rare edge clauses "
-        "(for example a cancelled meeting, or an odd-size rate move rounded up) keep a pair exact but are recorded "
-        "as tail risks and listed under Results. Adjudication was by an LLM, " + model_txt + ".",
+        "**What counts as exact.** The two Yes outcomes pay in the same states of the world: same event, same outcome "
+        "definition, same decision date and same resolving authority. Trading close times and the wording of the "
+        "source pages do not count as differences. Rare edge clauses (for example a cancelled meeting, or an odd-size "
+        "rate move rounded up) keep a pair exact but are recorded as tail risks and listed under Results. "
+        "**Near** means the Yes outcomes overlap but differ (window, threshold or authority). **Different** means the "
+        "Yes outcomes are mutually exclusive or disjoint, including different outcome brackets of the same meeting "
+        "(hold vs +25 bp, exactly 25 vs more than 25, +25 vs 50+). Every Fed target change since 1989 has been a "
+        "multiple of 25 bp, so \"more than 25 bp\" and \"50 bp or more\" are the same outcome set; an off-grid "
+        "move is a tail risk. Adjudication was by an LLM, " + model_txt + ".",
         "",
         ("**Eligibility.** The latest adjudication at the listings' current versions says `relation = 'exact'`, and "
         f"either confidence >= {MIN_CONFIDENCE} with no review, or a human review labeled `correct`; any `wrong` "
@@ -572,15 +578,13 @@ def main(out_dir: Path = Path("reports")) -> Path:
     def utc(r: dict) -> dict:
         return {k: v.replace(tzinfo=UTC) if isinstance(v, datetime) and not v.tzinfo else v for k, v in r.items()}
 
-    from venue_arb.matching.adjudicate import PROMPT_VERSION
-
     with db.pg() as conn:
         pairs = eligible(load_eligible(conn))
         episodes = rows(conn.execute(OPPS_SQL))
         adj = {(k, p): {"tail_risks": t, "prompt_version": v, "model": m} for k, p, t, v, m in
                conn.execute(ADJ_SQL, {"k": [p.kalshi_id for p in pairs]}).fetchall()}
         scope = {(k, p): {"reason": None if rel == "exact" and not bad else
-                          ("wrong/unsure review" if bad else f"latest v2 relation '{rel}'"), "closed": closed}
+                          ("wrong/unsure review" if bad else f"latest {PROMPT_VERSION} relation '{rel}'"), "closed": closed}
                  for k, p, rel, bad, closed in conn.execute(SCOPE_SQL, {"pv": PROMPT_VERSION}).fetchall()}
     ch = db.ch()
     scr = [utc(dict(zip(("ts", "kalshi_id", "pm_id", "direction", "net_gap_top"), r, strict=True)))

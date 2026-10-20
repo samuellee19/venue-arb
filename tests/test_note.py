@@ -1,6 +1,7 @@
 from datetime import UTC, datetime, timedelta
 
 from venue_arb.exact import ExactPair
+from venue_arb.matching.adjudicate import PROMPT_VERSION
 from venue_arb.report import note
 
 T0 = datetime(2026, 10, 19, 18, 0, tzinfo=UTC)
@@ -114,5 +115,5 @@ def test_scope_filters_tiers_and_counts():
                        [edge("K-3")], [], scope=scope)
     assert s["screened"]["rows"] == 2
     assert s["screened"]["scope"] == {"pairs": 2, "eligible": 1, "closed": 1, "other": 0, "excluded": {
-        "wrong/unsure review": 1, "no prompt-v2 adjudication": 1}}
+        "wrong/unsure review": 1, f"no prompt-{PROMPT_VERSION} adjudication": 1}}
     assert s["executable"]["rows"] == 0 and s["executable"]["scope"]["excluded"] == {"wrong/unsure review": 1}

@@ -241,7 +241,7 @@ def test_rejudge_upserts():
     v = V.model_copy(update={"tail_risks": "Meeting cancelled resolves No Change."})
     run(conn, [(listing("k1", "v1"), listing("p1", "w1"))], 0.0, call=lambda p: (v.model_dump(), 1000, 0))
     assert "ON CONFLICT (a_venue,a_id,a_version,b_venue,b_id,b_version) DO UPDATE SET" in conn.sqls[0]
-    assert conn.inserts[0][-2:] == ("v2", "Meeting cancelled resolves No Change.")
+    assert conn.inserts[0][-2:] == ("v3", "Meeting cancelled resolves No Change.")
 
 
 def test_prompt_v2_mentions_rules():
@@ -271,3 +271,8 @@ def test_transient_errors_do_not_cap_pair():
     assert out["adjudicated"] == 1 and out["skipped_failing"] == 0
     out = run(FakeConn(errors=e, error_type="BilledError"), pair, 0.0, call=FakeCall())
     assert out["adjudicated"] == 0 and out["skipped_failing"] == 1
+
+
+def test_prompt_v3_mentions_bracket_rule():
+    p = prompt_for(listing("k", "v"), listing("p", "w"))
+    assert "mutually exclusive" in p and "multiples of 25" in p

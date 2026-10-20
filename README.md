@@ -11,6 +11,8 @@ Follow `~/platform/docs/NEW_PROJECT.md` (platform checkout, `secrets` wrapper, `
 
 ## Run
 
+Adjudicator prompt v3: `near` needs overlapping Yes outcomes; mutually exclusive brackets of one meeting (hold vs +25) are `different`; Fed moves are on a 25 bp grid, so off-grid and rounding clauses are tail risks.
+
 ```bash
 secrets uv run python -m venue_arb.flows.catalog      # listings from both venues
 secrets uv run python -m venue_arb.flows.match        # candidates + LLM adjudication (re-judges pairs stored under an older prompt version)
