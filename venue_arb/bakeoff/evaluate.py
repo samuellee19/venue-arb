@@ -1,6 +1,9 @@
 """Bake-off evaluation: candidate recall of each model's vectors on the truth set, logged to MLflow.
 
-    uv run python -m venue_arb.bakeoff.evaluate [data/bakeoff]    (MLFLOW_TRACKING_URI from mise.toml, via the tunnel)
+    secrets uv run python -m venue_arb.bakeoff.evaluate [ARTIFACTS [LISTINGS]]    (MLFLOW_TRACKING_URI from mise.toml)
+
+ARTIFACTS (default data/bakeoff/out/artifacts) holds manifest.json and <slug>.npy from jobs/embed_bakeoff.py;
+LISTINGS (default data/bakeoff/listings.parquet) is the snapshot the job embedded.
 
 Candidates come from the production `embed_pairs`; recall@k reruns it with min_sim off (max_days and the category
 filter stay). `kalshi_hit` = share of truth Kalshi markets with at least one true partner among their candidates.
@@ -87,14 +90,15 @@ def table(results: dict) -> str:
     return "\n".join(lines)
 
 
-def main(data: str = "data/bakeoff") -> None:
+def main(data: str = "data/bakeoff/out/artifacts",
+         listings: str = "data/bakeoff/listings.parquet") -> None:
     import mlflow
     from qa import checks
 
     d = Path(data)
     manifest = json.loads((d / "manifest.json").read_text())
-    sha = hashlib.sha256((d / "listings.parquet").read_bytes()).hexdigest()
-    rows = pq.read_table(d / "listings.parquet").to_pylist()
+    sha = hashlib.sha256(Path(listings).read_bytes()).hexdigest()
+    rows = pq.read_table(listings).to_pylist()
     with TRUTH.open() as f:
         truth = [(r["kalshi_market_id"], r["pm_market_id"], r["kind"])
                  for r in csv.DictReader(line for line in f if not line.startswith("#"))]
