@@ -41,7 +41,7 @@ SELECT venue, market_id, event_id, category, title, yes_label, close_time, yes_t
 FROM venue_arb.listings WHERE category = 'crypto_price' AND close_time > %(start)s
 """
 # 30-day directional bounds as of `end`, so a re-run of the same window sees the same bounds
-BASIS_SQL = ("SELECT asset, diff FROM venue_arb.basis WHERE instant > {end:DateTime('UTC')} - "
+BASIS_SQL = ("SELECT asset, diff FROM venue_arb.basis FINAL WHERE instant > {end:DateTime('UTC')} - "
              f"INTERVAL {BASIS_WINDOW_DAYS} DAY "
              "AND instant <= {end:DateTime('UTC')}")
 READBACK_CAP = timedelta(hours=26)

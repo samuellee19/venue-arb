@@ -28,7 +28,8 @@ def watchlist(rows: list[dict], ladder_markets: list[dict] | None = None, cap: i
             out.setdefault((r["b_venue"], r["b_id"]), r["b_token"])
 
     add(r for r in live if r["relation"] == "exact")
-    for lad in ladder_markets or []:
+    # soonest ladders first (then asset), so the cap drops the farthest-out ladders deterministically
+    for lad in sorted(ladder_markets or [], key=lambda lad: (lad["polymarket"][0].instant, lad["polymarket"][0].asset)):
         pm = lad["polymarket"]
         mid = (min(s.level for s in pm) + max(s.level for s in pm)) / 2
         ks = sorted(lad["kalshi"], key=lambda s: abs(s.level - mid))

@@ -158,6 +158,7 @@ class _Ch:
         self.rows = rows
 
     def query(self, sql):
+        assert " FINAL " in sql  # ReplacingMergeTree basis: unmerged duplicates would inflate n
         return SimpleNamespace(result_rows=self.rows)
 
 

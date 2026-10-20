@@ -66,7 +66,7 @@ def default_fetchers() -> dict:
 LISTING_COLS = ("venue", "market_id", "event_id", "category", "title", "yes_label", "close_time", "yes_token")
 LISTINGS_SQL = (f"SELECT {', '.join(LISTING_COLS)} FROM venue_arb.listings WHERE category = 'crypto_price' "
                 "AND last_seen > now() - INTERVAL '2 hours' AND close_time > now()")
-BASIS_SQL = f"SELECT asset, diff FROM venue_arb.basis WHERE instant > now() - INTERVAL {BASIS_WINDOW_DAYS} DAY"
+BASIS_SQL = f"SELECT asset, diff FROM venue_arb.basis FINAL WHERE instant > now() - INTERVAL {BASIS_WINDOW_DAYS} DAY"
 
 
 def ladder_pads(basis_rows) -> dict[str, float]:
@@ -87,7 +87,7 @@ def load_ladders(conn, ch) -> list[dict]:
     except Exception as e:  # noqa: BLE001 — no basis history: fall back to the default pad
         log.warning("basis read failed, default ladder pad error=%s", type(e).__name__)
         pads = {}
-    return [crypto_rule.clip(lad, pads.get(asset, LADDER_PAD_DEFAULT)) for (asset, _), lad in found.items()]
+    return [crypto_rule.clip(lad, pads.get(asset, LADDER_PAD_DEFAULT)) for (asset, _), lad in sorted(found.items(), key=lambda kv: (kv[0][1], kv[0][0]))]
 
 
 def load_watchlist(conn, get_ch=None) -> list[tuple[str, str, str | None]]:

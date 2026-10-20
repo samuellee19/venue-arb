@@ -52,3 +52,17 @@ def test_watchlist_ladder_clip_and_cap():
     assert watchlist(rows, [lad], cap=100, ladder_cap=3)[2:7] == [("polymarket", f"p{i}", f"T{i}") for i in range(5)]
     assert len(watchlist(rows, [lad], cap=5)) == 5
     assert watchlist(rows, [], cap=100) == watchlist(rows, cap=100)
+
+
+def test_watchlist_ladders_ordered_by_instant_then_asset():
+    from venue_arb.matching.crypto_rule import Strike
+
+    def lad(asset, hour):
+        t = datetime(2026, 10, 20, hour, tzinfo=UTC)
+        return {"polymarket": [Strike("polymarket", f"p{asset}{hour}", "T", asset, t, "gt", 1.0)],
+                "kalshi": [Strike("kalshi", f"k{asset}{hour}", None, asset, t, "gt", 1.0)]}
+
+    a, b, c = lad("ETH", 9), lad("BTC", 9), lad("BTC", 5)
+    want = [m for _, m, _ in watchlist([], [c, b, a], cap=100)]
+    assert want == ["pBTC5", "kBTC5", "pBTC9", "kBTC9", "pETH9", "kETH9"]
+    assert [m for _, m, _ in watchlist([], [a, b, c], cap=100)] == want
