@@ -20,12 +20,13 @@ from prefect.runtime import flow_run
 from qa import checks, db, sql, store
 
 from venue_arb import basis
-from venue_arb.config import PIPELINE_PREFIX, SQL_CHECKS
+from venue_arb.config import BASIS_WINDOW_DAYS, PIPELINE_PREFIX, SQL_CHECKS
 from venue_arb.sources import binance_archive, kalshi
 
 PIPELINE = f"{PIPELINE_PREFIX}_basis"
 TABLE = "venue_arb.basis"
 REREAD_DAYS = 3
+FRESH_SLACK = timedelta(days=3)  # Binance archive lag plus a weekend-ish margin
 SERIES = {"KXBTCD": ("BTC", "BTCUSDT"), "KXETHD": ("ETH", "ETHUSDT")}
 CONTRACT = {"instant": "datetime", "asset": "str", "brti": "float", "binance": "float", "diff": "float",
             "binance_1m": "float", "diff_1m": "float"}
@@ -61,16 +62,22 @@ def basis_flow(days: int = 30) -> dict:
             ts = sorted(t for a, t in brti if a == asset)
             rows += basis.join({k: v for k, v in brti.items() if k[0] == asset},
                                candles(symbol, "1h", asset, 3600, ts))
-        pre = [checks.expect_schema(rows, CONTRACT, TABLE)]
-        if brti:
-            pre.append(checks.expect_rows(len(rows), TABLE))
+        # zero BRTI settles in the trailing window is an error, not a skip: a field rename must be loud
+        pre = [checks.expect_rows(len(brti), "kalshi BRTI settles"), checks.expect_schema(rows, CONTRACT, TABLE),
+               checks.expect_rows(len(rows), TABLE)]
         results += pre
         checks.enforce(pre)
         if rows:
             ch.insert(TABLE, [[r[c] for c in COLUMNS] for r in rows], column_names=COLUMNS)
+            keys = sorted({(r["asset"], int(r["instant"].timestamp())) for r in rows})
+            (stored,) = ch.query(f"SELECT count() FROM {TABLE} FINAL WHERE (asset, toUnixTimestamp(instant)) IN %(keys)s",
+                                 parameters={"keys": keys}).result_rows[0]
+            results.append(checks.expect_count_match(len(keys), stored, TABLE))
+            results += [checks.expect_fresh(latest, f"{TABLE}:{asset}", FRESH_SLACK) for asset, latest in ch.query(
+                f"SELECT asset, max(instant) FROM {TABLE} FINAL GROUP BY asset ORDER BY asset").result_rows]
         results += sql.run_all(pattern="basis_*.sql", directory=SQL_CHECKS)
         checks.enforce(results)
-        out = {"brti_instants": len(brti), "rows": len(rows), "bounds": bounds(ch, days)}
+        out = {"brti_instants": len(brti), "rows": len(rows), "bounds": bounds(ch)}
         log.info("basis ok: %s", out)
         return out
     except checks.DataQualityError as e:
@@ -85,10 +92,10 @@ def basis_flow(days: int = 30) -> dict:
             store.record(conn, PIPELINE, run_id, results)
 
 
-def bounds(ch, days: int = 30) -> dict[str, tuple[float, float]]:
-    """(up, down) per asset from the stored last `days` days."""
+def bounds(ch) -> dict[str, tuple[float, float]]:
+    """(up, down) per asset from the stored last BASIS_WINDOW_DAYS days (the window ladder_score and collect read)."""
     rs = ch.query(f"SELECT asset, groupArray(diff) FROM {TABLE} FINAL "
-                  "WHERE instant >= now() - INTERVAL {d:UInt32} DAY GROUP BY asset", parameters={"d": days}).result_rows
+                  f"WHERE instant > now() - INTERVAL {BASIS_WINDOW_DAYS} DAY GROUP BY asset").result_rows
     return {a: basis.bounds(d) for a, d in rs}
 
 
