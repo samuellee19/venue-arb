@@ -21,6 +21,17 @@ def list_events(series_tickers: list[str], get=http.get_json) -> list[dict]:
     return events
 
 
+def fetch_settled(series: str, min_close_ts: int, get=http.get_json) -> list[dict]:
+    """Settled markets of a series closing at or after min_close_ts (unix s); each carries `expiration_value`."""
+    out, params = [], {"series_ticker": series, "status": "settled", "limit": 1000, "min_close_ts": min_close_ts}
+    while True:
+        page = get(f"{API}/markets", params=params)
+        out += page.get("markets", [])
+        if not page.get("cursor"):
+            return out
+        params = {**params, "cursor": page["cursor"]}
+
+
 def parse_listings(events: list[dict]) -> list[Listing]:
     out, skipped = [], 0
     for e in events:
