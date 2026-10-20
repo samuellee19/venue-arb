@@ -13,7 +13,7 @@ from prefect.runtime import flow_run
 from qa import checks, db, sql, store
 
 from venue_arb.config import CATEGORIES, PIPELINE_PREFIX, SQL_CHECKS
-from venue_arb.matching import adjudicate
+from venue_arb.matching import adjudicate, fed_rule
 from venue_arb.matching.candidates import embed_pairs, merge, needs_embedding, rule_pairs, unadjudicated
 from venue_arb.matching.embed import embed, text_for
 
@@ -83,10 +83,14 @@ def match_flow(limit: int = 500) -> dict:
                 "source = EXCLUDED.source", [(a, b, s, src) for a, b, s, src in cands])
             # ponytail: pairs past the error cap still take `limit` slots (run() skips them for free); exclude them
             # here if they ever crowd out new pairs
-            done = set(conn.execute("SELECT a_id, a_version, b_id, b_version FROM venue_arb.adjudications "
-                                    "WHERE prompt_version = %s", (adjudicate.PROMPT_VERSION,)).fetchall())
-            pairs = unadjudicated(cands, {r["market_id"]: r for r in rows if r["venue"] == "kalshi"},
-                                  {r["market_id"]: r for r in rows if r["venue"] == "polymarket"}, done, limit)
+            kal = {r["market_id"]: r for r in rows if r["venue"] == "kalshi"}
+            pmr = {r["market_id"]: r for r in rows if r["venue"] == "polymarket"}
+            # rule-decidable Fed pairs count as done only when stored by the rule, so old LLM rows get replaced
+            done = {(a, av, b, bv) for a, av, b, bv, model in conn.execute(
+                "SELECT a_id, a_version, b_id, b_version, model FROM venue_arb.adjudications "
+                "WHERE prompt_version = %s", (adjudicate.PROMPT_VERSION,)).fetchall()
+                if model == fed_rule.RULE_MODEL or not (a in kal and b in pmr and fed_rule.decide(kal[a], pmr[b]))}
+            pairs = unadjudicated(cands, kal, pmr, done, limit)
             m = adjudicate.month_spend(conn)
             budget = m + adjudicate.daily_budget(m, adjudicate.today_spend(conn), datetime.now(UTC).date())
             out = adjudicate.run(conn, pairs, month_spend=m, budget=budget) | {"candidates": len(cands)}

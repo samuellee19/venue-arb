@@ -276,3 +276,14 @@ def test_transient_errors_do_not_cap_pair():
 def test_prompt_v3_mentions_bracket_rule():
     p = prompt_for(listing("k", "v"), listing("p", "w"))
     assert "mutually exclusive" in p and "multiples of 25" in p
+
+
+def test_rule_pairs_skip_llm_and_budget():
+    a = {**listing("KXFEDDECISION-26DEC-H25", "v1"), "title": "Will the Federal Reserve Hike rates by 25bps ..."}
+    b = {**listing("0xp", "w1"), "title": "Will the Fed increase interest rates by 25 bps after the December 2026 meeting?"}
+    conn, call = FakeConn(), FakeCall()
+    out = run(conn, [(a, b)], 0.0, budget=0.0, call=call)
+    assert call.n == 0 and out["ruled"] == 1 and out["adjudicated"] == 0 and out["skipped_budget"] == 0
+    assert conn.attempts == [] and len(conn.inserts) == 1
+    ins = conn.inserts[0]
+    assert "rule:fed-v1" in ins and ins[-3:-1] == (0, PROMPT_VERSION) and ins[7] == "exact"

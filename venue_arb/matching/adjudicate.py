@@ -150,12 +150,38 @@ def _record_attempt(conn, key: tuple, outcome: str, error_type: str | None, cost
     )
 
 
+def _upsert(conn, key: tuple, model: str, v: Verdict, cost: float) -> None:
+    conn.execute(
+        "INSERT INTO venue_arb.adjudications (a_venue,a_id,a_version,b_venue,b_id,b_version,model,relation,"
+        "yes_maps_to,deadline_diff,threshold_diff,resolution_diff,reason,confidence,cost_usd,prompt_version,"
+        "tail_risks) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
+        "ON CONFLICT (a_venue,a_id,a_version,b_venue,b_id,b_version) DO UPDATE SET model = EXCLUDED.model, "
+        "relation = EXCLUDED.relation, yes_maps_to = EXCLUDED.yes_maps_to, deadline_diff = EXCLUDED.deadline_diff, "
+        "threshold_diff = EXCLUDED.threshold_diff, resolution_diff = EXCLUDED.resolution_diff, "
+        "reason = EXCLUDED.reason, confidence = EXCLUDED.confidence, cost_usd = EXCLUDED.cost_usd, "
+        "prompt_version = EXCLUDED.prompt_version, tail_risks = EXCLUDED.tail_risks, created_at = now()",
+        (*key, model, v.relation, v.yes_maps_to, v.deadline_diff, v.threshold_diff,
+         v.resolution_diff, v.reason, v.confidence, cost, PROMPT_VERSION, v.tail_risks),
+    )
+
+
 def run(conn, pairs: list[tuple[dict, dict]], month_spend: float, budget: float = MONTHLY_LLM_BUDGET_USD,
         call=_call_claude) -> dict:
-    out = {"adjudicated": 0, "cached": 0, "skipped_budget": 0, "skipped_failing": 0, "errors": 0, "spend": 0.0}
+    from venue_arb.matching import fed_rule  # local: fed_rule imports Verdict from this module
+
+    out = {"ruled": 0, "adjudicated": 0, "cached": 0, "skipped_budget": 0, "skipped_failing": 0, "errors": 0, "spend": 0.0}
     streak = 0
     for a, b in pairs:
         key = ("kalshi", a["market_id"], a["version"], "polymarket", b["market_id"], b["version"])
+        rv = fed_rule.decide(a, b)
+        if rv is not None:  # deterministic Fed bracket rule: no LLM call, no budget, no llm_attempts row
+            if conn.execute(f"SELECT 1 FROM venue_arb.adjudications WHERE {_KEY} AND prompt_version = %s AND model = %s",
+                            (*key, PROMPT_VERSION, fed_rule.RULE_MODEL)).fetchone():
+                out["cached"] += 1
+            else:
+                _upsert(conn, key, fed_rule.RULE_MODEL, rv, 0.0)
+                out["ruled"] += 1
+            continue
         if conn.execute(f"SELECT 1 FROM venue_arb.adjudications WHERE {_KEY} AND prompt_version = %s",
                         (*key, PROMPT_VERSION)).fetchone():
             out["cached"] += 1
@@ -185,18 +211,7 @@ def run(conn, pairs: list[tuple[dict, dict]], month_spend: float, budget: float 
             continue
         streak = 0
         _record_attempt(conn, key, "ok", None, cost)
-        conn.execute(
-            "INSERT INTO venue_arb.adjudications (a_venue,a_id,a_version,b_venue,b_id,b_version,model,relation,"
-            "yes_maps_to,deadline_diff,threshold_diff,resolution_diff,reason,confidence,cost_usd,prompt_version,"
-            "tail_risks) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
-            "ON CONFLICT (a_venue,a_id,a_version,b_venue,b_id,b_version) DO UPDATE SET model = EXCLUDED.model, "
-            "relation = EXCLUDED.relation, yes_maps_to = EXCLUDED.yes_maps_to, deadline_diff = EXCLUDED.deadline_diff, "
-            "threshold_diff = EXCLUDED.threshold_diff, resolution_diff = EXCLUDED.resolution_diff, "
-            "reason = EXCLUDED.reason, confidence = EXCLUDED.confidence, cost_usd = EXCLUDED.cost_usd, "
-            "prompt_version = EXCLUDED.prompt_version, tail_risks = EXCLUDED.tail_risks, created_at = now()",
-            (*key, LLM_MODEL, v.relation, v.yes_maps_to, v.deadline_diff, v.threshold_diff,
-             v.resolution_diff, v.reason, v.confidence, cost, PROMPT_VERSION, v.tail_risks),
-        )
+        _upsert(conn, key, LLM_MODEL, v, cost)
         out["adjudicated"] += 1
         out["spend"] += cost
     return out

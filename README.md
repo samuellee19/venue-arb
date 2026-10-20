@@ -13,6 +13,8 @@ Follow `~/platform/docs/NEW_PROJECT.md` (platform checkout, `secrets` wrapper, `
 
 Adjudicator prompt v3: `near` needs overlapping Yes outcomes; mutually exclusive brackets of one meeting (hold vs +25) are `different`; Fed moves are on a 25 bp grid, so off-grid and rounding clauses are tail risks.
 
+Fed rate-decision pairs (Kalshi `KXFEDDECISION-*` vs a Polymarket bracket title) skip the LLM: `matching/fed_rule.py` compares the two outcome sets on the 25 bp grid (equal = exact, overlapping = near, disjoint or different meeting = different) and stores them with `model = 'rule:fed-v1'`, cost 0 and no `llm_attempts` row. Every other pair still goes to the LLM adjudicator.
+
 ```bash
 secrets uv run python -m venue_arb.flows.catalog      # listings from both venues
 secrets uv run python -m venue_arb.flows.match        # candidates + LLM adjudication (re-judges pairs stored under an older prompt version)

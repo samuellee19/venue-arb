@@ -1,7 +1,7 @@
 # draft: Sam to confirm
 # Fed-decision pairs: same FOMC meeting, same outcome, same threshold (checked 2026-10-19 against live listings).
-# Left out: Kalshi ">25bps" vs Polymarket "50+ bps" (equal only if the Fed moves in 25bp steps). Polymarket rounds odd
-# moves up to the nearest 25bp bracket; Kalshi's rules are silent on that, so odd-size moves are an edge case.
+# Kalshi ">25bps" vs Polymarket "50+ bps" are included as exact: Fed moves have all been multiples of 25bp since 1989
+# (fed_rule.py), and an odd-size move is a tail risk (Polymarket rounds up to the next bracket; Kalshi is strict).
 # BTC/ETH: none included. Polymarket's same-day price markets resolve on Binance BTC/USDT (noon ET) while Kalshi uses
 # CF Benchmarks RTI (2pm/5pm ET); Polymarket markets closing at the Kalshi times are Up/Down, not thresholds.
 kalshi_market_id,pm_market_id,note
@@ -14,3 +14,9 @@ KXFEDDECISION-26DEC-H25,0x8a4196617dcb703e49d9bb36d3847bf6a75fd364dbd19f8d408ac9
 KXFEDDECISION-27JAN-C25,0x0bbe79a986a3f84ea82ebe714159fcfaa488f80df878599e2cd9297ea57ee60f,January 2027 FOMC decrease interest rates by 25 bps
 KXFEDDECISION-27JAN-H0,0xf6e7c89ec4b5d3c887ed9b70dfbcac9392e287367783ce475d32e8c16ed9f61c,January 2027 FOMC no change
 KXFEDDECISION-27JAN-H25,0x50642b28be893e8752649e9ae6d687558fc5dcfeeecd10713cf59ef6ea0edce4,January 2027 FOMC increase interest rates by 25 bps
+KXFEDDECISION-26OCT-H26,0xde5d75ab7702875623ba509bc923241e1211da74a113521b3b70ddac930d7316,October 2026 FOMC increase interest rates by 50+ bps (Kalshi >25bps)
+KXFEDDECISION-26OCT-C26,0xa69ef420d8b4075ad8ba8611d02c63cb2ece46f5c8c643af223c272689b0c96f,October 2026 FOMC decrease interest rates by 50+ bps (Kalshi >25bps)
+KXFEDDECISION-26DEC-H26,0xa5f8a44504de30fa36fff2406b2b27b3d15476ed50448e4fc3ead4861d8a5e3e,December 2026 FOMC increase interest rates by 50+ bps (Kalshi >25bps)
+KXFEDDECISION-26DEC-C26,0xb9aee520bf51ac5f00b5c43e54ef9245bc9fcdef866ce8a33025f9a441cc651d,December 2026 FOMC decrease interest rates by 50+ bps (Kalshi >25bps)
+KXFEDDECISION-27JAN-H26,0x21cd6160d9de634104b719d50afa4a8ebfa3d0cd10609bf752c77b66f7bbd6a7,January 2027 FOMC increase interest rates by 50+ bps (Kalshi >25bps)
+KXFEDDECISION-27JAN-C26,0xfd0fb47daa40f79ed1bd8a0645d028c4583391b70860e4447f93b3b9fe797865,January 2027 FOMC decrease interest rates by 50+ bps (Kalshi >25bps)
