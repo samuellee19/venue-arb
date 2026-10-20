@@ -46,8 +46,10 @@ On the OptiPlex, two long-running systemd user units: `venue-arb-collector` (ord
 `venue-arb-flows` (`prefect.serve` of three hourly deployments: `catalog` at :05, `match` at :20 and `score` at
 :40, which scores the last 26 h of books; overlapping windows re-score idempotently). Schedules, retries and run
 history are in the Prefect UI (Deployments); to pause one, use its toggle there or
-`prefect deployment pause 'venue_arb_catalog/catalog'` (`prefect deployment ls` shows the exact names). A restart of
-`venue-arb-flows` re-registers the deployments and may unpause them.
+`prefect deployment pause '<flow>/<name>'`, undo with `prefect deployment resume '<flow>/<name>'` (e.g.
+`venue_arb_catalog/catalog`; `prefect deployment ls` shows the exact names). A deployment paused this way is
+expected to stay paused across `venue-arb-flows` restarts while the schedule is re-applied from `serve.py`
+(verify after the first deploy).
 
 ```bash
 mkdir -p ~/.config/systemd/user
