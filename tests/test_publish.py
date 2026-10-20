@@ -47,8 +47,8 @@ def test_push_returns_false_on_nonzero_exit(tmp_path):
         calls.append(args)
         return SimpleNamespace(returncode=23)
 
-    assert publish.push(tmp_path, "u@h:/srv/venue-arb/bundle/", rsync=rsync) is False
-    assert calls == [["rsync", "-az", "--timeout=30", "--partial", f"{tmp_path}/", "u@h:/srv/venue-arb/bundle/"]]
+    assert publish.push(tmp_path, "u@h:./", rsync=rsync) is False
+    assert calls == [["rsync", "-az", "--timeout=30", "--partial", f"{tmp_path}/", "u@h:./"]]
     assert publish.push(tmp_path, "u@h:/x/", rsync=lambda args, **kw: SimpleNamespace(returncode=0)) is True
 
 

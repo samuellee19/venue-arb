@@ -1,16 +1,17 @@
 #!/usr/bin/env bash
 # Provision the venue-arb dashboard server (fresh Ubuntu 24.04, run as root; safe to re-run).
-#   sudo REPO_URL=<git url> bash provision.sh /path/to/optiplex.pub [domain]
+#   sudo REPO_URL=<git url> bash provision.sh /path/to/optiplex.pub <public-ip-or-domain>
 # REPO_URL is needed only on the first run (when /srv/venue-arb/app has no checkout; a hand-copied one is fine); REPO_BRANCH defaults to main.
 set -euo pipefail
 
-PUBKEY_FILE=${1:?usage: provision.sh /path/to/optiplex.pub [domain]}
-DOMAIN=${2:-}
+PUBKEY_FILE=${1:?usage: provision.sh /path/to/optiplex.pub <public-ip-or-domain>}
+SITE=${2:?usage: provision.sh /path/to/optiplex.pub <public-ip-or-domain>}
 BRANCH=${REPO_BRANCH:-main}
 BASE=/srv/venue-arb
 [[ $EUID -eq 0 ]] || { echo "run as root" >&2; exit 1; }
 [[ -r $PUBKEY_FILE ]] || { echo "cannot read $PUBKEY_FILE" >&2; exit 1; }
 PUBKEY=$(cat "$PUBKEY_FILE")
+[[ $PUBKEY != *$'\n'* ]] || { echo "key file must be one line" >&2; exit 1; }
 [[ $PUBKEY == ssh-ed25519\ * ]] || { echo "$PUBKEY_FILE is not an ssh-ed25519 public key" >&2; exit 1; }
 
 export DEBIAN_FRONTEND=noninteractive
@@ -59,19 +60,33 @@ runuser -u venue-arb -- env HOME="$BASE" bash -euo pipefail -c '
 # units, cron, Caddy
 install -m 644 "$BASE/app/deploy/server/venue-arb-web.service" /etc/systemd/system/venue-arb-web.service
 install -m 644 "$BASE/app/deploy/server/prune.cron" /etc/cron.d/venue-arb-prune
-if [[ -n $DOMAIN ]]; then
-  sed "s|^DOMAIN {|$DOMAIN {|" "$BASE/app/deploy/server/Caddyfile" >/etc/caddy/Caddyfile
-else
-  printf ':443 {\n\ttls internal\n\treverse_proxy 127.0.0.1:8000\n}\n' >/etc/caddy/Caddyfile
-fi
+# a bare IP cannot get a Let's Encrypt cert, so it gets Caddy's internal CA (browser warning; curl -k)
+{
+  echo "$SITE {"
+  [[ $SITE =~ ^[0-9.]+$ ]] && printf '\ttls internal\n'
+  printf '\treverse_proxy 127.0.0.1:8000\n}\n'
+} >/etc/caddy/Caddyfile
 systemctl daemon-reload
-systemctl enable --now venue-arb-web cron
+systemctl enable --now cron
+systemctl enable venue-arb-web
+systemctl restart venue-arb-web   # a re-run applies new code, deps and unit changes
 systemctl enable caddy
 systemctl restart caddy
 
 # firewall (the cloud security list must also allow 443)
-ufw allow OpenSSH
-ufw allow 443/tcp
-ufw --force enable
+RULES=/etc/iptables/rules.v4
+if [[ -f $RULES ]]; then
+  # Oracle images: a static INPUT REJECT precedes anything ufw appends (and Oracle advises against ufw), so open 443 there
+  if ! grep -q -- '--dport 443 ' "$RULES"; then
+    awk '!d && /^-A INPUT .*-j REJECT/ {print "-A INPUT -p tcp -m state --state NEW -m tcp --dport 443 -j ACCEPT"; d=1} {print}' \
+      "$RULES" >"$RULES.new" && mv "$RULES.new" "$RULES"
+    grep -q -- '--dport 443 ' "$RULES" || { echo "no INPUT REJECT line in $RULES; open 443 by hand" >&2; exit 1; }
+  fi
+  iptables-restore <"$RULES"
+else
+  ufw allow OpenSSH
+  ufw allow 443/tcp
+  ufw --force enable
+fi
 
 echo "done: curl -s localhost:8000/healthz   (503 'no bundle yet' until the publisher's first push)"

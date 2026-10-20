@@ -77,8 +77,8 @@ cd ~/platform && docker compose exec postgres psql -U postgres -d app -c \
 ### Dashboard publisher
 
 `venue-arb-publish` (`python -m venue_arb.publish`) writes `live.json` every 60 s and one history Parquet per clock
-hour, then pushes them outbound with rsync to `VENUE_ARB_PUBLISH_DEST` (`user@host:/srv/venue-arb/bundle/`). The value
-in `mise.toml [env]` and the three units is the placeholder `venue-arb@SERVER_IP:/srv/venue-arb/bundle/` (a shared
+hour, then pushes them outbound with rsync to `VENUE_ARB_PUBLISH_DEST` (`venue-arb@host:./`; rrsync on the server takes the path relative to the bundle dir, so an absolute path would land in `bundle/srv/...`). The value
+in `mise.toml [env]` and the three units is the placeholder `venue-arb@SERVER_IP:./` (a shared
 env var; only the publisher reads it, and `tests/test_deploy.py` needs it identical everywhere). Once the server
 exists (Deploy step), set the real IP on the box in both `mise.toml` and the unit, then `daemon-reload` and restart.
 

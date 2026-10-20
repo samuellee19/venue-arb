@@ -1,4 +1,5 @@
-# provision.sh substitutes DOMAIN; with no domain, a self-signed cert on :443
-DOMAIN {
+# Reference only: provision.sh writes /etc/caddy/Caddyfile. SITE is the domain (Let's Encrypt) or the public IP
+# (add `tls internal` inside the block: self-signed, browsers warn, check with curl -k).
+SITE {
 	reverse_proxy 127.0.0.1:8000
 }
