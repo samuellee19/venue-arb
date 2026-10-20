@@ -55,10 +55,26 @@ did not settle when fetched is marked "unverified". Re-check before relying on a
 - Unverified. The fetched docs pages list no country list. Kalshi is a US-regulated exchange; US availability is
   not confirmed from a primary page here. This project does not trade, so it only matters for the demo's framing.
 
-### Public data terms (2026-10-19)
-- Unverified. The docs say that by using the API "you are agreeing to be bound to our Developer Agreement"
-  (<https://docs.kalshi.com/welcome>) but that agreement was not fetched, so whether prices may be shown on a
-  public page is not settled. Treat the public demo as blocked on this until the Developer Agreement is read.
+### Public data terms (2026-10-20)
+- **Decision: `DASHBOARD_SHOW_BOOKS = False`. Kalshi's Data Terms of Use prohibit public display without written
+  authorization, and the Developer Agreement (which governs the API) could not be read. Sam to review.**
+- The Developer Agreement <https://kalshi.com/developer-agreement> returned HTTP 429 (Vercel checkpoint) to curl and
+  WebFetch today; in a browser the page loaded but its body was empty. Not read. Not bypassed.
+- The same page's footer links "Data Terms of Service"
+  (<https://kalshi-public-docs.s3.amazonaws.com/kalshi-data-terms-of-service.pdf>, read 2026-10-20). It covers
+  `kalshi.com` website content including "bid-ask prices", not the API explicitly. It says: "You may access content
+  only for your personal use for non-commercial purposes." and prohibits, absent "prior written authorization",
+  "publicly displaying, publishing" and "systematic retrieval to create collections, compilations, databases".
+  Whether it reaches API data is the Developer Agreement's question; on its face it forbids a public quote page.
+- Attribution text required: none found (neither document was read in full for the API terms).
+- To flip to `True`: obtain Kalshi's written permission, or read the Developer Agreement and find an explicit
+  display allowance.
+
+### Kalshi fee schedule source (2026-10-20, Task 1)
+- Still unverified. <https://kalshi.com/fee-schedule> and the PDF both return HTTP 429; the S3 guess
+  `kalshi-public-docs.s3.amazonaws.com/kalshi-fee-schedule.pdf` is 404. `docs.kalshi.com/llms.txt` lists no fee
+  schedule page (only fee rounding, series/event fee-change endpoints, margin fee tiers). Coefficient 0.07 stays
+  secondhand; Task 8 shows the caveat line.
 
 ## Polymarket International
 
@@ -99,7 +115,13 @@ did not settle when fetched is marked "unverified". Re-check before relying on a
   Source: <https://docs.polymarket.com/api-reference/geoblock>
 - Allowed countries are everything not listed above; the page does not enumerate them.
 
-### Public data terms (2026-10-19)
-- Unverified. The Terms of Use page body could not be read (only a banner came back) and no clause on data
-  display or redistribution was found. Treat the public demo as blocked on this until the terms are read.
-  Source to check: <https://polymarket.com/tos>
+### Public data terms (2026-10-20)
+- **Decision: `DASHBOARD_SHOW_BOOKS = False`. Polymarket's Terms of Use could not be read, so display is not
+  confirmed allowed. Sam to review.**
+- <https://polymarket.com/tos> fetched 2026-10-20 by curl (HTTP 200, 343 KB) and in the browser pane: the document
+  body does not render, only the site shell (and no clause text is in the raw HTML either). The only text is the meta
+  description, "By using Polymarket you agree to our Terms of Use."
+- Alternatives tried: `docs.polymarket.com` home and `llms.txt` (no terms link or data-use clause), GitHub
+  `Polymarket/clob-client` README (no terms; lists an MIT license for the code only). No clause on displaying or
+  redistributing market data was found, so none is recorded.
+- Attribution text required: none found.

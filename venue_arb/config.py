@@ -17,3 +17,4 @@ LADDER_PAD_DEFAULT = 50.0  # USD clip pad when an asset has < LADDER_MIN_BASIS b
 LADDER_MIN_BASIS = 24
 BASIS_WINDOW_DAYS = 30  # trailing basis window for the ladder bounds (collector pad, ladder_score, the note)
 LADDER_WINDOW_HOURS = 3  # ladder_score rescoring window
+DASHBOARD_SHOW_BOOKS = False  # public order-book quotes: both venues' terms must allow it; docs/venues.md "Public data terms" (Sam to review)
