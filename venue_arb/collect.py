@@ -11,6 +11,8 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from functools import partial
 
+import obs
+
 from venue_arb import basis, http
 from venue_arb.books import to_rows, watchlist
 from venue_arb.config import (
@@ -184,6 +186,7 @@ def flush(buf, venues, load, record, run_sql, checks, stats, max_buffer: int = M
 def run_forever(interval_s: int = SNAPSHOT_INTERVAL_S, flush_every: int = 5) -> None:
     from qa import checks, db, sql, store
 
+    obs.init(service="venue-arb")
     fetchers, buf, watch, n = default_fetchers(), {v: [] for v in VENUES}, [], 0
     stats, cycles = {v: [0, 0, 0] for v in VENUES}, []
 
@@ -192,7 +195,7 @@ def run_forever(interval_s: int = SNAPSHOT_INTERVAL_S, flush_every: int = 5) -> 
 
     def record(results):
         with db.pg() as conn:
-            store.record(conn, PIPELINE, str(uuid.uuid4()), results)
+            store.record(conn, PIPELINE, obs.current().id if obs.current() else str(uuid.uuid4()), results)
 
     while True:
         started = time.monotonic()
@@ -204,9 +207,10 @@ def run_forever(interval_s: int = SNAPSHOT_INTERVAL_S, flush_every: int = 5) -> 
             tick(watch, fetchers, buf, stats)
             cycles.append(time.monotonic() - started)
             if n % flush_every == 0:
-                flush(buf, {v for v, _, _ in watch}, load, record,
-                      lambda: sql.run_all(pattern="book_levels_*.sql", directory=SQL_CHECKS), checks, stats,
-                      cycles=cycles, interval_s=interval_s)
+                with obs.run("venue-arb.collector"):
+                    flush(buf, {v for v, _, _ in watch}, load, record,
+                          lambda: sql.run_all(pattern="book_levels_*.sql", directory=SQL_CHECKS), checks, stats,
+                          cycles=cycles, interval_s=interval_s)
                 cycles.clear()
         except Exception:
             log.exception("collector cycle failed")

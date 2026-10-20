@@ -4,11 +4,10 @@
 """
 
 import logging
-import uuid
 from datetime import UTC, datetime, timedelta
 
+import obs
 from prefect import flow, get_run_logger, task
-from prefect.runtime import flow_run
 from qa import checks, db, sql, store
 
 from venue_arb import catalog
@@ -34,9 +33,10 @@ def fetch(venue: str) -> list[Listing]:
 
 
 @flow(name=PIPELINE)
+@obs.job("venue-arb.catalog")
 def catalog_flow() -> dict:
     log = get_run_logger()
-    run_id = str(flow_run.get_id() or uuid.uuid4())
+    run_id = obs.current().id
     results: list[checks.Result] = []
     try:
         now = datetime.now(UTC)

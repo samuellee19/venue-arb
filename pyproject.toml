@@ -16,6 +16,9 @@ dependencies = [
     "matplotlib==3.11.2",
     "pyarrow>=25.0.1",
     "mlflow-skinny==3.16.1",
+    "opentelemetry-sdk>=1.45.0",  # the platform obs package (PYTHONPATH) needs these three
+    "opentelemetry-exporter-otlp-proto-http>=1.45.0",
+    "structlog>=26.1.0",
 ]
 
 [dependency-groups]

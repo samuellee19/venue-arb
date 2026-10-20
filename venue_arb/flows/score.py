@@ -4,11 +4,10 @@
 """
 
 import logging
-import uuid
 from datetime import UTC, datetime, timedelta
 
+import obs
 from prefect import flow, get_run_logger
-from prefect.runtime import flow_run
 from qa import checks, db, sql, store
 
 from venue_arb import episodes, scoring
@@ -48,11 +47,12 @@ def upsert_opportunities(conn, opps: list[dict]) -> int:
 
 
 @flow(name=PIPELINE)
+@obs.job("venue-arb.score")
 def score_flow(window_hours: int = 26, end: datetime | None = None) -> dict:
     """Score the `window_hours` before `end` (default now). Windows overlap run to run; re-scoring rewrites the same
     edge keys and upserts the same episodes."""
     log = get_run_logger()
-    run_id = str(flow_run.get_id() or uuid.uuid4())
+    run_id = obs.current().id
     results: list[checks.Result] = []
     try:
         end = end or datetime.now(UTC)

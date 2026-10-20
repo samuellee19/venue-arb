@@ -3,13 +3,12 @@
     secrets uv run python -m venue_arb.flows.match
 """
 
-import uuid
 from datetime import UTC, datetime
 
 import numpy as np
+import obs
 from pgvector.psycopg import register_vector
 from prefect import flow, get_run_logger
-from prefect.runtime import flow_run
 from qa import checks, db, sql, store
 
 from venue_arb.config import CATEGORIES, PIPELINE_PREFIX, SQL_CHECKS
@@ -63,9 +62,10 @@ def candidate_pairs(rows: list[dict], vecs: dict) -> list[tuple[str, str, float,
 
 
 @flow(name=PIPELINE)
+@obs.job("venue-arb.match")
 def match_flow(limit: int = 500) -> dict:
     log = get_run_logger()
-    run_id = str(flow_run.get_id() or uuid.uuid4())
+    run_id = obs.current().id
     results: list[checks.Result] = []
     try:
         with db.pg() as conn:

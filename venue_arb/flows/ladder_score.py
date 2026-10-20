@@ -6,11 +6,10 @@ episodes (Postgres, source 'ladder'), via qa.
 
 import logging
 import math
-import uuid
 from datetime import UTC, datetime, timedelta
 
+import obs
 from prefect import flow, get_run_logger
-from prefect.runtime import flow_run
 from qa import checks, db, sql, store
 
 from venue_arb import basis, episodes, ladder_edges, scoring
@@ -73,6 +72,7 @@ def bounds_by_asset(rows) -> dict[str, tuple[float, float]]:
 
 
 @flow(name=PIPELINE)
+@obs.job("venue-arb.ladder_score")
 def ladder_score_flow(window_hours: int = LADDER_WINDOW_HOURS, end: datetime | None = None, pipeline: str = PIPELINE) -> dict:
     """Score the `window_hours` before `end` (default now); overlapping windows rewrite the same keys. Admissible
     checks are counted only in ladder_edges.count_window(end). `pipeline` names the qa results (tests use their own).
@@ -80,7 +80,7 @@ def ladder_score_flow(window_hours: int = LADDER_WINDOW_HOURS, end: datetime | N
     longer than 3 h leaves books unscored; re-run once with a wider window. Ladders are read and written one at a time,
     so memory is bounded by the largest ladder's books and rows."""
     log = get_run_logger()
-    run_id = str(flow_run.get_id() or uuid.uuid4())
+    run_id = obs.current().id
     results: list[checks.Result] = []
     try:
         end = end or datetime.now(UTC)

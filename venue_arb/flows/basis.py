@@ -12,11 +12,10 @@ first live run showed in every row, so only the 1h zips are downloaded and binan
 """
 
 import logging
-import uuid
 from datetime import UTC, datetime, timedelta
 
+import obs
 from prefect import flow, get_run_logger
-from prefect.runtime import flow_run
 from qa import checks, db, sql, store
 
 from venue_arb import basis
@@ -46,9 +45,10 @@ def candles(symbol: str, interval: str, asset: str, seconds: int, instants: list
 
 
 @flow(name=PIPELINE)
+@obs.job("venue-arb.basis")
 def basis_flow(days: int = 30) -> dict:
     log = get_run_logger()
-    run_id = str(flow_run.get_id() or uuid.uuid4())
+    run_id = obs.current().id
     results: list[checks.Result] = []
     try:
         ch = db.ch()

@@ -6,11 +6,10 @@ History is a traded/mid price, not an ask: these rows are screened only, never e
 """
 
 import logging
-import uuid
 from datetime import UTC, datetime
 
+import obs
 from prefect import flow, get_run_logger
-from prefect.runtime import flow_run
 from qa import checks, db, sql, store
 
 from venue_arb import screened
@@ -40,9 +39,10 @@ def _start(first_seen, *opens) -> datetime:
 
 
 @flow(name=PIPELINE)
+@obs.job("venue-arb.screened")
 def screened_flow(end: datetime | None = None) -> dict:
     log = get_run_logger()
-    run_id = str(flow_run.get_id() or uuid.uuid4())
+    run_id = obs.current().id
     results: list[checks.Result] = []
     try:
         end = (end or datetime.now(UTC)).replace(minute=0, second=0, microsecond=0)  # skip the in-progress hour
