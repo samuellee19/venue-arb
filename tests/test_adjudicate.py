@@ -287,3 +287,31 @@ def test_rule_pairs_skip_llm_and_budget():
     assert conn.attempts == [] and len(conn.inserts) == 1
     ins = conn.inserts[0]
     assert "rule:fed-v1" in ins and ins[-3:-1] == (0, PROMPT_VERSION) and ins[7] == "exact"
+
+
+def _fed():
+    a = {**listing("KXFEDDECISION-26DEC-H25", "v1"), "title": "Will the Federal Reserve Hike rates by 25bps ..."}
+    b = {**listing("0xp", "w1"), "title": "Will the Fed increase interest rates by 25 bps after the December 2026 meeting?"}
+    return [(a, b)]
+
+
+def test_rule_overwrites_existing_llm_row():
+    conn, call = FakeConn(old=[("KXFEDDECISION-26DEC-H25", "v1", "0xp", "w1")]), FakeCall()
+    out = run(conn, _fed(), 0.0, call=call)
+    assert call.n == 0 and out["ruled"] == 1 and conn.attempts == []
+    assert "rule:fed-v1" in conn.inserts[0] and "ON CONFLICT" in conn.sqls[0]
+
+
+def test_rule_second_run_is_cached():
+    conn = FakeConn()
+    real = conn.execute
+
+    def execute(sql, params=()):  # the stored row now carries the rule model at the current prompt version
+        if sql.startswith("SELECT 1 FROM venue_arb.adjudications") and "model" in sql:
+            return Cur((1,) if conn.inserts else None)
+        return real(sql, params)
+
+    conn.execute = execute
+    assert run(conn, _fed(), 0.0, call=FakeCall())["ruled"] == 1
+    out = run(conn, _fed(), 0.0, call=FakeCall())
+    assert out["ruled"] == 0 and out["cached"] == 1 and len(conn.inserts) == 1

@@ -68,7 +68,8 @@ def test_summarize_empty_inputs():
         assert out.name == "research-note-v1.md" and "no eligible pairs" in out.read_text()
 
 
-def test_render_sections_and_tiers_labeled(tmp_path):
+def test_render_sections_and_tiers_labeled(tmp_path, monkeypatch):
+    monkeypatch.setattr(note, "NEEDS_REVIEW", {"K-1": {0: "x"}})
     s = note.summarize([pair()], [screened(h=h, net=-0.03 + h / 1000) for h in range(50)],
                        [edge(m=m) for m in range(10)], [], adjudications={("K-1", "0xpm"): {"tail_risks": "Cancelled meeting resolves No", "model": "m", "prompt_version": "v2"}})
     text = note.render(s, tmp_path).read_text()
@@ -117,3 +118,11 @@ def test_scope_filters_tiers_and_counts():
     assert s["screened"]["scope"] == {"pairs": 2, "eligible": 1, "closed": 1, "other": 0, "excluded": {
         "wrong/unsure review": 1, f"no prompt-{PROMPT_VERSION} adjudication": 1}}
     assert s["executable"]["rows"] == 0 and s["executable"]["scope"]["excluded"] == {"wrong/unsure review": 1}
+
+
+def test_render_rule_pairs_no_flag_intro_and_method(tmp_path):
+    a = {("K-1", "0xpm"): {"tail_risks": "t", "model": "rule:fed-v1", "prompt_version": "v3"}}
+    s = note.summarize([pair()], [screened(h=h) for h in range(50)], [edge(m=m) for m in range(10)], [], adjudications=a)
+    text = note.render(s, tmp_path).read_text()
+    assert "builder's own reading" not in text
+    assert "by a deterministic rule (rule:fed-v1 (prompt v3))" in text and "by an LLM" not in text

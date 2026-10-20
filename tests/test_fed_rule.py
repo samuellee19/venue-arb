@@ -1,5 +1,6 @@
 import pytest
 
+import venue_arb.matching.fed_rule as fr
 from venue_arb.matching.fed_rule import RULE_MODEL, decide, kalshi_outcome, polymarket_outcome
 
 UP = frozenset(range(50, 501, 25))
@@ -63,10 +64,16 @@ def test_different_meeting():
 
 
 def test_overlap_is_near():
-    a = {"market_id": "KXFEDDECISION-26DEC-H26", "title": ""}
-    import venue_arb.matching.fed_rule as fr
     assert fr._relation(frozenset({25, 50}), UP) == "near"
-    assert decide(a, pm(INC50)).relation == "exact"
+
+
+@pytest.mark.parametrize("title", [
+    "Will the Fed increase interest rates by 75 bps after the December 2026 meeting?",
+    "Will the Fed increase interest rates by 25 bps or more after the December 2026 meeting?",
+    "Will the Fed increase interest rates by 25 bps after the December 2026 meeting? (updated)",
+    "Will the Fed increase interest rates by 25 bps after the Smarch 2026 meeting?"])
+def test_parser_negatives(title):
+    assert polymarket_outcome({"market_id": "x", "title": title}) is None
 
 
 def test_non_fed_row_is_none():

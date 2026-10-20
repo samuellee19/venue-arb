@@ -19,27 +19,18 @@ from venue_arb.episodes import ALIGN_S, MAX_GAP_S, MIN_EDGE
 from venue_arb.exact import MIN_CONFIDENCE, ExactPair
 from venue_arb.fees import FEE_VERSION, KALSHI_RATE, TRANSFER, US_EXECUTABLE
 from venue_arb.matching.adjudicate import PROMPT_VERSION
+from venue_arb.matching.fed_rule import RULE_MODEL
 
 NOTE = "research-note-v1.md"
 SCREENED_PNG = "screened-net-gap.png"
 EXEC_PNG = "executable-edge.png"
 EARLY_DAYS = 7  # "early life": a pair's first week of screened history
 CONCLUSIVE_H = 14 * 24  # below this much executable data the short answer says it is too short to conclude
-# The builder's reading of the LLM tail_risks text (2026-10-19; Task 8 review + final review): clauses that read like
-# real contract differences or are muddled, to be checked at a human review sitting before v1-final.
+# The builder's reading of LLM-written tail_risks text: clauses that read like real contract differences or are muddled,
+# to be checked at a human review sitting before v1-final. Rule-judged pairs (fixed TAIL text) need no entries.
 # {kalshi_id: {clause number (1-based, 0 = the pair as a whole): reason}}. Drop entries once reviewed.
 REVIEW_FLAGS_DATE = "2026-10-19"
-NEEDS_REVIEW = {
-    "KXFEDDECISION-26DEC-C25": {0: "says Kalshi's rules do not define the rate variable precisely, which reads like "
-                                   "a real resolution difference rather than a rare edge case"},
-    "KXFEDDECISION-26DEC-H25": {0: "the cancelled-meeting clause is muddled about which side resolves how"},
-    "KXFEDDECISION-26OCT-H25": {3: "says the mapping holds only for exactly 25 bp moves, which reads like a bracket "
-                                   "difference rather than a rare edge case"},
-    "KXFEDDECISION-26OCT-H0": {2: "the 'resolves No on both' claim rests on Kalshi treating a 12.5 bp move as not "
-                                  "'maintains rate', which the clause does not show from Kalshi's rules"},
-    "KXFEDDECISION-27JAN-C25": {1: "argues from the sibling 'Fed maintains rate' market, not from the Cut 25bps "
-                                   "market's own cancellation rule"},
-}
+NEEDS_REVIEW: dict[str, dict[int, str]] = {}  # none now: every current pair is a Fed bracket judged by rule
 
 # Queries main() runs; quoted verbatim in the note so every number traces to a table.
 SCREENED_SQL = ("SELECT ts, kalshi_id, pm_id, direction, net_gap_top FROM venue_arb.screened_v2 FINAL "
@@ -353,7 +344,11 @@ def render(summary: dict, out_dir: Path) -> Path:
     cap_ex = _chart_executable(ex, out_dir / EXEC_PNG)
     tr = s["fees"]["transfer"]
     models = sorted({(p.get("model"), p.get("prompt_version")) for p in s["pair_list"] if p.get("model")})
-    model_txt = ", ".join(f"{m} (prompt {v})" for m, v in models) or "n/a"
+    llm = [f"{m} (prompt {v})" for m, v in models if m != RULE_MODEL]
+    rule = [f"{m} (prompt {v})" for m, v in models if m == RULE_MODEL]
+    parts = ([f"by an LLM ({', '.join(llm)})"] if llm else [])
+    parts += [f"by a deterministic rule ({', '.join(rule)})"] if rule else []
+    adj_txt = ", or, for Fed decision brackets, ".join(parts) if len(parts) == 2 else (parts or ["by an unrecorded method"])[0]
     series = ", ".join(f"`{x}`" for x in sorted({p["series"] for p in s["pair_list"]})) or "none"
     fee_pm = ", ".join(f"`{x}`" for x in sorted({p["pm_fee"] for p in s["pair_list"]})) or "n/a"
     no_books = [p["kalshi_id"] for p in s["pair_list"] if p["kalshi_id"] not in {r["kalshi_id"] for r in ex["per_pair"]}]
@@ -421,7 +416,7 @@ def render(summary: dict, out_dir: Path) -> Path:
         "Yes outcomes are mutually exclusive or disjoint, including different outcome brackets of the same meeting "
         "(hold vs +25 bp, exactly 25 vs more than 25, +25 vs 50+). Every Fed target change since 1989 has been a "
         "multiple of 25 bp, so \"more than 25 bp\" and \"50 bp or more\" are the same outcome set; an off-grid "
-        "move is a tail risk. Adjudication was by an LLM, " + model_txt + ".",
+        "move is a tail risk. Adjudication was " + adj_txt + ".",
         "",
         ("**Eligibility.** The latest adjudication at the listings' current versions says `relation = 'exact'`, and "
         f"either confidence >= {MIN_CONFIDENCE} with no review, or a human review labeled `correct`; any `wrong` "
@@ -509,11 +504,13 @@ def render(summary: dict, out_dir: Path) -> Path:
         "",
         "### Contract-term differences (tail risk)",
         "",
-        ("Clauses the LLM adjudicator recorded as rare edge cases that keep each eligible pair exact (latest "
-        "adjudication at current versions). They are LLM-written, quoted verbatim, and not human-reviewed. "
-        f"The flags are the builder's own reading of the clauses, dated {REVIEW_FLAGS_DATE}, not a human review "
-        "sitting: a pair or clause that reads like a real difference or is muddled is flagged for review before "
-        "v1-final; an unflagged clause has not been checked either."),
+        ("Clauses recorded as rare edge cases that keep each eligible pair exact (latest adjudication at current "
+        "versions): LLM-written for LLM-judged pairs, a fixed text for rule-judged Fed pairs. Quoted verbatim, not "
+        "human-reviewed." + (
+            f" The flags are the builder's own reading of the clauses, dated {REVIEW_FLAGS_DATE}, not a human review "
+            "sitting: a pair or clause that reads like a real difference or is muddled is flagged for review before "
+            "v1-final; an unflagged clause has not been checked either."
+            if any(p["kalshi_id"] in NEEDS_REVIEW for p in s["pair_list"]) else "")),
         "",
         *[line for p in s["pair_list"] for line in _tail(p)],
         "",
@@ -537,7 +534,7 @@ def render(summary: dict, out_dir: Path) -> Path:
         "slightly overstated."),
         (f"- Few exact pairs ({pc['eligible']}), from Kalshi series {series}; nothing here generalizes to "
         "other categories."),
-        (f"- Matches were adjudicated by an LLM, {model_txt}; no human review sitting has happened yet: "
+        (f"- Matches were adjudicated {adj_txt}; no human review sitting has happened yet: "
         f"{pc['reviewed']} of {pc['eligible']} eligible pairs reviewed, {pc['unreviewed']} unreviewed."),
         ("- No execution latency, fill risk, partial fills, or capital lock-up costs beyond the annualized figure "
         "are modeled. The transfer cost is an assumption, reported as a sensitivity only."),
