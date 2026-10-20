@@ -14,7 +14,7 @@ LABELS = ("Exact match · no edge", "Executable edge · +", "Not an arbitrage ·
 
 
 def _bundle():
-    return LiveBundle.model_validate_json((SAMPLE / "live.json").read_text())
+    return LiveBundle.model_validate_json((SAMPLE / "live.json").read_text(encoding="utf-8"))
 
 
 def test_sample_live_covers_every_ui_path():
@@ -34,7 +34,8 @@ def test_sample_history_has_task4_columns_and_every_pair_key():
         t = pq.read_table(SAMPLE / "history" / name)
         assert t.column_names == COLS and set(t["key"].to_pylist()) == keys
         assert t.num_rows == 60 * len(keys)
-        assert t["k_ask"].null_count == t.num_rows  # quotes hidden while DASHBOARD_SHOW_BOOKS is False
+        for col in ("k_ask", "k_size", "pm_ask", "pm_size"):  # quotes hidden while DASHBOARD_SHOW_BOOKS is False
+            assert t[col].null_count == t.num_rows, f"{col} not null: regenerate the sample after flipping DASHBOARD_SHOW_BOOKS"
     assert max(pq.read_table(SAMPLE / "history" / HOURS[1])["net_edge_cents"].to_pylist(), key=lambda x: x or 0) > 1
 
 

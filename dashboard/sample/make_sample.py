@@ -150,7 +150,8 @@ def history_rows(rng, hour, rows):
                 up = r.key == EXEC_KEY and ts >= BUMP_FROM
                 c = r.net_edge_cents * (.7 + .3 * rng.random()) if up else (
                     0.2 + rng.gauss(0, .1) if r.key == EXEC_KEY else r.net_edge_cents + rng.gauss(0, .2))
-                best = c / 100
+                c = round(c, 2)  # gauss goes through libm: round so the Parquet bytes match across platforms
+                best = round(c / 100, 4)
                 cap = round(r.capacity_usd * (.9 + .2 * rng.random()) if up or r.key != EXEC_KEY else 40.0, 2)
                 if r.kind != "ladder":  # steer the first Kalshi ask so the derived fee stays the pair's fee
                     ks, ps = r.legs[0].side, r.legs[1].side
@@ -194,7 +195,8 @@ def build(out: Path) -> None:
     sides = {(p.kalshi_id, p.pm_id): p.yes_maps_to for p in PAIRS}
     (out / "history").mkdir(parents=True, exist_ok=True)
     (out / "live.json").write_text(
-        json.dumps(json.loads(bundle.model_dump_json()), sort_keys=True, indent=2, ensure_ascii=False) + "\n")
+        json.dumps(json.loads(bundle.model_dump_json()), sort_keys=True, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8")
     for hour in HOURS:
         tbl = history_table(*history_rows(rng, hour, bundle.pairs), sides)
         pq.write_table(tbl, out / "history" / f"pairs-{hour:%Y%m%d%H}.parquet", compression="zstd")
