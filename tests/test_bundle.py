@@ -1,4 +1,5 @@
 import json
+import re
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -13,7 +14,9 @@ from venue_arb.bundle import (
     exact_pair_rows,
     ladder_pair_rows,
     market_url,
+    verdict,
 )
+from venue_arb.edges import Edge
 from venue_arb.exact import ExactPair
 from venue_arb.fees import transfer_cost
 from venue_arb.matching.crypto_rule import Strike
@@ -140,8 +143,12 @@ def test_build_live_kpis_and_schema_roundtrip():
     b = _live(_ex(), _lad())
     # the brief expected ladder 2; the brief's own strikes give 3 admissible (strike, direction) rows, all live
     assert b.kpis.pairs_live == {"exact": 2, "near_exact": 2, "ladder": 3}
-    assert b.kpis.best_edge["key"] == max(b.pairs, key=lambda p: p.net_edge_cents or -9).key
+    # controller ruling: near-exact rows (basis exposure) never head the best-edge tile
+    assert b.kpis.best_edge["key"] == max((p for p in b.pairs if p.kind != "near_exact"),
+                                          key=lambda p: p.net_edge_cents or -9).key
     assert b.kpis.best_edge["key"] == "KXBTCD-26OCT2011-T85999.99~0xb88200~k_yes_pm_no"
+    lad = [r.model_copy(update={"net_edge_cents": 99.0}) if r.kind == "near_exact" else r for r in _lad()]
+    assert _live(_ex(), lad).kpis.best_edge["key"] == b.kpis.best_edge["key"]  # a 99¢ near-exact row is ignored
     assert LiveBundle.model_validate_json(b.model_dump_json()) == b
     assert len(b.model_dump_json()) < 200_000
 
@@ -152,6 +159,19 @@ def test_books_hidden_when_flag_off(monkeypatch):
     assert not b.show_books and all(p.books is None for p in b.pairs)
     js = b.model_dump_json()
     assert '"price"' not in js and '"size"' not in js
+    details = [c.detail for p in b.pairs for c in p.verdict.checks]
+    sizes = {f"{x['size']:,.0f}" for fx in (EXF["k_book"], EXF["pm_book"]) for x in fx["levels"]}
+    sizes |= {f"{x['size']:,.0f}" for xs in LDF["books"].values() for x in xs}
+    numbers = {n for d in details for n in re.findall(r"(?<![\d,.$])\d[\d,]*(?:\.\d+)?", d)}  # $ amounts excluded
+    assert numbers and not numbers & sizes
+    r = b.pairs[0]  # exact k_yes_pm_no
+    assert r.verdict.checks[2].detail == "net -0.7¢ on the first slice; fees 1.7¢"
+
+
+def test_verdict_without_first_slice():
+    e = Edge("k_yes_pm_no", 0.02, 500, 480, 0.02)
+    v = verdict("exact", "k_yes_pm_no", e, a=None, b=None, up=None, down=None, us_executable=False, both_live=True)
+    assert v.checks[2].detail == "net +2.0¢ on the first slice" and v.label.startswith("Executable edge · +2.0¢")
 
 
 def test_market_urls():

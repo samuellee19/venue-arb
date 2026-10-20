@@ -141,9 +141,10 @@ def market_url(venue: str, listing: dict) -> str:
 
 def verdict(kind: str, direction: str, edge: Edge | None, *, a: float | None, b: float | None,
             up: float | None, down: float | None, us_executable: bool, both_live: bool,
-            first: tuple[float, float] | None) -> Verdict:
+            first: tuple[float, float] | None = None) -> Verdict:
     """`edge` None = not scored (a leg is stale); edge.best_edge None = no asks on one side. `first` = (contracts,
-    fee ¢ per contract) of the walk's first slice, for the fees_depth detail."""
+    fee ¢ per contract) of the walk's first slice, for the fees_depth detail; the contract count (a top-of-book
+    size) appears only while config.DASHBOARD_SHOW_BOOKS is True."""
     best = edge.best_edge if edge else None
     executable = best is not None and best >= MIN_EDGE and edge.capacity_usd >= MIN_CAPACITY_USD
     if kind == "exact":
@@ -159,9 +160,15 @@ def verdict(kind: str, direction: str, edge: Edge | None, *, a: float | None, b:
         checks.append(Check(name="fees_depth", status="fail",
                             detail="not walked: " + ("no asks on one side" if edge else "a leg is stale")))
     else:
-        q, fee = first
+        detail = f"net {100 * best:+.1f}¢"
+        if first is None:
+            detail += " on the first slice"
+        elif config.DASHBOARD_SHOW_BOOKS:
+            detail += f" at the first {first[0]:,.0f} contracts; fees {first[1]:.1f}¢"
+        else:
+            detail += f" on the first slice; fees {first[1]:.1f}¢"
         checks.append(Check(name="fees_depth", status="ok" if executable else "partial" if best >= MIN_EDGE else "fail",
-                            detail=f"net {100 * best:+.1f}¢ at the first {q:,.0f} contracts; fees {fee:.1f}¢"))
+                            detail=detail))
     us = "both legs open" if us_executable else "Polymarket rejects US orders"
     checks.append(Check(name="jurisdiction", status="ok" if us_executable else "partial",
                         detail=f"anywhere: both legs open · US: {us}"))
@@ -284,7 +291,9 @@ def build_live(*, now: datetime, exact_rows: list[Pair], ladder_rows: list[Pair]
     keys (each optional): checks_window, admissible_checks, violations, screened_share_ge_1c, screened_hours."""
     pairs = exact_rows + ladder_rows
     live = [p for p in pairs if p.live]
-    top = max((p for p in live if p.net_edge_cents is not None), key=lambda p: p.net_edge_cents, default=None)
+    # near-exact rows are basis exposure, never the headline edge
+    top = max((p for p in live if p.net_edge_cents is not None and p.kind != "near_exact"),
+              key=lambda p: p.net_edge_cents, default=None)
     kpis = Kpis(
         episodes_7d=len(episodes),
         best_edge=None if top is None else {"key": top.key, "net_edge_cents": top.net_edge_cents,
