@@ -8,8 +8,7 @@ from venue_arb.flows.score import score_flow
 
 if __name__ == "__main__":
     # concurrency_limit=1: runs of one deployment never overlap. serve() creates/updates each deployment and
-    # its schedule from here on each start; a deployment paused in the UI/CLI is expected to stay paused
-    # (unverified, check after the first deploy).
+    # its schedule on each start and UNPAUSES it (verified 2026-10-20): a UI/CLI pause lasts only until restart.
     serve(
         catalog_flow.to_deployment("catalog", cron="5 * * * *", concurrency_limit=1),
         match_flow.to_deployment("match", cron="20 * * * *", concurrency_limit=1),
