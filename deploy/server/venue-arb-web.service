@@ -1,0 +1,17 @@
+[Unit]
+Description=venue-arb dashboard (FastAPI behind Caddy)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=venue-arb
+WorkingDirectory=/srv/venue-arb/app
+Environment=BUNDLE_DIR=/srv/venue-arb/bundle
+# the repo is not pip-installable (flat layout); venue_arb and dashboard import from the checkout
+Environment=PYTHONPATH=/srv/venue-arb/app
+ExecStart=/srv/venue-arb/app/.venv/bin/uvicorn dashboard.api.app:app --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,2 @@
+# keep history 9 days: the OptiPlex publisher prunes its own copy at 8, so the two never fight
+17 4 * * * root find /srv/venue-arb/bundle/history -name 'pairs-*.parquet' -mtime +9 -delete

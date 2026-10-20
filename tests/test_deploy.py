@@ -27,3 +27,11 @@ def test_unit_env_matches_mise(unit):
 def test_units_present():
     assert [p.name for p in UNITS] == ["venue-arb-collector.service", "venue-arb-flows.service", "venue-arb-publish.service"]
     assert not list((ROOT / "deploy").glob("*.timer"))
+
+
+def test_server_unit_has_no_db_env():
+    text = (ROOT / "deploy" / "server" / "venue-arb-web.service").read_text()
+    env = unit_env(ROOT / "deploy" / "server" / "venue-arb-web.service")
+    assert env["BUNDLE_DIR"] == "/srv/venue-arb/bundle"
+    assert not [k for k in env if k.startswith(("PG", "CLICKHOUSE_", "BWS_", "PREFECT_"))]
+    assert "User=venue-arb" in text

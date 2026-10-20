@@ -1,0 +1,4 @@
+# provision.sh substitutes DOMAIN; with no domain, a self-signed cert on :443
+DOMAIN {
+	reverse_proxy 127.0.0.1:8000
+}
