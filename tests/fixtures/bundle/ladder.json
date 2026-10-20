@@ -1,0 +1,39 @@
+{
+  "_note": "synthetic quotes; spot far above both strikes, K 85999.99 yes + PM 88200 no mispriced (the one executable row)",
+  "now": "2026-10-20T15:30:00+00:00",
+  "asset": "BTC",
+  "instant": "2026-10-20T16:00:00+00:00",
+  "basis": {"up": 182, "down": 152},
+  "kalshi": [{"market_id": "KXBTCD-26OCT2011-T85999.99", "level": 85999.99},
+             {"market_id": "KXBTCD-26OCT2011-T87999.99", "level": 87999.99}],
+  "polymarket": [{"market_id": "0xb86000", "yes_token": "tok-86000", "level": 86000},
+                 {"market_id": "0xb88200", "yes_token": "tok-88200", "level": 88200}],
+  "series_fee": {"fee_type": "quadratic", "fee_multiplier": 1},
+  "pm_fee": {"schedule": {"rate": 0.07, "exponent": 1, "takerOnly": true, "rebateRate": 0.2}, "fees_enabled": true},
+  "books": {
+    "KXBTCD-26OCT2011-T85999.99": [{"side": "no", "level": 0, "price": 0.08, "size": 400},
+                                   {"side": "yes", "level": 0, "price": 0.93, "size": 500},
+                                   {"side": "yes", "level": 1, "price": 0.94, "size": 800}],
+    "KXBTCD-26OCT2011-T87999.99": [{"side": "no", "level": 0, "price": 0.07, "size": 250},
+                                   {"side": "yes", "level": 0, "price": 0.96, "size": 300}],
+    "0xb86000": [{"side": "no", "level": 0, "price": 0.09, "size": 350},
+                 {"side": "yes", "level": 0, "price": 0.92, "size": 300}],
+    "0xb88200": [{"side": "no", "level": 0, "price": 0.04, "size": 600},
+                 {"side": "no", "level": 1, "price": 0.05, "size": 300},
+                 {"side": "yes", "level": 0, "price": 0.95, "size": 200}]
+  },
+  "listings": [
+    {"venue": "kalshi", "market_id": "KXBTCD-26OCT2011-T85999.99", "category": "crypto_price",
+     "title": "Bitcoin price on Oct 20, 2026?", "resolution_source": "CF Benchmarks BRTI",
+     "raw": {"event": {"series_ticker": "KXBTCD", "event_ticker": "KXBTCD-26OCT2011"}}},
+    {"venue": "kalshi", "market_id": "KXBTCD-26OCT2011-T87999.99", "category": "crypto_price",
+     "title": "Bitcoin price on Oct 20, 2026?", "resolution_source": "CF Benchmarks BRTI",
+     "raw": {"event": {"series_ticker": "KXBTCD", "event_ticker": "KXBTCD-26OCT2011"}}},
+    {"venue": "polymarket", "market_id": "0xb86000", "category": "crypto_price",
+     "title": "Bitcoin above 86,000 on October 20, 12PM ET?", "resolution_source": "Binance BTC/USDT 1m close",
+     "raw": {"event": {"slug": "bitcoin-above-86000-on-october-20-12pm-et"}}},
+    {"venue": "polymarket", "market_id": "0xb88200", "category": "crypto_price",
+     "title": "Bitcoin above 88,200 on October 20, 12PM ET?", "resolution_source": "Binance BTC/USDT 1m close",
+     "raw": {"event": {"slug": "bitcoin-above-88200-on-october-20-12pm-et"}}}
+  ]
+}

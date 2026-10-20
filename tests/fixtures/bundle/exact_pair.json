@@ -1,0 +1,23 @@
+{
+  "_note": "synthetic quotes on a real ticker shape; Polymarket fees disabled so the PM fee is 0",
+  "now": "2026-10-20T15:30:00+00:00",
+  "pair": {"kalshi_id": "KXFED-26DEC-H0", "pm_id": "0xabc", "pm_yes_token": "tok-yes", "yes_maps_to": "yes",
+           "close_time": "2026-12-09T19:00:00+00:00", "kalshi_series": "KXFED",
+           "pm_fee_schedule": {"rate": 0.05, "exponent": 1, "takerOnly": true, "rebateRate": 0.25},
+           "pm_fees_enabled": false, "confidence": 0.95, "reviewed": true},
+  "series_fee": {"fee_type": "quadratic_with_maker_fees", "fee_multiplier": 1},
+  "k_book": {"ts": "2026-10-20T15:29:00+00:00",
+             "levels": [{"side": "yes", "level": 0, "price": 0.41, "size": 120},
+                        {"side": "yes", "level": 1, "price": 0.42, "size": 340}]},
+  "pm_book": {"ts": "2026-10-20T15:29:10+00:00",
+              "levels": [{"side": "no", "level": 0, "price": 0.58, "size": 400},
+                         {"side": "no", "level": 1, "price": 0.59, "size": 210}]},
+  "listings": [
+    {"venue": "kalshi", "market_id": "KXFED-26DEC-H0", "category": "fed_macro",
+     "title": "Fed hikes in December 2026?", "resolution_source": "FOMC statement",
+     "raw": {"event": {"series_ticker": "KXFED", "event_ticker": "KXFED-26DEC"}}},
+    {"venue": "polymarket", "market_id": "0xabc", "category": "fed_macro",
+     "title": "Fed rate hike in December?", "resolution_source": "https://www.federalreserve.gov",
+     "raw": {"event": {"slug": "fed-decision-in-december"}}}
+  ]
+}

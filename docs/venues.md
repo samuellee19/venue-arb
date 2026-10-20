@@ -76,6 +76,15 @@ did not settle when fetched is marked "unverified". Re-check before relying on a
   schedule page (only fee rounding, series/event fee-change endpoints, margin fee tiers). Coefficient 0.07 stays
   secondhand; Task 8 shows the caveat line.
 
+### Market page URL (2026-10-20)
+- Verified in the browser pane (curl and WebFetch get HTTP 429). `kalshi.com/markets/kxbtcd` redirected to
+  `/markets/kxbtcd/bitcoin-price-abovebelow/kxbtcd-26oct2018`: series ticker, a slug, event ticker, all lower case.
+  The slug is not a key: `/markets/kxbtcd/x/kxbtcd-26oct2117` opened that event and canonicalized the slug, and
+  `/markets/kxfeddecision/market/kxfeddecision-26oct` opened "Fed decision in October?". Pages are per event, not
+  per market (strike).
+- Code (`bundle.market_url`): `https://kalshi.com/markets/{series_ticker}/market/{event_ticker}`, lower case, from
+  `listings.raw["event"]`.
+
 ## Polymarket International
 
 ### Read endpoints and rate limits (2026-10-19)
@@ -125,3 +134,8 @@ did not settle when fetched is marked "unverified". Re-check before relying on a
   `Polymarket/clob-client` README (no terms; lists an MIT license for the code only). No clause on displaying or
   redistributing market data was found, so none is recorded.
 - Attribution text required: none found.
+
+### Market page URL (2026-10-20)
+- Verified in the browser pane: `polymarket.com/event/how-many-fed-rate-cuts-in-2026` (the Gamma event slug from
+  `tests/fixtures/pm_events_p1.json`) opened "How many Fed rate cuts in 2026?" with the address unchanged.
+- Code (`bundle.market_url`): `https://polymarket.com/event/{slug}` from `listings.raw["event"]["slug"]`.
