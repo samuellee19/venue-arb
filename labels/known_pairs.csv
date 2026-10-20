@@ -1,4 +1,4 @@
-# draft: Sam to confirm
+# confirmed 2026-10-20: all 15 pairs labeled correct in Sam's review sitting (rule:fed-v1 verdicts)
 # Fed-decision pairs: same FOMC meeting, same outcome, same threshold (checked 2026-10-19 against live listings).
 # Kalshi ">25bps" vs Polymarket "50+ bps" are included as exact: Fed moves have all been multiples of 25bp since 1989
 # (fed_rule.py), and an odd-size move is a tail risk (Polymarket rounds up to the next bracket; Kalshi is strict).

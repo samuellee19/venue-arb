@@ -1,4 +1,4 @@
-# draft: Sam to confirm
+# confirmed by Sam 2026-10-20: candidate recall is hour-agnostic (same asset, ET date, direction, threshold)
 # built from listings snapshot sha256 577aaff857d833b7e938a761224f669793331140751ad0eb75eba2867f056262
 kalshi_market_id,pm_market_id,kind,note
 KXBTCD-26OCT2002-T73999.99,0x48c1c2d41fde272d7fad3fcea65de77e4202566fe1cd1cfd2be0ee2845cbe785,crypto_above,"Bitcoin price on Oct 20, 2026? $74,000 or above ~ Will the price of Bitcoin be above $74,000 on October 20?"

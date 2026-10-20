@@ -1,4 +1,4 @@
-"""Bake-off input: current listings -> content-hashed Parquet for the Colab job, plus the draft truth set from the
+"""Bake-off input: current listings -> content-hashed Parquet for the Colab job, plus the truth set from the
 same read so both refer to the same markets.
 
     secrets uv run python -m venue_arb.bakeoff.snapshot [out_dir]   (default data/bakeoff, gitignored)
@@ -63,7 +63,7 @@ def main(out_dir: str = "data/bakeoff") -> None:
     known = list(csv.DictReader(line for line in KNOWN.open() if not line.startswith("#")))
     truth = truth_rows(rows, known)
     with TRUTH.open("w", newline="") as f:
-        f.write(f"# draft: Sam to confirm\n# built from listings snapshot sha256 {sha}\n")
+        f.write(f"# candidate recall is hour-agnostic: same asset, ET date, direction, threshold (Sam, 2026-10-20)\n# built from listings snapshot sha256 {sha}\n")
         w = csv.DictWriter(f, ["kalshi_market_id", "pm_market_id", "kind", "note"])
         w.writeheader()
         w.writerows(truth)

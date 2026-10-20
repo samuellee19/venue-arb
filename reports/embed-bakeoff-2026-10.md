@@ -6,7 +6,7 @@
 
 **Answer: no.** The larger model does worse on the crypto near-pairs, and both models miss most of them for the
 same reason: dense threshold ladders. Keep bge-small. The fix belongs in candidate generation (a structured crypto
-rule, or a larger k), not in the embedding model. **The truth set is a draft until Sam confirms it.**
+rule, or a larger k), not in the embedding model. Sam confirmed the truth set's definition on 2026-10-20.
 
 ## Setup
 
@@ -14,7 +14,7 @@ rule, or a larger k), not in the embedding model. **The truth set is a draft unt
 |---|---|
 | Snapshot | 5,006 current listings (last_seen within 2 h, category set), `data/bakeoff/listings.parquet`, sha256 `577aaff857d8…6262` |
 | Text | `matching.embed.text_for(row)`: `"{title} \| {yes_label} \| closes {YYYY-MM-DD}"`, identical to production |
-| Truth set | `labels/crypto_near_pairs.csv` (draft): 312 `crypto_above` pairs (147 Kalshi markets), 15 `fed_exact` pairs |
+| Truth set | `labels/crypto_near_pairs.csv`: 312 `crypto_above` pairs (147 Kalshi markets), 15 `fed_exact` pairs |
 | bge-small | revision `5c38ec7c405ec4b44b94cc5a9bb96e735b38267a`, sentence-transformers fp16, no prefix (as fastembed) |
 | Qwen3-4B | revision `5cf2132abc99cad020ac570b19d031efec650f2b`, fp16 + sdpa, left padding, the model card's instruction prefix on every text (symmetric task) |
 | Candidates | production `matching.candidates.embed_pairs` (same category, k=5, min_sim=0.75, max_days=31); recall@k reruns it with min_sim off |
@@ -69,8 +69,8 @@ Polymarket 1 AM hourly market on the same date count as a near-pair).
 
 ## Caveats
 
-- The truth set is a draft built by a parser, not hand-checked. The `crypto_above` group is many-to-many by
-  construction (same date, any time of day), which makes pair recall at small k look harsh; `kalshi hit` is the
+- The truth set is built by a parser, not hand-checked; Sam confirmed its definition (2026-10-20). The
+  `crypto_above` group is many-to-many by construction (same date, any time of day), which makes pair recall at small k look harsh; `kalshi hit` is the
   kinder number.
 - One snapshot (2026-10-19, ~23:40 PT). Kalshi crypto markets on that day cover only Oct 20 and Oct 23.
 - bge-small was embedded on the T4 with sentence-transformers fp16, not with production fastembed ONNX on CPU.

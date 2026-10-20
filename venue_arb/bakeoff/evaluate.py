@@ -1,4 +1,4 @@
-"""Bake-off evaluation: candidate recall of each model's vectors on the draft truth set, logged to MLflow.
+"""Bake-off evaluation: candidate recall of each model's vectors on the truth set, logged to MLflow.
 
     uv run python -m venue_arb.bakeoff.evaluate [data/bakeoff]    (MLFLOW_TRACKING_URI from mise.toml, via the tunnel)
 
