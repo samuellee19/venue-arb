@@ -1,6 +1,7 @@
 import pytest
 
 from venue_arb import edges
+from venue_arb.edges import fill
 from venue_arb.exact import ExactPair
 from venue_arb.models import Level
 
@@ -86,3 +87,29 @@ def test_score_applies_pair_fees():
     p = ExactPair("K", "P", "tok", "yes", None, "KXS", {"rate": 0.05, "exponent": 1}, True, 0.9, False)
     out = edges.score(p, [L("yes", 0.40, 100)], [L("no", 0.55, 100)], NOFEE)
     assert out[0].best_edge == pytest.approx(0.05 - 0.05 * 0.55 * 0.45)
+
+
+def test_fill_single_level():
+    k = [Level("yes", 1, 0.41, 120)]; pm = [Level("no", 1, 0.58, 400)]
+    f = fill(k, pm, lambda p, q: 0.017 * q, lambda p, q: 0.0, 100)
+    assert f.filled == 100 and not f.insufficient_depth
+    assert f.k_avg_price == 0.41 and f.pm_avg_price == 0.58
+    assert f.fees_usd == pytest.approx(1.7) and f.cost_usd == pytest.approx(100.7)
+    assert f.net_cents == pytest.approx(-0.7) and f.net_bps == pytest.approx(-0.7 / 100.7 * 1e4)
+
+
+def test_fill_walks_through_negative_slices():
+    k = [Level("yes", 1, 0.41, 120), Level("yes", 2, 0.45, 300)]; pm = [Level("no", 1, 0.58, 400)]
+    f = fill(k, pm, lambda p, q: 0.0, lambda p, q: 0.0, 400)
+    assert f.filled == 400 and f.k_avg_price == pytest.approx((120 * 0.41 + 280 * 0.45) / 400)
+
+
+def test_fill_insufficient_depth():
+    f = fill([Level("yes", 1, 0.41, 120)], [Level("no", 1, 0.58, 400)], lambda p, q: 0.0, lambda p, q: 0.0, 1000)
+    assert f.filled == 120 and f.insufficient_depth and f.requested == 1000
+
+
+def test_fill_empty_ladder_and_bad_size():
+    assert fill([], [Level("no", 1, 0.58, 400)], lambda p, q: 0.0, lambda p, q: 0.0, 10).filled == 0
+    with pytest.raises(ValueError):
+        fill([], [], lambda p, q: 0.0, lambda p, q: 0.0, 0)

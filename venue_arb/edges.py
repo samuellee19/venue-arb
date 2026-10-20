@@ -53,6 +53,50 @@ def walk(k_asks: list[Level], pm_asks: list[Level], fee_k: Fee, fee_pm: Fee, min
     return best, cap, usd, (total / cap if cap else None)
 
 
+@dataclass(frozen=True)
+class Fill:
+    requested: float
+    filled: float  # contracts both ladders could supply, <= requested
+    insufficient_depth: bool
+    k_avg_price: float | None
+    pm_avg_price: float | None
+    fees_usd: float
+    cost_usd: float  # filled * (k_avg + pm_avg) + fees_usd
+    net_cents: float | None
+    net_bps: float | None
+
+
+def fill(k_asks: list[Level], pm_asks: list[Level], fee_k: Fee, fee_pm: Fee, contracts: float) -> Fill:
+    """Walk both best-first ladders to `contracts`, through negative slices; fees per slice as in `walk`."""
+    if contracts <= 0:
+        raise ValueError("contracts must be positive")
+    i = j = 0
+    rk = k_asks[0].size if k_asks else 0
+    rp = pm_asks[0].size if pm_asks else 0
+    filled = k_usd = pm_usd = fees = 0.0
+    while i < len(k_asks) and j < len(pm_asks) and filled < contracts:
+        pk, pp = k_asks[i].price, pm_asks[j].price
+        q = min(rk, rp, contracts - filled)
+        if q > 0:
+            filled += q
+            k_usd += q * pk
+            pm_usd += q * pp
+            fees += fee_k(pk, q) + fee_pm(pp, q)
+        rk -= q
+        rp -= q
+        if rk <= 0:
+            i += 1
+            rk = k_asks[i].size if i < len(k_asks) else 0
+        if rp <= 0:
+            j += 1
+            rp = pm_asks[j].size if j < len(pm_asks) else 0
+    cost = k_usd + pm_usd + fees
+    return Fill(contracts, filled, filled < contracts,
+                k_usd / filled if filled else None, pm_usd / filled if filled else None, fees, cost,
+                100 * (filled - cost) / filled if filled else None,
+                1e4 * (filled - cost) / cost if filled else None)
+
+
 def score(pair: ExactPair, k_levels: list[Level], pm_levels: list[Level], series_fee: dict,
           min_edge: float = 0.01) -> list[Edge]:
     def fee_k(p, q):
