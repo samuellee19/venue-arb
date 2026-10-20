@@ -197,6 +197,8 @@ function select(key) {
 
 // ---- pair detail ----
 function buildDetail() {
+  const old = $("plot");
+  if (old && window.Plotly) Plotly.purge(old);  // drops the graph and its window resize handler before the node goes
   if (!S.sel) { $("detail").innerHTML = `<div class="empty">No pairs in this bundle.</div>`; return; }
   const ranges = ["1h", "24h", "7d", "all"].map(r => `<button data-r="${r}"${r === S.range ? ' class="on"' : ""}>${r.replace(/(\d+)/, "$1 ")}</button>`);
   $("detail").innerHTML = `<div id="dhead"></div><div id="boxes"></div>`
@@ -408,10 +410,12 @@ function drawChart() {
   if (!el.dataset.bound) {
     el.dataset.bound = "1";
     el.on("plotly_click", async ev => {
-      const [key, ts] = ev.points[0].customdata;
+      const [key, ts] = ev.points[0].customdata, sel = S.sel;
       const res = await fetch(`/api/pair/${enc(key)}/snapshot?ts=${enc(ts)}`);
       if (!res.ok) return;
-      S.snap = {key, row: await res.json()};
+      const row = await res.json();
+      if (S.sel !== sel) return;  // another row was selected meanwhile
+      S.snap = {key, row};
       renderBoxes();
     });
   }

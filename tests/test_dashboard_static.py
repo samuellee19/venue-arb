@@ -8,7 +8,8 @@ VERDICTS = ("Exact match · no edge", "Executable edge", "Not an arbitrage · ba
             "Not executable from the US")
 BANNERS = ("No pair is executable from the US: Polymarket rejects US orders (docs/venues.md). Gaps shown for reference.",
            "last update {n} min ago")
-ALLOWED_URLS = ("https://kalshi.com", "https://polymarket.com", "https://github.com/samuellee19/venue-arb")
+ALLOWED_URL = re.compile(r"https://(kalshi\.com|polymarket\.com|github\.com/samuellee19/venue-arb)(/|$)")
+URL = re.compile(r"https?://[^\s'\"`)]+")
 
 
 def test_index_references_only_vendored_files():
@@ -25,9 +26,14 @@ def test_vendor_md_sha256_matches_plotly():
     assert hashlib.sha256((STATIC / "plotly-basic.min.js").read_bytes()).hexdigest() == sha
 
 
-def test_app_js_has_no_cdn_and_carries_the_copy():
+def test_no_external_urls_but_venue_and_repo_links():
+    for name in ("app.js", "styles.css", "index.html"):  # index.html: its inline script too
+        for url in URL.findall((STATIC / name).read_text(encoding="utf-8")):
+            assert ALLOWED_URL.match(url), (name, url)
+    assert not ALLOWED_URL.match("https://kalshi.com.evil.net/x")
+
+
+def test_app_js_carries_the_copy():
     js = (STATIC / "app.js").read_text(encoding="utf-8")
-    for url in re.findall(r"https?://[^\s'\"`)]+", js):
-        assert url.startswith(ALLOWED_URLS), url
     for text in VERDICTS + BANNERS:
         assert text in js, text
