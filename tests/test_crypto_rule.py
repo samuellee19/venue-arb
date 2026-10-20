@@ -1,5 +1,5 @@
 import json
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 from venue_arb.matching.crypto_rule import clip, ladders, parse, parse_strike
@@ -96,4 +96,17 @@ def test_bad_dates_return_none_not_raise():
               "Bitcoin above 80,000 on October 20, 13AM ET?", "Bitcoin above 80,000 on October 20, 0AM ET?",
               "Will the price of Bitcoin be above $80,000 on February 30?"):
         assert parse_strike({**p(80000), "title": t}) is None
-        parse({**p(80000), "title": t})
+        # legacy parse does not validate title dates; it must not raise and uses close_time's ET date
+        assert parse({**p(80000), "title": t}) == ("BTC", date(2026, 10, 20), "above", 80000.0, None)
+
+
+def test_midnight_noon_and_full_month_name():
+    def at(title, close):
+        return parse_strike({**p(80000), "title": title, "close_time": close}).instant
+
+    assert at("Bitcoin above 80,000 on October 20, 12AM ET?", datetime(2026, 10, 20, 4, tzinfo=UTC)) == \
+        datetime(2026, 10, 20, 4, tzinfo=UTC)
+    assert at("Bitcoin above 80,000 on October 20, 12PM ET?", datetime(2026, 10, 20, 16, tzinfo=UTC)) == \
+        datetime(2026, 10, 20, 16, tzinfo=UTC)
+    assert at("Bitcoin above 80,000 on September 15, 5AM ET?", datetime(2026, 9, 15, 9, tzinfo=UTC)) == \
+        datetime(2026, 9, 15, 9, tzinfo=UTC)
