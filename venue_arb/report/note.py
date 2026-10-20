@@ -63,10 +63,16 @@ GROUP BY asset, instant, k_id, pm_id, direction, kind, a, b, basis_up, basis_dow
 # the basis window ladder_score reads (flows/ladder_score.BASIS_SQL), as of generation time
 BASIS_SQL = ("SELECT asset, diff, binance FROM venue_arb.basis FINAL "
              f"WHERE instant > now() - INTERVAL {BASIS_WINDOW_DAYS} DAY")
-# scored and positive arb checks per hour, so the numerator covers the same hours as the denominator
+# scored and positive arb checks per hour, so the numerator covers the same hours as the denominator; only rows scored
+# under the latest bounds of their (asset, instant) ladder count (stale rows from earlier bounds drop out, so the
+# numerator can only undercount)
 LADDER_HOURS_SQL = """
 SELECT toStartOfHour(ts) AS hour, count() AS scored, countIf(capacity_usd > 0) AS pos
-FROM venue_arb.ladder_edges FINAL WHERE kind = 'arb' AND k_id NOT LIKE 'ZZTEST-%' GROUP BY hour
+FROM venue_arb.ladder_edges FINAL WHERE kind = 'arb' AND k_id NOT LIKE 'ZZTEST-%'
+  AND (asset, instant, basis_up, basis_down) IN (
+    SELECT asset, instant, argMax(basis_up, ts), argMax(basis_down, ts)
+    FROM venue_arb.ladder_edges FINAL WHERE k_id NOT LIKE 'ZZTEST-%' GROUP BY asset, instant)
+GROUP BY hour
 """
 # denominator: each successful ladder_score run records the admissible (a, b, direction) x aligned snapshot count for
 # the clock hour before it (window in `detail`); runs with a failed error-severity check are left out
@@ -486,7 +492,7 @@ def _ladder_text(lad: dict) -> dict[str, list[str]]:
         ("**Same-instant crypto ladders (model-free).** A third tier, scored from our own order books like the "
          "executable tier and never combined with it."),
         "",
-        ("- *Same-instant rule.* Kalshi `KXBTCD`/`KXETHD` \"$X or above\" contracts are paired with Polymarket "
+        ("- *Same-instant rule.* Kalshi `KXBTCD`/`KXETHD` \"$X or above\" contracts (and the \"or above\" tails of the `KXBTC`/`KXETH` range events) are paired with Polymarket "
          "\"Bitcoin/Ethereum above X\" contracts (hourly ladders, and the daily ladder at noon ET) only when both "
          "settle at the same instant H (Kalshi's `close_time` is its settlement instant). Pairs whose settlement "
          "instants differ (gapped pairs) are excluded: whether they pay in every state depends on how far the price "
@@ -594,7 +600,7 @@ def _ladder_text(lad: dict) -> dict[str, list[str]]:
          f"strike gap it exceeds. Observed diff range over the window: {tails}."
          + (f" With {at_max_n} hours, the {BASIS_Q} nearest-rank quantile is the largest "
             "observed move, so each bound is set by a single hour, rounded up to $1: one larger hour, which a "
-            "30-day window gives no reason to rule out, breaks it." if at_max else "")),
+            f"{BASIS_WINDOW_DAYS}-day window gives no reason to rule out, breaks it." if at_max else "")),
         ("- Ladder tier: only Kalshi strikes inside Polymarket's range (padded by the basis bound) are snapshotted, "
          f"at most {LADDER_CAP} per ladder, and only the nearest admissible strikes are scored; a violation that shows only "
          "at a farther strike in a non-monotone book is missed (the positive counts can only undercount)."),
