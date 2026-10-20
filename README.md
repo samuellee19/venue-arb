@@ -42,8 +42,8 @@ secrets uv run pytest -m integration    # needs the stack up
 
 ## Services
 
-On the OptiPlex, two long-running systemd user units: `venue-arb-collector` (order-book snapshots) and
-`venue-arb-flows` (`prefect.serve` of five hourly deployments: `catalog` at :05, `match` at :20, `basis` at :35,
+On the OptiPlex, three long-running systemd user units: `venue-arb-collector` (order-book snapshots),
+`venue-arb-publish` (dashboard bundle, below) and `venue-arb-flows` (`prefect.serve` of five hourly deployments: `catalog` at :05, `match` at :20, `basis` at :35,
 `score` at :40, which scores the last 26 h of books, and `ladder_score` at :50, which scores the last 3 h of same-instant
 ladder books; overlapping windows re-score idempotently). Apply migrations (`db.migrate`) before restarting
 `venue-arb-flows` after a pull: `score` reads `opportunities.source` (pg/006). Schedules, retries and run
@@ -58,9 +58,9 @@ mkdir -p ~/.config/systemd/user
 cp deploy/*.service ~/.config/systemd/user/ && systemctl --user daemon-reload
 # one-off when migrating from the old timers:
 systemctl --user disable --now venue-arb-{catalog,match,score}.timer; rm -f ~/.config/systemd/user/venue-arb-{catalog,match,score}.{service,timer}
-systemctl --user enable --now venue-arb-collector venue-arb-flows
+systemctl --user enable --now venue-arb-collector venue-arb-flows venue-arb-publish
 loginctl enable-linger "$USER"          # keep them running after logout
-journalctl --user -u venue-arb-collector -u venue-arb-flows -f
+journalctl --user -u venue-arb-collector -u venue-arb-flows -u venue-arb-publish -f
 ```
 
 systemd doesn't load `mise.toml`, so each unit repeats its non-secret `[env]` values as `Environment=` lines
@@ -68,11 +68,33 @@ systemd doesn't load `mise.toml`, so each unit repeats its non-secret `[env]` va
 database superusers. After installing, check they connect as the project role:
 
 ```bash
-systemctl --user show venue-arb-collector venue-arb-flows -p Environment | tr ' ' '\n' \
+systemctl --user show venue-arb-collector venue-arb-flows venue-arb-publish -p Environment | tr ' ' '\n' \
   | grep -E '^(PGUSER|CLICKHOUSE_USER|PREFECT_API_URL)='
 cd ~/platform && docker compose exec postgres psql -U postgres -d app -c \
   "SELECT usename, count(*) FROM pg_stat_activity WHERE datname = 'app' GROUP BY 1"   # expect venue_arb, not postgres
 ```
+
+### Dashboard publisher
+
+`venue-arb-publish` (`python -m venue_arb.publish`) writes `live.json` every 60 s and one history Parquet per clock
+hour, then pushes them outbound with rsync to `VENUE_ARB_PUBLISH_DEST` (`user@host:/srv/venue-arb/bundle/`). The value
+in `mise.toml [env]` and the three units is the placeholder `venue-arb@SERVER_IP:/srv/venue-arb/bundle/` (a shared
+env var; only the publisher reads it, and `tests/test_deploy.py` needs it identical everywhere). Once the server
+exists (Deploy step), set the real IP on the box in both `mise.toml` and the unit, then `daemon-reload` and restart.
+
+Backfill history (oldest hour first, idempotent; pushes at the end when a destination is set):
+
+```bash
+secrets uv run python -m venue_arb.publish history --hours 168
+```
+
+Without a server, unset the destination and the publisher only writes locally; this also works on a laptop:
+
+```bash
+env -u VENUE_ARB_PUBLISH_DEST secrets uv run python -m venue_arb.publish   # add `history --hours N` to backfill
+```
+
+The local bundle lands in `data/bundle/` (`live.json`, `history/`); `--out DIR` changes it.
 
 Snapshots land in ClickHouse `venue_arb.book_levels_v2` (daily partitions, 90-day TTL). The original unpartitioned
 `venue_arb.book_levels` was never written to and was dropped by hand on 2026-10-20.

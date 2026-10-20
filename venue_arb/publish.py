@@ -50,7 +50,7 @@ HISTORY_SIZE_BUDGET_MB = 50
 # local hour files older than this are deleted; the server's prune cron cutoff (8 d, Task 9) must be no shorter, or
 # rsync (no --delete) copies back every file the cron removed
 HISTORY_KEEP = timedelta(days=HISTORY_DAYS + 1)
-LIVE_BYTES_BUDGET = 200_000
+LIVE_BYTES_BUDGET = 600_000  # real bundles are ~460 KB with ~215 pair rows
 HISTORY_LAG = timedelta(minutes=55)  # an hour is written once score (:40) and ladder_score (:50) have scored it
 GAP = timedelta(minutes=3)
 PUSH_TIMEOUT_S = 120  # rsync's --timeout covers stalled I/O, not a black-holed ssh connect
