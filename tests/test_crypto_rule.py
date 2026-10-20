@@ -2,7 +2,7 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 
-from venue_arb.matching.crypto_rule import clip, ladders, parse_strike
+from venue_arb.matching.crypto_rule import clip, ladders, parse, parse_strike
 
 H5 = datetime(2026, 10, 20, 9, tzinfo=UTC)  # 5 AM EDT
 
@@ -89,3 +89,11 @@ def test_clip():
     out = clip(lad, 150)
     assert [s.level for s in out["kalshi"]] == [79899.99, 79999.99, 80599.99]
     assert out["polymarket"] == lad["polymarket"]
+
+
+def test_bad_dates_return_none_not_raise():
+    for t in ("Bitcoin above 80,000 on Octember 20, 5AM ET?", "Bitcoin above 80,000 on February 30, 5AM ET?",
+              "Bitcoin above 80,000 on October 20, 13AM ET?", "Bitcoin above 80,000 on October 20, 0AM ET?",
+              "Will the price of Bitcoin be above $80,000 on February 30?"):
+        assert parse_strike({**p(80000), "title": t}) is None
+        parse({**p(80000), "title": t})

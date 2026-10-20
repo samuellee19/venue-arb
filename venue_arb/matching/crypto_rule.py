@@ -17,7 +17,7 @@ Not parsed: ranges, "below / less than / or below", Up/Down, reach/dip, and othe
 """
 
 import re
-from calendar import month_abbr
+from calendar import month_name
 from datetime import UTC, date, datetime
 from typing import Literal, NamedTuple
 from zoneinfo import ZoneInfo
@@ -25,7 +25,7 @@ from zoneinfo import ZoneInfo
 ET = ZoneInfo("America/New_York")
 _ASSET = {"KXBTC": "BTC", "KXBTCD": "BTC", "KXETH": "ETH", "KXETHD": "ETH", "Bitcoin": "BTC", "Ethereum": "ETH"}
 _N = r"\$?([\d,]+(?:\.\d+)?)"
-_MONTH = {m.lower(): i for i, m in enumerate(month_abbr) if m}
+_MONTH = {m.lower(): i for i, m in enumerate(month_name) if m}
 _MD = r"(?P<mon>[A-Z][a-z]+) (?P<day>\d+)"
 _K_ABOVE = re.compile(rf"^{_N} or above$")
 _K_BELOW = re.compile(rf"^{_N} or below$")
@@ -78,10 +78,15 @@ class Strike(NamedTuple):
     level: float  # Yes iff settlement value > level
 
 
-def _et(row: dict, m: re.Match, hour: int) -> datetime:
-    """Title month/day at `hour` ET; the year comes from close_time (an ET instant on the same date)."""
-    month = _MONTH[m["mon"][:3].lower()]
-    return datetime(row["close_time"].astimezone(ET).year, month, int(m["day"]), hour, tzinfo=ET)
+def _et(row: dict, m: re.Match, hour: int) -> datetime | None:
+    """Title month/day at `hour` ET as UTC; the year comes from close_time. None for an impossible date or hour."""
+    month = _MONTH.get(m["mon"].lower())
+    if month is None or not 0 <= hour < 24:
+        return None
+    try:
+        return datetime(row["close_time"].astimezone(ET).year, month, int(m["day"]), hour, tzinfo=ET).astimezone(UTC)
+    except ValueError:
+        return None
 
 
 def parse_strike(row: dict) -> Strike | None:
@@ -95,11 +100,14 @@ def parse_strike(row: dict) -> Strike | None:
         return None
     title = row["title"]
     if m := _P_HOURLY.match(title):
-        hour = int(m["h"]) % 12 + (12 if m["ap"] == "PM" else 0)
-        return Strike("polymarket", row["market_id"], row["yes_token"], _ASSET[m[1]], _et(row, m, hour).astimezone(UTC), "gt", _f(m[2]))
+        if not 1 <= int(m["h"]) <= 12:
+            return None
+        at = _et(row, m, int(m["h"]) % 12 + (12 if m["ap"] == "PM" else 0))
+        return at and Strike("polymarket", row["market_id"], row["yes_token"], _ASSET[m[1]], at, "gt", _f(m[2]))
     if (m := _P_DAILY.match(title)) and m[2] != "less than":
         level = _f(m[3]) if m[2] == "above" else round(_f(m[3]) - 0.01, 2)
-        return Strike("polymarket", row["market_id"], row["yes_token"], _ASSET[m[1]], _et(row, m, 12).astimezone(UTC), "gt", level)
+        at = _et(row, m, 12)
+        return at and Strike("polymarket", row["market_id"], row["yes_token"], _ASSET[m[1]], at, "gt", level)
     return None
 
 
