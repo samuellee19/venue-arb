@@ -25,7 +25,7 @@ CONTRACT = {"ts": "datetime", "kalshi_id": "str", "pm_id": "str", "direction": "
             "capacity_contracts": "float", "capacity_usd": "float", "avg_edge": "float", "fee_version": "str"}
 COLUMNS = list(CONTRACT)
 OPP_COLS = ("kalshi_id", "pm_id", "direction", "start_ts", "end_ts", "snapshots", "max_edge", "median_capacity_usd",
-            "annualized", "us_executable", "transfer_cost_usd")
+            "annualized", "us_executable", "transfer_cost_usd", "source")
 BOOKS_SQL = """
 SELECT ts, toString(venue), market_id, toString(side), level, price, size FROM venue_arb.book_levels_v2 FINAL
 WHERE ts >= {start:DateTime64(3, 'UTC')} AND ts < {end:DateTime64(3, 'UTC')}
@@ -35,7 +35,8 @@ UPSERT = (f"INSERT INTO {OPPS} ({', '.join(OPP_COLS)}) VALUES ({', '.join(['%s']
           "ON CONFLICT (kalshi_id, pm_id, direction, start_ts) DO UPDATE SET "
           + ", ".join(f"{c} = EXCLUDED.{c}" for c in OPP_COLS[4:]) + ", scored_at = now()")
 # an episode still open at the window start: read books back to its start so it re-forms under the same key
-OPEN_START = (f"SELECT min(start_ts) FROM {OPPS} WHERE end_ts >= %(start)s - make_interval(secs => %(gap)s)")
+OPEN_START = (f"SELECT min(start_ts) FROM {OPPS} "
+              "WHERE source = %(source)s AND end_ts >= %(start)s - make_interval(secs => %(gap)s)")
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
@@ -58,7 +59,7 @@ def score_flow(window_hours: int = 26, end: datetime | None = None) -> dict:
         start = end - timedelta(hours=window_hours)
         with db.pg() as conn:
             pairs = eligible(load_eligible(conn))
-            (open_start,) = conn.execute(OPEN_START, {"start": start, "gap": episodes.MAX_GAP_S}).fetchone()
+            (open_start,) = conn.execute(OPEN_START, {"start": start, "gap": episodes.MAX_GAP_S, "source": "pair"}).fetchone()
         # ponytail: an episode first seen already truncated (first run, or an outage longer than the window) keeps
         # its truncated start; later runs extend that row. Full history needs one re-score from the books' start.
         if open_start and open_start < start:

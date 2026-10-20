@@ -20,6 +20,7 @@ secrets uv run python -m venue_arb.flows.catalog      # listings from both venue
 secrets uv run python -m venue_arb.flows.match        # candidates + LLM adjudication (re-judges pairs stored under an older prompt version)
 secrets uv run python -m venue_arb.flows.review_cli   # hand review of adjudicated matches
 secrets uv run python -m venue_arb.flows.score        # exact pairs: executable edges (ClickHouse) + opportunity episodes (Postgres)
+secrets uv run python -m venue_arb.flows.ladder_score # same-instant crypto ladders: spreads -> venue_arb.ladder_edges + episodes (source 'ladder')
 secrets uv run python -m venue_arb.flows.screened     # screened tier: hourly history gaps -> venue_arb.screened_v2 (by hand)
 secrets uv run python -m venue_arb.report.note  # research note v1 -> reports/research-note-v1.md + PNGs (re-run after ~4 weeks of snapshots for v1-final)
 secrets uv run python -m venue_arb.collect            # order-book snapshot collector (runs forever)
@@ -43,13 +44,15 @@ secrets uv run pytest -m integration    # needs the stack up
 ## Services
 
 On the OptiPlex, two long-running systemd user units: `venue-arb-collector` (order-book snapshots) and
-`venue-arb-flows` (`prefect.serve` of three hourly deployments: `catalog` at :05, `match` at :20 and `score` at
-:40, which scores the last 26 h of books; overlapping windows re-score idempotently). Schedules, retries and run
+`venue-arb-flows` (`prefect.serve` of five hourly deployments: `catalog` at :05, `match` at :20, `basis` at :35,
+`score` at :40, which scores the last 26 h of books, and `ladder_score` at :50, which scores the last 3 h of same-instant
+ladder books; overlapping windows re-score idempotently). Apply migrations (`db.migrate`) before restarting
+`venue-arb-flows` after a pull: `score` reads `opportunities.source` (pg/006). Schedules, retries and run
 history are in the Prefect UI (Deployments); to pause one, use its toggle there or
 `prefect deployment pause '<flow>/<name>'`, undo with `prefect deployment resume '<flow>/<name>'` (e.g.
 `venue_arb_catalog/catalog`; `prefect deployment ls` shows the exact names). A pause lasts only until `venue-arb-flows` restarts
-(verified: a restart unpauses all three; it restarts on reboot and via `Restart=always`). To stop a job durably,
-remove it from `serve.py` and restart the unit, or stop the unit (stops all three). Use pause/resume for short pauses.
+(verified: a restart unpauses all of them; it restarts on reboot and via `Restart=always`). To stop a job durably,
+remove it from `serve.py` and restart the unit, or stop the unit (stops all of them). Use pause/resume for short pauses.
 
 ```bash
 mkdir -p ~/.config/systemd/user
