@@ -110,3 +110,26 @@ def test_midnight_noon_and_full_month_name():
         datetime(2026, 10, 20, 16, tzinfo=UTC)
     assert at("Bitcoin above 80,000 on September 15, 5AM ET?", datetime(2026, 9, 15, 9, tzinfo=UTC)) == \
         datetime(2026, 9, 15, 9, tzinfo=UTC)
+
+
+def _pm(title, close):
+    return {**p(80000), "title": title, "close_time": close}
+
+
+def test_dst_ambiguous_and_nonexistent_et_hours_are_dropped():
+    fall = datetime(2026, 11, 1, 6, tzinfo=UTC)
+    assert parse_strike(_pm("Bitcoin above 80,000 on November 1, 1AM ET?", fall)) is None  # 1 AM happens twice
+    spring = datetime(2027, 3, 14, 7, tzinfo=UTC)
+    assert parse_strike(_pm("Bitcoin above 80,000 on March 14, 2AM ET?", spring)) is None  # 2 AM never happens
+    # the neighbouring hours are fine
+    s = parse_strike(_pm("Bitcoin above 80,000 on November 1, 2AM ET?", datetime(2026, 11, 1, 7, tzinfo=UTC)))
+    assert s.instant == datetime(2026, 11, 1, 7, tzinfo=UTC)  # EST
+
+
+def test_et_winter_daily_hourly_and_year_rollover():
+    s = parse_strike(_pm("Will the price of Bitcoin be above $80,000 on January 15?", datetime(2027, 1, 15, 17, tzinfo=UTC)))
+    assert s.instant == datetime(2027, 1, 15, 17, tzinfo=UTC)  # noon EST
+    s = parse_strike(_pm("Bitcoin above 80,000 on January 15, 3PM ET?", datetime(2027, 1, 15, 20, tzinfo=UTC)))
+    assert s.instant == datetime(2027, 1, 15, 20, tzinfo=UTC)
+    s = parse_strike(_pm("Bitcoin above 80,000 on December 31, 11PM ET?", datetime(2027, 1, 1, 4, tzinfo=UTC)))
+    assert s.instant == datetime(2027, 1, 1, 4, tzinfo=UTC)  # Dec 31 title, Jan 1 UTC close

@@ -79,14 +79,19 @@ class Strike(NamedTuple):
 
 
 def _et(row: dict, m: re.Match, hour: int) -> datetime | None:
-    """Title month/day at `hour` ET as UTC; the year comes from close_time. None for an impossible date or hour."""
+    """Title month/day at `hour` ET as UTC; the year comes from close_time. None for an impossible date or hour, or an
+    ambiguous (DST fall-back) or nonexistent (spring-forward) wall time."""
     month = _MONTH.get(m["mon"].lower())
     if month is None or not 0 <= hour < 24:
         return None
     try:
-        return datetime(row["close_time"].astimezone(ET).year, month, int(m["day"]), hour, tzinfo=ET).astimezone(UTC)
+        at = datetime(row["close_time"].astimezone(ET).year, month, int(m["day"]), hour, tzinfo=ET)
     except ValueError:
         return None
+    # fall-back hour is ambiguous (two UTC instants); spring-forward hour does not exist (round trip shifts the wall time)
+    if at.replace(fold=1).utcoffset() != at.utcoffset() or at.astimezone(UTC).astimezone(ET).replace(tzinfo=None) != at.replace(tzinfo=None):
+        return None
+    return at.astimezone(UTC)
 
 
 def parse_strike(row: dict) -> Strike | None:
