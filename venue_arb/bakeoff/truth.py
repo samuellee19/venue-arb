@@ -18,51 +18,7 @@ A pair is a near-match when asset, ET calendar date of close_time, direction and
 agree. Settlement source and time of day may differ; that is what makes them near-matches, not exact ones.
 """
 
-import re
-from datetime import date
-from zoneinfo import ZoneInfo
-
-ET = ZoneInfo("America/New_York")
-_ASSET = {"KXBTC": "BTC", "KXBTCD": "BTC", "KXETH": "ETH", "KXETHD": "ETH", "Bitcoin": "BTC", "Ethereum": "ETH"}
-_N = r"\$?([\d,]+(?:\.\d+)?)"
-_K_ABOVE = re.compile(rf"^{_N} or above$")
-_K_BELOW = re.compile(rf"^{_N} or below$")
-_K_RANGE = re.compile(rf"^{_N} to {_N}$")
-_P_DAILY = re.compile(rf"^Will the price of (Bitcoin|Ethereum) be (above|greater than|less than) {_N} on \w+ \d+\?$")
-_P_RANGE = re.compile(rf"^Will the price of (Bitcoin|Ethereum) be between {_N} and {_N} on \w+ \d+\?$")
-_P_HOURLY = re.compile(rf"^(Bitcoin|Ethereum) above {_N} on \w+ \d+, \d+(?:AM|PM) ET\?$")
-
-Parsed = tuple[str, date, str, float, float | None]  # asset, ET date, kind (above/below/range), lo, hi
-
-
-def _f(s: str) -> float:
-    return float(s.replace(",", ""))
-
-
-def parse(row: dict) -> Parsed | None:
-    day = row["close_time"].astimezone(ET).date()
-    if row["venue"] == "kalshi":
-        asset = _ASSET.get((row["event_id"] or "").split("-")[0])
-        label = row["yes_label"] or ""
-        if not asset:
-            return None
-        if m := _K_ABOVE.match(label):
-            return asset, day, "above", _f(m[1]), None
-        if m := _K_BELOW.match(label):
-            return asset, day, "below", _f(m[1]), None
-        if m := _K_RANGE.match(label):
-            return asset, day, "range", _f(m[1]), round(_f(m[2]) + 0.01, 2)
-        return None
-    if row["yes_label"] != "Yes":
-        return None
-    title = row["title"]
-    if m := _P_DAILY.match(title):
-        return _ASSET[m[1]], day, "below" if m[2] == "less than" else "above", _f(m[3]), None
-    if m := _P_RANGE.match(title):
-        return _ASSET[m[1]], day, "range", _f(m[2]), _f(m[3])
-    if m := _P_HOURLY.match(title):
-        return _ASSET[m[1]], day, "above", _f(m[2]), None
-    return None
+from venue_arb.matching.crypto_rule import Parsed, parse
 
 
 def _parsed(rows: list[dict]) -> list[tuple[dict, Parsed]]:
