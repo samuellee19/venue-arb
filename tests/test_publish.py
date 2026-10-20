@@ -8,7 +8,7 @@ import pyarrow as pa
 import pytest
 
 from tests.test_bundle import BOOKS, INSTANT, K_BOOK, KPI, LADDER, LDF, NOW, PAIR, PM_BOOK, SERIES_FEE, TITLES
-from venue_arb import publish
+from venue_arb import config, publish
 from venue_arb.bundle import LiveBundle
 from venue_arb.models import Level
 
@@ -52,7 +52,7 @@ def test_push_returns_false_on_nonzero_exit(tmp_path):
     assert publish.push(tmp_path, "u@h:/x/", rsync=lambda args, **kw: SimpleNamespace(returncode=0)) is True
 
 
-def test_history_table_schema_and_nulls():
+def _history_fixture():
     t = datetime(2026, 10, 20, 15, 0, 10, tzinfo=UTC)
     books = {("kalshi", "K1"): {t: [Level("no", 0, 0.62, 30.0), Level("yes", 0, 0.41, 120.0)]},
              ("polymarket", "P1"): {t + timedelta(seconds=8): [Level("no", 0, 0.58, 400.0),
@@ -62,6 +62,12 @@ def test_history_table_schema_and_nulls():
     edge_rows = [(t, "K1", "P1", "k_yes_pm_no", -0.007, 0.0), (t, "K1", "P1", "k_no_pm_yes", None, 0.0)]
     ladder_rows = [(t, "KA", "PA", "k_yes_pm_no", "near_exact", 0.15, 60.0),
                    (t.replace(tzinfo=None), "KA", "PB", "k_yes_pm_no", "arb", 0.1, 450.0)]
+    return t, edge_rows, ladder_rows, books
+
+
+def test_history_table_schema_and_nulls(monkeypatch):
+    monkeypatch.setattr(config, "DASHBOARD_SHOW_BOOKS", True)
+    t, edge_rows, ladder_rows, books = _history_fixture()
     tab = publish.history_table(edge_rows, ladder_rows, books, sides={("K1", "P1"): "yes"})
     assert tab.column_names == ["ts", "key", "kind", "direction", "net_edge_cents", "capacity_usd", "k_ask", "k_size",
                                 "pm_ask", "pm_size", "fees_cents"]
@@ -82,6 +88,45 @@ def test_history_table_schema_and_nulls():
     # an exact pair without a known yes mapping keeps its edge but not the legs' asks
     unknown = publish.history_table(edge_rows[:1], [], books).to_pylist()[0]
     assert unknown["k_ask"] is None and unknown["net_edge_cents"] == pytest.approx(-0.7)
+
+
+@pytest.mark.parametrize("show", [True, False])
+def test_history_hides_quotes_when_books_hidden(monkeypatch, show):
+    monkeypatch.setattr(config, "DASHBOARD_SHOW_BOOKS", show)
+    _, edge_rows, ladder_rows, books = _history_fixture()
+    rows = publish.history_table(edge_rows, ladder_rows, books, sides={("K1", "P1"): "yes"}).to_pylist()
+    quotes = [r[c] for r in rows[:3] for c in ("k_ask", "k_size", "pm_ask", "pm_size")]
+    assert all(q is not None for q in quotes) if show else all(q is None for q in quotes)
+    assert rows[0]["fees_cents"] == pytest.approx(1.7)  # derived from the asks either way
+
+
+def _touch_hours(out, hours):
+    (out / "history").mkdir(exist_ok=True)
+    for h in hours:
+        (out / "history" / f"pairs-{h:%Y%m%d%H}.parquet").write_bytes(b"x")
+
+
+def test_history_due_rewrites_two_hours_and_fills_missing(tmp_path):
+    now = datetime(2026, 10, 20, 15, 56, tzinfo=UTC)
+    h = publish.history_hour(now)  # 14:00
+    window = [h - timedelta(hours=i) for i in range(publish.HISTORY_DAYS * 24)]
+    assert publish.history_due(tmp_path, now, None) == sorted(window)  # fresh start: the whole trailing window
+    _touch_hours(tmp_path, [x for x in window if x != h - timedelta(hours=30)])
+    assert publish.missing_hours(tmp_path, now) == [h - timedelta(hours=30)]
+    # the hour moved on: the newest two hours again, plus the one still missing
+    assert publish.history_due(tmp_path, now, h - timedelta(hours=1)) == [h - timedelta(hours=30),
+                                                                          h - timedelta(hours=1), h]
+    assert publish.history_due(tmp_path, now, h) == []
+
+
+def test_prune_history_keeps_the_server_window(tmp_path):
+    now = datetime(2026, 10, 20, 15, 56, tzinfo=UTC)
+    edge = now.replace(minute=0) - publish.HISTORY_KEEP
+    _touch_hours(tmp_path, [edge - timedelta(hours=1), edge, edge + timedelta(hours=1)])
+    gone = publish.prune_history(tmp_path, now)
+    assert [p.name for p in gone] == [f"pairs-{edge - timedelta(hours=1):%Y%m%d%H}.parquet"]
+    assert sorted(os.listdir(tmp_path / "history")) == [f"pairs-{edge:%Y%m%d%H}.parquet",
+                                                        f"pairs-{edge + timedelta(hours=1):%Y%m%d%H}.parquet"]
 
 
 def _pm_listing(r):  # listings.raw = {"event", "market"}; the ladder fixture's PM fee lives in raw["market"]
@@ -120,8 +165,9 @@ def test_tick_composes_bundle_with_injected_readers():
     assert out.kpis.pairs_live == {"exact": 2, "near_exact": 2, "ladder": 3}
     assert out.kpis.admissible_checks == 1200 and out.basis["BTC"].up == 182.0
     assert out.collector_last_snapshot_at == NOW - timedelta(seconds=30)  # newest book read
-    assert {a.kind for a in out.annotations} == {"settlement"}  # fixture listings carry no first_seen
-    assert {a.key for a in out.annotations} == {p.key for p in out.pairs}
+    # one settlement line per instant, key None; fixture listings carry no first_seen, so no listing lines
+    assert [(a.kind, a.at, a.key) for a in out.annotations] == [("settlement", INSTANT, None),
+                                                                ("settlement", PAIR.close_time, None)]
     LiveBundle.model_validate_json(out.model_dump_json())
 
 
@@ -129,7 +175,23 @@ def test_tick_skips_pair_without_listing():
     state = {}
     out = publish.tick(state, readers(drop={("polymarket", PAIR.pm_id)}), NOW)
     assert [p.kind for p in out.pairs].count("exact") == 0 and len(out.pairs) == 5
-    assert state["skipped"] == {"pairs_no_listing": 1, "strikes_no_listing": 0, "ladders_no_basis": 0}
+    assert state["skipped"] == {"pairs_no_listing": 1, "strikes_no_listing": 0, "strikes_no_series": 0,
+                                "ladders_no_basis": 0}
+
+
+def test_tick_skips_strike_without_series_ticker():
+    rd, state = readers(), {}
+    listings = rd["listings"]
+    bad = ("kalshi", "KXBTCD-26OCT2011-T87999.99")
+
+    def no_series(ids):
+        out = listings(ids)
+        return out | {bad: {**out[bad], "raw": {"event": {"event_ticker": "KXBTCD-26OCT2011"}}}}
+
+    rd["listings"] = no_series
+    out = publish.tick(state, rd, NOW)
+    assert all(p.legs[0].market_id != bad[1] for p in out.pairs) and len(out.pairs) == 2 + 3  # 85999.99: 2 near-exact + 1
+    assert state["skipped"]["strikes_no_series"] == 1
 
 
 def test_tick_refreshes_every_n():
@@ -142,9 +204,10 @@ def test_tick_refreshes_every_n():
     assert calls["series_fee"] == 2 * 2  # two series, fetched once each per refresh
 
 
-def test_failed_refresh_is_retried_next_tick():
-    rd, state, fail = readers(), {}, [True]
-    pairs = rd["pairs"]
+def test_failed_refresh_keeps_previous_state_and_retries():
+    calls, state = {}, {}
+    rd = readers(calls)
+    pairs, fail = rd["pairs"], [True]
 
     def flaky():
         if fail:
@@ -153,9 +216,15 @@ def test_failed_refresh_is_retried_next_tick():
         return pairs()
 
     rd["pairs"] = flaky
-    with pytest.raises(ConnectionError):
+    with pytest.raises(ConnectionError):  # nothing to fall back on yet
         publish.tick(state, rd, NOW)
     assert len(publish.tick(state, rd, NOW).pairs) == 7
+    fail.append(True)
+    state["since_refresh"] = publish.REFRESH_EVERY  # the next refresh is due, and fails
+    assert len(publish.tick(state, rd, NOW).pairs) == 7  # previous pairs kept, bundle still built
+    assert state["refresh_errors"] == ["ConnectionError"]
+    publish.tick(state, rd, NOW)  # retried at once, succeeds
+    assert calls["pairs"] == 2 and state["since_refresh"] == 1
 
 
 def test_context_rows_to_sparks_and_gaps():

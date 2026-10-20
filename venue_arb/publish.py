@@ -25,7 +25,7 @@ from pathlib import Path
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from venue_arb import bundle
+from venue_arb import bundle, config
 from venue_arb.bundle import Annotation, Basis, Episode, LiveBundle, Snap, pair_key
 from venue_arb.config import BASIS_WINDOW_DAYS, PIPELINE_PREFIX
 from venue_arb.episodes import ALIGN_S
@@ -47,6 +47,10 @@ REFRESH_EVERY = 10  # ticks between pair/ladder/KPI refreshes
 RECORD_EVERY = 5  # ticks between qa records (Ruling 1, as collect.py's flush_every)
 HISTORY_DAYS = 7
 HISTORY_SIZE_BUDGET_MB = 50
+# local hour files older than this are deleted; the server's prune cron cutoff (8 d, Task 9) must be no shorter, or
+# rsync (no --delete) copies back every file the cron removed
+HISTORY_KEEP = timedelta(days=HISTORY_DAYS + 1)
+LIVE_BYTES_BUDGET = 200_000
 HISTORY_LAG = timedelta(minutes=55)  # an hour is written once score (:40) and ladder_score (:50) have scored it
 GAP = timedelta(minutes=3)
 PUSH_TIMEOUT_S = 120  # rsync's --timeout covers stalled I/O, not a black-holed ssh connect
@@ -186,8 +190,10 @@ def _first_ask(snaps: dict | None, t: datetime, side: str):
 def history_table(edge_rows, ladder_rows, books, sides: dict | None = None) -> pa.Table:
     """EDGES_HOUR_SQL and LADDER_HOUR_SQL rows + scoring.snapshots books -> one row per scored snapshot.
     k_ask/pm_ask = each leg's first ask at that snapshot, for exact and near-exact rows only; an exact row needs its
-    pair's yes mapping in `sides` {(kalshi_id, pm_id): "yes"|"no"} to know the Polymarket side, else asks are null."""
+    pair's yes mapping in `sides` {(kalshi_id, pm_id): "yes"|"no"} to know the Polymarket side, else asks are null.
+    Asks and sizes are null while config.DASHBOARD_SHOW_BOOKS is False; fees_cents (derived) is kept."""
     sides, flip = sides or {}, {"yes": "no", "no": "yes"}
+    show = config.DASHBOARD_SHOW_BOOKS  # read at call time (tests monkeypatch it); fees stay, quotes go
     rows = []
     for ts, k, p, d, best, cap in edge_rows:
         ym = sides.get((k, p))
@@ -207,8 +213,9 @@ def history_table(edge_rows, ladder_rows, books, sides: dict | None = None) -> p
             fee = round(100 * (1 - ka.price - pa_.price - best), 4)
         for c, v in (("ts", ts), ("key", pair_key(k, p, d)), ("kind", kind), ("direction", d),
                      ("net_edge_cents", None if best is None else round(100 * best, 4)), ("capacity_usd", cap),
-                     ("k_ask", ka and ka.price), ("k_size", ka and ka.size), ("pm_ask", pa_ and pa_.price),
-                     ("pm_size", pa_ and pa_.size), ("fees_cents", fee)):
+                     ("k_ask", ka.price if show and ka else None), ("k_size", ka.size if show and ka else None),
+                     ("pm_ask", pa_.price if show and pa_ else None),
+                     ("pm_size", pa_.size if show and pa_ else None), ("fees_cents", fee)):
             cols[c].append(v)
     return pa.table(cols, schema=HISTORY_SCHEMA)
 
@@ -227,7 +234,7 @@ def write_history_hour(ch, out_dir: Path, hour: datetime, sides: dict | None = N
     ).result_rows) if k else {}
     buf = io.BytesIO()
     pq.write_table(history_table(edge, lad, books, sides), buf, compression="zstd")
-    path = out_dir / "history" / f"pairs-{lo:%Y%m%d%H}.parquet"
+    path = _hour_file(out_dir, lo)
     path.parent.mkdir(parents=True, exist_ok=True)
     write_atomic(path, buf.getvalue())
     return path
@@ -238,9 +245,40 @@ def history_hour(now: datetime) -> datetime:
     return _hour(now - HISTORY_LAG) - timedelta(hours=1)
 
 
+def _hour_file(out_dir: Path, hour: datetime) -> Path:
+    return out_dir / "history" / f"pairs-{hour:%Y%m%d%H}.parquet"
+
+
+def missing_hours(out_dir: Path, now: datetime) -> list[datetime]:
+    """Hours of the trailing HISTORY_DAYS window (ending at history_hour(now)) without a file."""
+    last = history_hour(now)
+    return [h for h in (last - timedelta(hours=i) for i in range(HISTORY_DAYS * 24))
+            if not _hour_file(out_dir, h).exists()]
+
+
+def history_due(out_dir: Path, now: datetime, written: datetime | None) -> list[datetime]:
+    """Hours to (re)write, oldest first, once history_hour(now) moves past `written` (None: never written): the newest
+    two (a late scorer's rows land on the second pass) plus every missing hour of the trailing window (a fresh start
+    or an outage).
+    ponytail: a first start writes up to HISTORY_DAYS * 24 hours in one cycle; the live push goes first."""
+    h = history_hour(now)
+    if written == h:
+        return []
+    return sorted({h, h - timedelta(hours=1)} | set(missing_hours(out_dir, now)))
+
+
+def prune_history(out_dir: Path, now: datetime) -> list[Path]:
+    """Delete local hour files older than HISTORY_KEEP (see its comment for the server cron's cutoff)."""
+    cutoff = _hour_file(out_dir, _hour(now - HISTORY_KEEP)).name
+    old = [f for f in (out_dir / "history").glob("pairs-*.parquet") if f.name < cutoff]
+    for f in old:
+        f.unlink()
+    return old
+
+
 def history_size_mb(out_dir: Path, now: datetime) -> float:
-    """Size of the trailing HISTORY_DAYS of hour files (older local files stay; only the server prunes)."""
-    cutoff = f"pairs-{now - timedelta(days=HISTORY_DAYS):%Y%m%d%H}.parquet"
+    """Size of the trailing HISTORY_DAYS of hour files."""
+    cutoff = _hour_file(out_dir, now - timedelta(days=HISTORY_DAYS)).name
     return sum(f.stat().st_size for f in (out_dir / "history").glob("pairs-*.parquet") if f.name > cutoff) / 1e6
 
 
@@ -286,10 +324,14 @@ def load_context(conn, ch, now: datetime) -> dict:
     return {"sparks": sparks, "episodes": episodes, "annotations": notes, "kpi_inputs": kpi}
 
 
+def _series(listing: dict) -> str | None:
+    return ((listing.get("raw") or {}).get("event") or {}).get("series_ticker")
+
+
 def refresh(readers: dict, now: datetime) -> dict:
     """Pairs, ladders, bounds, listings and fees; pairs and strikes without a listing row are skipped and counted."""
     pairs, (found, bounds) = readers["pairs"](), readers["ladders"](now)
-    skipped = {"pairs_no_listing": 0, "strikes_no_listing": 0, "ladders_no_basis": 0}
+    skipped = {"pairs_no_listing": 0, "strikes_no_listing": 0, "strikes_no_series": 0, "ladders_no_basis": 0}
     ladders = {}
     for (asset, instant), lad in sorted(found.items()):
         if asset in bounds:
@@ -304,12 +346,13 @@ def refresh(readers: dict, now: datetime) -> dict:
     for key, lad in ladders.items():
         kept = {v: [s for s in xs if (v, s.market_id) in titles] for v, xs in lad.items()}
         skipped["strikes_no_listing"] += sum(map(len, lad.values())) - sum(map(len, kept.values()))
-        ladders[key] = kept
+        series_ok = [s for s in kept["kalshi"] if _series(titles[("kalshi", s.market_id)])]
+        skipped["strikes_no_series"] += len(kept["kalshi"]) - len(series_ok)
+        ladders[key] = kept | {"kalshi": series_ok}
     if any(skipped.values()):
         log.warning("refresh skipped %s", skipped)
     series = {p.kalshi_series for p in ok}
-    series |= {titles[("kalshi", s.market_id)]["raw"]["event"]["series_ticker"]
-               for lad in ladders.values() for s in lad["kalshi"]}
+    series |= {_series(titles[("kalshi", s.market_id)]) for lad in ladders.values() for s in lad["kalshi"]}
     return {"pairs": ok, "ladders": ladders, "titles": titles, "skipped": skipped,
             "fees": {s: readers["series_fee"](s) for s in sorted(series)},  # once per series per refresh
             "basis": {a: Basis(up=up, down=down, window_days=BASIS_WINDOW_DAYS, asof=now)
@@ -318,9 +361,9 @@ def refresh(readers: dict, now: datetime) -> dict:
             "context": readers["context"](now)}
 
 
-def _pair_notes(p, titles: dict, now: datetime) -> list[Annotation]:
-    """Settlement line per row; listing line when the later leg was first seen in the last HISTORY_DAYS."""
-    out = [Annotation(kind="settlement", at=p.settles_at, until=None, key=p.key, label="settles")]
+def _listing_note(p, titles: dict, now: datetime) -> list[Annotation]:
+    """Listing line per row when the later leg was first seen in the last HISTORY_DAYS."""
+    out = []
     seen = [(titles[(lg.venue, lg.market_id)].get("first_seen"), lg.venue) for lg in p.legs]
     if None not in (seen[0][0], seen[1][0]):
         at, venue = max(seen)
@@ -330,15 +373,22 @@ def _pair_notes(p, titles: dict, now: datetime) -> list[Annotation]:
 
 
 def tick(state: dict, readers: dict, now: datetime) -> LiveBundle:
-    """Latest books every call; refresh() every REFRESH_EVERY calls (retried next call if it raised)."""
+    """Latest books every call; refresh() every REFRESH_EVERY calls. A refresh that raises is retried next call; the
+    previous refresh's state serves meanwhile (its error type goes to state["refresh_errors"]). Without one, it raises."""
     if state.get("since_refresh", REFRESH_EVERY) >= REFRESH_EVERY:
-        state |= refresh(readers, now) | {"since_refresh": 0}
+        try:
+            state |= refresh(readers, now) | {"since_refresh": 0}
+        except Exception as e:
+            if "titles" not in state:
+                raise
+            log.warning("refresh failed, keeping the previous pairs error=%s", type(e).__name__)
+            state.setdefault("refresh_errors", []).append(type(e).__name__)
     state["since_refresh"] += 1
     books = readers["books"](state["k_ids"], state["pm_ids"])
     titles, fees, ctx = state["titles"], state["fees"], state["context"]
 
     def k_fee(market_id: str) -> dict:
-        return fees[titles[("kalshi", market_id)]["raw"]["event"]["series_ticker"]]
+        return fees[_series(titles[("kalshi", market_id)])]
 
     def pm_fee(market_id: str) -> tuple[dict | None, bool]:  # the market's own feeSchedule, as ladder_score
         m = titles[("polymarket", market_id)]["raw"].get("market") or {}
@@ -351,7 +401,10 @@ def tick(state: dict, readers: dict, now: datetime) -> LiveBundle:
     ladder = [r for (asset, instant), lad in state["ladders"].items()
               for r in bundle.ladder_pair_rows(asset, instant, lad, books, state["basis"][asset].up,
                                                state["basis"][asset].down, k_fee, pm_fee, titles, ctx["sparks"], now)]
-    notes = ctx["annotations"] + [a for p in exact + ladder for a in _pair_notes(p, titles, now)]
+    # one settlement line per instant, key None (ladder rows share instants; the client matches pair.settles_at)
+    notes = ctx["annotations"] + [Annotation(kind="settlement", at=t, until=None, key=None, label="settles")
+                                  for t in sorted({p.settles_at for p in exact + ladder})]
+    notes += [a for p in exact + ladder for a in _listing_note(p, titles, now)]
     return bundle.build_live(now=now, exact_rows=exact, ladder_rows=ladder, basis=state["basis"],
                              episodes=ctx["episodes"], annotations=notes, kpi_inputs=ctx["kpi_inputs"],
                              attribution=ATTRIBUTION, caveats=CAVEATS,
@@ -409,28 +462,35 @@ def run_forever(out_dir: Path, dest: str | None, interval_s: int = INTERVAL_S) -
     while True:
         started = time.monotonic()
         n += 1
+        now = datetime.now(UTC)
         try:
-            now = datetime.now(UTC)
             live = tick(state, readers, now)
-            write_atomic(out_dir / "live.json", live.model_dump_json().encode())
-            if state.get("history_hour") != (hour := history_hour(now)):
-                with db.pg() as conn:
-                    sides = load_sides(conn)
-                write_history_hour(db.ch(), out_dir, hour, sides)
-                state["history_hour"] = hour
-                mb = history_size_mb(out_dir, now)
-                pending.append(checks.Result("history_size_mb", mb <= HISTORY_SIZE_BUDGET_MB, round(mb, 2),
-                                             HISTORY_SIZE_BUDGET_MB, f"trailing {HISTORY_DAYS} d of hour files",
-                                             severity="warn", target=HISTORY_TARGET))
-            if dest:
+            data = live.model_dump_json().encode()
+            state["live_bytes"] = len(data)
+            write_atomic(out_dir / "live.json", data)
+            if dest:  # history files written below go out with the next tick's push
                 pushes.append(push(out_dir, dest))
             cycles.append(time.monotonic() - started)
         except Exception as e:
             log.exception("publish cycle failed")
             pending.append(checks.Result("cycle_exception", False, detail=type(e).__name__, target=PIPELINE))
+        try:  # separate: a history failure never stops live.json
+            if due := history_due(out_dir, now, state.get("history_hour")):
+                with db.pg() as conn:
+                    sides = load_sides(conn)
+                ch = db.ch()
+                for hour in due:
+                    write_history_hour(ch, out_dir, hour, sides)
+                state["history_hour"] = history_hour(now)
+                prune_history(out_dir, now)
+                pending += _history_results(checks, out_dir, now)
+        except Exception as e:
+            log.exception("history write failed")
+            pending.append(checks.Result("history_exception", False, detail=type(e).__name__,
+                                         target=HISTORY_TARGET))
         try:
             if n % RECORD_EVERY == 0:
-                results = pending + _results(checks, live, pushes, cycles, interval_s, state.get("skipped"))
+                results = pending + _results(checks, live, state, pushes, cycles, interval_s)
                 with db.pg() as conn:
                     store.record(conn, PIPELINE, str(uuid.uuid4()), results)
                 pending, cycles, pushes = [], [], []
@@ -439,15 +499,31 @@ def run_forever(out_dir: Path, dest: str | None, interval_s: int = INTERVAL_S) -
         time.sleep(max(0.0, interval_s - (time.monotonic() - started)))
 
 
-def _results(checks, live: LiveBundle | None, pushes: list[bool], cycles: list[float], interval_s: int,
-             skipped: dict | None) -> list:
+def _history_results(checks, out_dir: Path, now: datetime) -> list:
+    mb, missing = history_size_mb(out_dir, now), len(missing_hours(out_dir, now))
+    return [checks.Result("history_size_mb", mb <= HISTORY_SIZE_BUDGET_MB, round(mb, 2), HISTORY_SIZE_BUDGET_MB,
+                          f"trailing {HISTORY_DAYS} d of hour files", severity="warn", target=HISTORY_TARGET),
+            checks.Result("history_missing_hours", missing == 0, missing, 0,
+                          f"{missing} of the trailing {HISTORY_DAYS * 24} hour files missing", severity="warn",
+                          target=HISTORY_TARGET)]
+
+
+def _results(checks, live: LiveBundle | None, state: dict, pushes: list[bool], cycles: list[float],
+             interval_s: int) -> list:
     out = []
     if live is not None:  # the last good bundle: a stale one fails bundle_fresh
         out.append(replace(checks.expect_rows(len(live.pairs), LIVE_TARGET), check="bundle_pairs",
-                           detail=f"{len(live.pairs)} pair rows; skipped {skipped}"))
+                           detail=f"{len(live.pairs)} pair rows; skipped {state.get('skipped')}"))
         out.append(replace(checks.expect_fresh(live.collector_last_snapshot_at, LIVE_TARGET,
                                                timedelta(seconds=bundle.LIVE_MAX_AGE_S)),
                            check="bundle_fresh", severity="warn"))
+        size = state.get("live_bytes", 0)
+        out.append(checks.Result("live_bytes", size <= LIVE_BYTES_BUDGET, size, LIVE_BYTES_BUDGET,
+                                 f"live.json is {size:,} bytes", severity="warn", target=LIVE_TARGET))
+    errs = state.pop("refresh_errors", [])
+    out.append(checks.Result("refresh_failed", not errs, len(errs), 0,
+                             f"{len(errs)} refreshes failed, previous pairs kept: {sorted(set(errs))}",
+                             severity="warn", target=LIVE_TARGET))
     if pushes:
         bad = pushes.count(False)
         out.append(checks.Result("push", bad == 0, bad, 0, f"{bad}/{len(pushes)} pushes failed", target=LIVE_TARGET))
