@@ -1,7 +1,8 @@
 """Deterministic judge for Fed rate-decision bracket markets (pure; no qa, no LLM).
 
 Verified 2026-10-19 against live listings (venue_arb.listings):
-- Kalshi `KXFEDDECISION-<YY><MON>-<LEG>`: yes_label and no_label are identical text ("Hike 25bps"), so the leg is read H0 = "Hike rates by 0bps" (Fed maintains rate), H25 = hike exactly 25,
+- Kalshi `KXFEDDECISION-<YY><MON>-<LEG>`: yes_label and no_label are identical text ("Hike 25bps"), so the leg is read
+  from the ticker alone (not from the labels). H0 = "Hike rates by 0bps" (Fed maintains rate), H25 = hike exactly 25,
   H26 = "Hike >25bps", C25 = cut exactly 25, C26 = "Cut >25bps". Legs are mutually exclusive.
 - Polymarket titles (yes_label "Yes"/no_label "No"; token 0 is the bracket's Yes): "Will the Fed increase|decrease
   interest rates by 25|50+ bps after the <Month YYYY> meeting?" and "Will there be no change in Fed interest rates
