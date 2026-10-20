@@ -14,7 +14,13 @@ from prefect.runtime import flow_run
 from qa import checks, db, sql, store
 
 from venue_arb import basis, episodes, ladder_edges, scoring
-from venue_arb.config import LADDER_MIN_BASIS, PIPELINE_PREFIX, SQL_CHECKS
+from venue_arb.config import (
+    BASIS_WINDOW_DAYS,
+    LADDER_MIN_BASIS,
+    LADDER_WINDOW_HOURS,
+    PIPELINE_PREFIX,
+    SQL_CHECKS,
+)
 from venue_arb.fees import FEE_VERSION
 from venue_arb.flows.score import OPEN_START, upsert_opportunities
 from venue_arb.matching import crypto_rule
@@ -35,7 +41,8 @@ SELECT venue, market_id, event_id, category, title, yes_label, close_time, yes_t
 FROM venue_arb.listings WHERE category = 'crypto_price' AND close_time > %(start)s
 """
 # 30-day directional bounds as of `end`, so a re-run of the same window sees the same bounds
-BASIS_SQL = ("SELECT asset, diff FROM venue_arb.basis WHERE instant > {end:DateTime('UTC')} - INTERVAL 30 DAY "
+BASIS_SQL = ("SELECT asset, diff FROM venue_arb.basis WHERE instant > {end:DateTime('UTC')} - "
+             f"INTERVAL {BASIS_WINDOW_DAYS} DAY "
              "AND instant <= {end:DateTime('UTC')}")
 READBACK_CAP = timedelta(hours=26)
 # hundreds of strike ids: client-side binding (%(x)s) puts them in the POST body, not the URL
@@ -66,8 +73,9 @@ def bounds_by_asset(rows) -> dict[str, tuple[float, float]]:
 
 
 @flow(name=PIPELINE)
-def ladder_score_flow(window_hours: int = 3, end: datetime | None = None) -> dict:
-    """Score the `window_hours` before `end` (default now); overlapping windows rewrite the same keys.
+def ladder_score_flow(window_hours: int = LADDER_WINDOW_HOURS, end: datetime | None = None, pipeline: str = PIPELINE) -> dict:
+    """Score the `window_hours` before `end` (default now); overlapping windows rewrite the same keys. Admissible
+    checks are counted only in ladder_edges.count_window(end). `pipeline` names the qa results (tests use their own).
     ponytail: 3 h, not the score flow's 26 h: re-scoring a day of every ladder's books hourly buys nothing. An outage
     longer than 3 h leaves books unscored; re-run once with a wider window. Ladders are read and written one at a time,
     so memory is bounded by the largest ladder's books and rows."""
@@ -92,6 +100,7 @@ def ladder_score_flow(window_hours: int = 3, end: datetime | None = None) -> dic
         ch = db.ch()
         bounds = bounds_by_asset(ch.query(BASIS_SQL, parameters={"end": end}).result_rows)
         fees: dict[str, dict] = {}
+        cw = ladder_edges.count_window(end)
 
         def k_fee(market_id: str) -> dict:  # Kalshi series fee, fetched once per series per run
             series = meta[("kalshi", market_id)]["series"]
@@ -119,7 +128,7 @@ def ladder_score_flow(window_hours: int = 3, end: datetime | None = None) -> dic
                 "start": _ms(start), "end": _ms(min(end, instant)),
                 "k": [s.market_id for s in lad["kalshi"]], "p": [s.market_id for s in lad["polymarket"]]}).result_rows)
             rows, eps, st = ladder_edges.score_ladder(asset, instant, lad, snaps, *bounds[asset], k_fee, pm_fee,
-                                                      FEE_VERSION)
+                                                      FEE_VERSION, count_window=cw)
             del snaps
             for key, v in st.items():
                 stats[key] += v
@@ -142,9 +151,11 @@ def ladder_score_flow(window_hours: int = 3, end: datetime | None = None) -> dic
                                      "before insert", target=EDGES))
         # ponytail: 1% slack, as in the score flow, for rows an earlier overlapping window aligned differently
         results.append(checks.expect_count_match(stats["edge_rows"], stored_total, EDGES, tolerance=0.01))
-        # denominator for the note: every admissible (a, b, direction) at every aligned snapshot, scored or pruned
+        # denominator for the note: every admissible (a, b, direction) at every aligned snapshot in count_window(end),
+        # scored or pruned
         results.append(checks.Result("ladder_admissible_checks", True, stats["admissible_checks"],
-                                     detail="admissible strike-pair checks (not stored)", severity="warn",
+                                     detail=f"admissible strike-pair checks (not stored), Kalshi snapshots in "
+                                     f"[{cw[0].isoformat()}, {cw[1].isoformat()})", severity="warn",
                                      target=EDGES))
         with db.pg() as conn, conn.transaction():  # one transaction keeps now() fixed for the count
             n = upsert_opportunities(conn, opps)
@@ -159,11 +170,11 @@ def ladder_score_flow(window_hours: int = 3, end: datetime | None = None) -> dic
         log.error("QA failed: %s", e)
         raise
     except Exception as e:
-        results.append(checks.Result("flow_exception", False, detail=type(e).__name__, target=PIPELINE))
+        results.append(checks.Result("flow_exception", False, detail=type(e).__name__, target=pipeline))
         raise
     finally:
         with db.pg() as conn:
-            store.record(conn, PIPELINE, run_id, results)
+            store.record(conn, pipeline, run_id, results)
 
 
 if __name__ == "__main__":

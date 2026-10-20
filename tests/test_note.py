@@ -144,6 +144,9 @@ def lepisode(minutes=3, cap=150.0):
             "end_ts": T0 + timedelta(minutes=minutes)}
 
 
+ADM = [{"hour": T0, "checks": 50}, {"hour": T0, "checks": 50}, {"hour": T0 + timedelta(hours=1), "checks": 30}]
+HOURS = [{"hour": T0, "scored": 10, "pos": 2}, {"hour": T0 + timedelta(hours=1), "scored": 5, "pos": 0},
+         {"hour": T0 + timedelta(hours=2), "scored": 5, "pos": 0}]
 BASIS = [("BTC", -40.0 + i % 7, 80_000.0) for i in range(30)] + [("ETH", 1.0, 2_500.0)] * 5
 
 
@@ -152,11 +155,13 @@ def test_ladder_tier_separate_and_counted(tmp_path):
               lgroup(kind="near_exact", pm="pm-80000", b=80000.0, n=10, best=0.004),
               lgroup(kind="near_exact", d="pm_yes_k_no", pm="pm-80000", b=80000.0, n=10)]
     s = note.summarize([pair()], [screened()], [edge()], [episode()], ladder_rows=groups,
-                       ladder_episodes=[lepisode()], basis_rows=BASIS, admissible={"runs": 3, "checks": 80})
+                       ladder_episodes=[lepisode()], basis_rows=BASIS, admissible=ADM, ladder_hours=HOURS)
     lad = s["ladder"]
     assert lad["ladders"] == 1 and lad["kalshi_strikes"] == 1 and lad["pm_strikes"] == 3
     assert lad["arb_checks_scored"] == 20 and lad["arb_checks_pos"] == 2 and lad["share_scored"] == 0.1
-    assert lad["admissible_checks"] == 80 and lad["share_admissible"] == 2 / 80 and lad["best_edge_max"] == 0.03
+    # hour T0 counted twice (manual re-run) is kept once; hour T0+2h was never counted, so its rows stay out of the share
+    assert lad["counted_hours"] == 2 and lad["admissible_checks"] == 80 and lad["pos_counted"] == 2
+    assert lad["scored_counted"] == 15 and lad["share_admissible"] == 2 / 80 and lad["best_edge_max"] == 0.03
     assert lad["episodes"] == 1 and lad["duration_min_max"] == 3.0 and lad["capacity_usd_max"] == 150.0
     assert lad["hours"] == 2.0
     assert len(lad["near_exact"]) == 2 and {r["exposure"] for r in lad["near_exact"]} == {60.0, 150.0}
@@ -168,10 +173,10 @@ def test_ladder_tier_separate_and_counted(tmp_path):
     assert base["executable"] == s["executable"] and base["screened"] == s["screened"]
     assert base["jurisdiction"] == s["jurisdiction"]
     other = note.summarize([pair()], [screened(net=0.5)], [edge(best=0.5, cap=999.0)], [], ladder_rows=groups,
-                           ladder_episodes=[lepisode()], basis_rows=BASIS, admissible={"runs": 3, "checks": 80})
+                           ladder_episodes=[lepisode()], basis_rows=BASIS, admissible=ADM, ladder_hours=HOURS)
     assert other["ladder"] == lad
     text = note.render(s, tmp_path).read_text()
-    for h in ("Near-exact same-strike pairs (not arbitrage)", "a lower bound", "2 of 80 admissible",
+    for h in ("Near-exact same-strike pairs (not arbitrage)", "2 of 80 admissible", "disjoint hours",
               "80,000.00", "no ladder snapshots yet"):
         assert (h in text) == (h != "no ladder snapshots yet"), h
 
@@ -181,12 +186,13 @@ def test_ladder_empty_renders_plainly(tmp_path):
                        basis_rows=BASIS)
     lad = s["ladder"]
     assert lad["arb_checks_scored"] == 0 and lad["episodes"] == 0 and lad["admissible_checks"] is None
-    assert lad["share_admissible"] is None and lad["hours"] == 0.0
+    assert lad["share_admissible"] is None and lad["hours"] == 0.0 and lad["counted_hours"] == 0
     text = note.render(s, tmp_path).read_text()
     assert "Same-instant crypto ladders (model-free)" in text and "no ladder snapshots yet" in text
     for h in ("ladder_edges", "source = 'ladder'", "0.999", "X - 0.01", "gapped", "BRTI sits below Binance"):
         assert h in text, h
-    assert "ladder_admissible_checks" in text
+    assert "ladder_admissible_checks" in text and "lower bound" not in text
+    assert "BTC n = 30 hours, the 0.999 nearest-rank quantile is the largest" in text
 
 
 def test_pair_tier_query_excludes_ladders():

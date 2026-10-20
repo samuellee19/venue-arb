@@ -16,12 +16,19 @@ from statistics import mean, median
 
 import numpy as np
 
+from venue_arb.basis import BASIS_Q
 from venue_arb.basis import bounds as basis_bounds
-from venue_arb.config import LADDER_MIN_BASIS
+from venue_arb.config import (
+    BASIS_WINDOW_DAYS,
+    LADDER_CAP,
+    LADDER_MIN_BASIS,
+    LADDER_WINDOW_HOURS,
+    PIPELINE_PREFIX,
+)
 from venue_arb.episodes import ALIGN_S, MAX_GAP_S, MIN_EDGE
 from venue_arb.exact import MIN_CONFIDENCE, ExactPair
 from venue_arb.fees import FEE_VERSION, KALSHI_RATE, TRANSFER, US_EXECUTABLE
-from venue_arb.ladder_edges import K_NEAREST, NEAR_EXACT_TOL
+from venue_arb.ladder_edges import COUNT_INTERVAL, K_NEAREST, NEAR_EXACT_TOL
 from venue_arb.matching.adjudicate import PROMPT_VERSION
 from venue_arb.matching.fed_rule import RULE_MODEL
 
@@ -53,12 +60,20 @@ SELECT asset, instant, k_id, pm_id, direction, kind, a, b, basis_up, basis_down,
 FROM venue_arb.ladder_edges FINAL WHERE k_id NOT LIKE 'ZZTEST-%'
 GROUP BY asset, instant, k_id, pm_id, direction, kind, a, b, basis_up, basis_down
 """
-# the 30-day window ladder_score reads (flows/ladder_score.BASIS_SQL), as of generation time
-BASIS_SQL = "SELECT asset, diff, binance FROM venue_arb.basis FINAL WHERE instant > now() - INTERVAL 30 DAY"
-# check denominator: ladder_score records every admissible (a, b, direction) x aligned snapshot per run, not stored
-ADMISSIBLE_SQL = """
-SELECT count(*), coalesce(sum(observed), 0) FROM qa.check_results
-WHERE pipeline = 'venue_arb_ladder_score' AND check_name = 'ladder_admissible_checks' AND checked_at >= %(since)s
+# the basis window ladder_score reads (flows/ladder_score.BASIS_SQL), as of generation time
+BASIS_SQL = ("SELECT asset, diff, binance FROM venue_arb.basis FINAL "
+             f"WHERE instant > now() - INTERVAL {BASIS_WINDOW_DAYS} DAY")
+# scored and positive arb checks per hour, so the numerator covers the same hours as the denominator
+LADDER_HOURS_SQL = """
+SELECT toStartOfHour(ts) AS hour, count() AS scored, countIf(capacity_usd > 0) AS pos
+FROM venue_arb.ladder_edges FINAL WHERE kind = 'arb' AND k_id NOT LIKE 'ZZTEST-%' GROUP BY hour
+"""
+# denominator: each successful ladder_score run records the admissible (a, b, direction) x aligned snapshot count for
+# the clock hour before it (window in `detail`); runs with a failed error-severity check are left out
+ADMISSIBLE_SQL = f"""
+SELECT r.observed, r.detail FROM qa.check_results r
+WHERE r.pipeline = '{PIPELINE_PREFIX}_ladder_score' AND r.check_name = 'ladder_admissible_checks'
+  AND NOT EXISTS (SELECT 1 FROM qa.check_results f WHERE f.run_id = r.run_id AND NOT f.passed AND f.severity = 'error')
 """
 # Tier scope (Ruling 11): pairs whose latest adjudication at the current prompt version (%(pv)s) is 'exact' and that
 # carry no wrong/unsure review made at that prompt version, whether or not they are open now (a closed pair's history
@@ -191,13 +206,21 @@ def _basis(rows: list) -> dict:
     return out
 
 
-def _ladder(groups: list[dict], episodes: list[dict], basis_rows: list, admissible: dict | None) -> dict:
+def _ladder(groups: list[dict], episodes: list[dict], basis_rows: list, admissible: list[dict],
+            hours: list[dict]) -> dict:
     """groups: LADDER_SQL rows (one per strike pair x direction x stored bounds). A check = one strike pair, one
-    direction, one aligned snapshot. 'Positive' = capacity_usd > 0, i.e. the top-of-book edge after fees >= MIN_EDGE."""
+    direction, one aligned snapshot. 'Positive' = capacity_usd > 0, i.e. the top-of-book edge after fees >= MIN_EDGE.
+    admissible: [{"hour", "checks"}] per counted clock hour; hours: LADDER_HOURS_SQL rows. The share against the
+    admissible count uses only scored rows in counted hours, so numerator and denominator cover the same hours."""
     arb = [g for g in groups if g["kind"] == "arb"]
     near = [g for g in groups if g["kind"] == "near_exact"]
     scored, pos = sum(g["snapshots"] for g in arb), sum(g["n_capacity_gt0"] for g in arb)
-    checks = admissible["checks"] if admissible and admissible["runs"] else None
+    counted: dict = {}
+    for r in admissible:  # a manual re-run inside an hour records the same hour again: keep one
+        counted[r["hour"]] = max(counted.get(r["hour"], 0), r["checks"])
+    checks = sum(counted.values()) if counted else None
+    pos_c = sum(h["pos"] for h in hours if h["hour"] in counted)
+    scored_c = sum(h["scored"] for h in hours if h["hour"] in counted)
     start = min((g["first_ts"] for g in groups), default=None)
     end = max((g["last_ts"] for g in groups), default=None)
     dur = [(e["end_ts"] - e["start_ts"]).total_seconds() / 60 for e in episodes]
@@ -213,8 +236,8 @@ def _ladder(groups: list[dict], episodes: list[dict], basis_rows: list, admissib
         "start": start, "end": end,
         "hours": (end - start).total_seconds() / 3600 if start else 0.0,
         "arb_checks_scored": scored, "arb_checks_pos": pos, "share_scored": _share(pos, scored) if scored else None,
-        "admissible_runs": admissible["runs"] if admissible else 0, "admissible_checks": checks,
-        "share_admissible": _share(pos, checks) if checks else None,
+        "counted_hours": len(counted), "admissible_checks": checks, "scored_counted": scored_c,
+        "pos_counted": pos_c, "share_admissible": _share(pos_c, checks) if checks else None,
         "best_edge_max": max(best, default=None),
         "bounds_stored": sorted({(g["asset"], g["basis_up"], g["basis_down"]) for g in groups}),
         "episodes": len(episodes),
@@ -256,11 +279,11 @@ def summarize(pairs: list[ExactPair], screened_rows: list[dict], edge_rows: list
               *, adjudications: dict | None = None, scope: dict | None = None,
               generated_at: datetime | None = None, ladder_rows: list[dict] | None = None,
               ladder_episodes: list[dict] | None = None, basis_rows: list | None = None,
-              admissible: dict | None = None) -> dict:
+              admissible: list[dict] | None = None, ladder_hours: list[dict] | None = None) -> dict:
     """Pure. `adjudications`: {(kalshi_id, pm_id): {"tail_risks", "model", "prompt_version"}} for eligible pairs.
     `scope`: see `_scoped`; None keeps every row (no scope filter). Ladder tier (its own key, never scoped by the pair
     scope): `ladder_rows` LADDER_SQL rows, `ladder_episodes` source-'ladder' opportunities, `basis_rows`
-    (asset, diff, binance), `admissible` {"runs", "checks"} from ADMISSIBLE_SQL."""
+    (asset, diff, binance), `admissible` [{"hour", "checks"}] from ADMISSIBLE_SQL, `ladder_hours` LADDER_HOURS_SQL rows."""
     adj = adjudications or {}
     ek = {(p.kalshi_id, p.pm_id) for p in pairs}
     screened_rows, sc_scope = _scoped(screened_rows, scope, ek)
@@ -286,7 +309,8 @@ def summarize(pairs: list[ExactPair], screened_rows: list[dict], edge_rows: list
                        f"(US_EXECUTABLE = {US_EXECUTABLE}, docs/venues.md geoblock entry), so no pair has both "
                        "legs executable from the US." if not US_EXECUTABLE["polymarket"] else ""),
         },
-        "ladder": _ladder(ladder_rows or [], ladder_episodes or [], basis_rows or [], admissible),
+        "ladder": _ladder(ladder_rows or [], ladder_episodes or [], basis_rows or [], admissible or [],
+                          ladder_hours or []),
     }
 
 
@@ -440,8 +464,8 @@ def _ladder_text(lad: dict) -> dict[str, list[str]]:
         data = ("- Ladder tier: no ladder snapshots yet. The live collector snapshots same-instant ladders only "
                 "from Plan 3's deployment on; `venue_arb.ladder_edges` holds no rows.")
     else:
-        of = (f"{lad['arb_checks_pos']:,} of {adm:,} admissible cross-strike checks "
-              f"({_f(lad['share_admissible'], pct=True)}, a lower bound, see Results)" if adm else
+        of = (f"{lad['pos_counted']:,} of {adm:,} admissible cross-strike checks "
+              f"({_f(lad['share_admissible'], pct=True)}, over {lad['counted_hours']} counted hours)" if adm else
               f"{lad['arb_checks_pos']:,} of {lad['arb_checks_scored']:,} scored cross-strike checks "
               "(admissible-check count not recorded)")
         short = (f"- Same-instant crypto ladders (model-free, a separate tier): {of} had an executable edge >= "
@@ -483,7 +507,7 @@ def _ladder_text(lad: dict) -> dict[str, list[str]]:
          "needs BRTI - Binance > a - b. In every other state at least one leg pays $1."),
         ("- *Basis bounds* (`venue_arb.basis`: one row per asset and hour with BRTI's settle and the Binance candle "
          "close). Directional: `up` = how far BRTI rose above Binance, `down` = how far it fell below, each the "
-         "0.999 nearest-rank quantile of the trailing 30 days of hourly diffs, rounded up to $1. An asset with fewer "
+         f"{BASIS_Q} nearest-rank quantile of the trailing {BASIS_WINDOW_DAYS} days of hourly diffs, rounded up to $1. An asset with fewer "
          f"than {LADDER_MIN_BASIS} hours has no bound and its ladders are not scored. The scoring flow computes the "
          "bounds as of each run, so stored rows can carry slightly different bounds from the table below, which is "
          "as of generation time:"),
@@ -506,7 +530,12 @@ def _ladder_text(lad: dict) -> dict[str, list[str]]:
          "with b, so the nearest admissible strike is the cheapest when books are monotone (the second is margin "
          "for books that are not). Every admissible check, scored or pruned, is counted by the scoring flow and "
          "recorded as the `ladder_admissible_checks` qa result; that count is the denominator. A check is one "
-         "strike pair, one direction, one aligned snapshot."),
+         f"strike pair, one direction, one aligned snapshot. Each hourly run rescores the last {LADDER_WINDOW_HOURS} h "
+         f"but counts only snapshots in the {COUNT_INTERVAL.seconds // 3600}-hour clock bucket before its start (the "
+         "bucket is recorded with the count), so successive runs count disjoint hours and their sum counts each "
+         "snapshot once; a manual re-run of a bucket is kept once. The numerator is restricted to the same hours. "
+         "A failed or skipped run leaves its hour out of both, so the share covers counted hours only; tests "
+         "record under a separate qa pipeline and never enter it."),
         (f"- *Execution rules* are the executable tier's: ask ladders walked together with taker fees on both legs, "
          f"snapshots aligned within {ALIGN_S} s, edge threshold {MIN_EDGE}, the same episode definition. Only "
          "snapshots strictly before H count (from H on, the outcome is being fixed). Episodes are stored in "
@@ -529,13 +558,13 @@ def _ladder_text(lad: dict) -> dict[str, list[str]]:
              f"{_t(lad['end'])} ({lad['hours']:.1f} h); {lad['kalshi_strikes']} Kalshi strikes, "
              f"{lad['pm_strikes']} Polymarket strikes."),
             ("- Admissible cross-strike checks: "
-             + (f"{adm:,}, summed over {lad['admissible_runs']} `ladder_score` runs. Each run scores a 3-hour window "
-                "and runs hourly, so a snapshot is counted in up to three runs: the sum overstates distinct checks by "
-                "up to about 3x and the share below is a lower bound." if adm else "not recorded.")),
-            (f"- Scored (the {K_NEAREST} nearest per Kalshi strike and direction): {lad['arb_checks_scored']:,}; with "
-             f"an executable edge >= {MIN_EDGE} (capacity > 0): {lad['arb_checks_pos']:,} "
-             f"({_f(lad['share_scored'], pct=True)} of scored"
-             + (f", {_f(lad['share_admissible'], pct=True)} of admissible" if adm else "") + ")."),
+             + (f"{adm:,} over {lad['counted_hours']} counted hours (successful `ladder_score` runs); scored in "
+                f"those hours: {lad['scored_counted']:,}; with an executable edge >= {MIN_EDGE} (capacity > 0): "
+                f"{lad['pos_counted']:,} ({_f(lad['share_admissible'], pct=True)} of admissible)."
+                if adm else "none recorded by a successful run yet.")),
+            (f"- All scored rows (the {K_NEAREST} nearest per Kalshi strike and direction, every hour stored): "
+             f"{lad['arb_checks_scored']:,}; with an executable edge >= {MIN_EDGE}: {lad['arb_checks_pos']:,} "
+             f"({_f(lad['share_scored'], pct=True)} of scored)."),
             f"- Largest top-of-book `best_edge` on an admissible check: {_f(lad['best_edge_max'], 4)} per $1.",
             (f"- Episodes (`source = 'ladder'`): {lad['episodes']}. Duration median "
              f"{_f(lad['duration_min_median'], 1)} min, max {_f(lad['duration_min_max'], 1)} min; median capacity "
@@ -556,17 +585,18 @@ def _ladder_text(lad: dict) -> dict[str, list[str]]:
             "",
         ]
     tails = "; ".join(f"{a} {_usd(v['min'])} to {_usd(v['max'])}" for a, v in b.items()) or "none recorded"
-    # nearest rank ceil(0.999 n) = n below 1,000 observations: the bound is then the window's largest move
-    at_max = [a for a, v in b.items() if v["up"] is not None and v["n"] < 1000]
+    # nearest rank ceil(q n) = n: the bound is then the window's largest move (basis._rank_up's rank)
+    at_max = [a for a, v in b.items() if v["up"] is not None and math.ceil(round(BASIS_Q * v["n"], 9)) == v["n"]]
+    at_max_n = ", ".join(f"{a} n = {b[a]['n']}" for a in at_max)
     limits = [
-        ("- Ladder tier: \"pays in every state\" holds only inside the measured basis range. The bound is the 0.999 "
-         "quantile of 30 days of hourly settles; a basis move beyond it breaks the guarantee for any spread whose "
+        ("- Ladder tier: \"pays in every state\" holds only inside the measured basis range. The bound is the "
+         f"{BASIS_Q} quantile of {BASIS_WINDOW_DAYS} days of hourly settles; a basis move beyond it breaks the guarantee for any spread whose "
          f"strike gap it exceeds. Observed diff range over the window: {tails}."
-         + (f" With fewer than 1,000 hours ({', '.join(at_max)}), the 0.999 nearest-rank quantile is the largest "
+         + (f" With {at_max_n} hours, the {BASIS_Q} nearest-rank quantile is the largest "
             "observed move, so each bound is set by a single hour, rounded up to $1: one larger hour, which a "
             "30-day window gives no reason to rule out, breaks it." if at_max else "")),
         ("- Ladder tier: only Kalshi strikes inside Polymarket's range (padded by the basis bound) are snapshotted, "
-         "at most 60 per ladder, and only the nearest admissible strikes are scored; a violation that shows only "
+         f"at most {LADDER_CAP} per ladder, and only the nearest admissible strikes are scored; a violation that shows only "
          "at a farther strike in a non-monotone book is missed (the positive counts can only undercount)."),
         (f"- Ladder tier window: {lad['hours']:.1f} hours of ladder snapshots"
          + (", i.e. none yet." if not have else ".")),
@@ -798,7 +828,8 @@ def render(summary: dict, out_dir: Path) -> Path:
         f"-- ladder tier: spreads, one row per strike pair x direction x stored bounds{LADDER_SQL.rstrip()}",
         f"-- ladder tier: episodes (Postgres)\n{LADDER_OPPS_SQL}",
         f"-- ladder tier: basis window (bounds via venue_arb.basis.bounds)\n{BASIS_SQL}",
-        f"-- ladder tier: admissible-check denominator (Postgres; since = first ladder row){ADMISSIBLE_SQL.rstrip()}",
+        f"-- ladder tier: numerator per hour{LADDER_HOURS_SQL.rstrip()}",
+        f"-- ladder tier: admissible-check denominator (Postgres){ADMISSIBLE_SQL.rstrip()}",
         "```",
         "",
         ("Eligible pairs: `venue_arb/flows/exact_sql.py` (`ELIGIBLE_SQL`) filtered by `venue_arb/exact.py`; tail "
@@ -842,14 +873,16 @@ def main(out_dir: Path = Path("reports")) -> Path:
              "snapshots", "n_capacity_gt0", "best_edge_max", "first_ts", "last_ts")
     ladder = [utc(dict(zip(lcols, r, strict=True))) for r in ch.query(LADDER_SQL).result_rows]
     basis_rows = ch.query(BASIS_SQL).result_rows
-    admissible = None
+    hours = [utc(dict(zip(("hour", "scored", "pos"), r, strict=True))) for r in ch.query(LADDER_HOURS_SQL).result_rows]
     with db.pg() as conn:
         lad_eps = rows(conn.execute(LADDER_OPPS_SQL))
-        if ladder:  # runs before the first real ladder row are the integration test's synthetic ladder only
-            n, total = conn.execute(ADMISSIBLE_SQL, {"since": min(g["first_ts"] for g in ladder)}).fetchone()
-            admissible = {"runs": n, "checks": int(total)}
+        # the counted hour's start is in `detail`; results without one predate the count window and are skipped
+        admissible = [{"hour": datetime.fromisoformat(m.group(1)), "checks": int(obs)}
+                      for obs, detail in conn.execute(ADMISSIBLE_SQL).fetchall()
+                      if (m := re.search(r"\[([^,]+),", detail or ""))]
     s = summarize(pairs, scr, edges, episodes, adjudications=adj, scope=scope, generated_at=datetime.now(UTC),
-                  ladder_rows=ladder, ladder_episodes=lad_eps, basis_rows=basis_rows, admissible=admissible)
+                  ladder_rows=ladder, ladder_episodes=lad_eps, basis_rows=basis_rows, admissible=admissible,
+                  ladder_hours=hours)
     path = render(s, out_dir)
     print(f"wrote {path}: pairs={s['pairs']} screened_rows={s['screened']['rows']} "
           f"snapshots={s['executable']['snapshots']} episodes={s['executable']['episodes']} "

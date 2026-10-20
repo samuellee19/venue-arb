@@ -21,6 +21,7 @@ from venue_arb.models import Level
 
 Direction = Literal["k_yes_pm_no", "pm_yes_k_no"]
 K_NEAREST = 2  # admissible PM strikes scored per Kalshi strike and direction (Ruling 7)
+COUNT_INTERVAL = timedelta(hours=1)  # the ladder_score deployment's schedule interval (serve.py: hourly at :50)
 NEAR_EXACT_TOL = 1.0  # $: "same strike" after normalization (Kalshi T81499.99 vs PM above 81500)
 _LEGS = {"k_yes_pm_no": ("yes", "no"), "pm_yes_k_no": ("no", "yes")}  # direction -> (Kalshi side, PM side)
 
@@ -110,12 +111,22 @@ def spread_points(direction: Direction, k: dict[datetime, list[Level]], pm: dict
             for kt, pt in align(kt_ok, pt_ok)]
 
 
+def count_window(end: datetime) -> tuple[datetime, datetime]:
+    """The clock hour before `end`'s hour: [H - 1 h, H). Hourly runs (seconds of start jitter included) count disjoint,
+    adjacent hours, so summing admissible_checks over successful runs counts each snapshot once; a failed or skipped
+    run leaves its hour uncounted, a manual re-run inside the same hour counts it twice."""
+    h = end.replace(minute=0, second=0, microsecond=0)
+    return h - COUNT_INTERVAL, h
+
+
 def score_ladder(asset: str, instant: datetime, ladder: dict, snaps: dict, up: float, down: float,
-                 k_fee: Callable[[str], dict], pm_fee: Callable[[str], tuple[dict | None, bool]], fee_version: str
+                 k_fee: Callable[[str], dict], pm_fee: Callable[[str], tuple[dict | None, bool]], fee_version: str,
+                 count_window: tuple[datetime, datetime] | None = None
                  ) -> tuple[list[dict], list[Episode], dict[str, int]]:
     """Edge rows, arb episodes and counts for one same-instant ladder (crypto_rule.Strike lists per venue). `snaps` is
     scoring.snapshots output; strikes without snapshots are skipped. Per Kalshi strike only select_pairs' plan is
-    scored; admissible_checks counts every admissible (a, b, direction) at every aligned snapshot (not stored). Only
+    scored; admissible_checks counts every admissible (a, b, direction) at every aligned snapshot (not stored) whose
+    Kalshi time is in count_window [lo, hi) (None: all), so overlapping runs can each count disjoint snapshots. Only
     'arb' pairs form episodes: near-exact pairs carry basis exposure. k_fee(kalshi_id) -> series fee;
     pm_fee(pm_id) -> (feeSchedule, feesEnabled)."""
     ks = [s for s in ladder["kalshi"] if ("kalshi", s.market_id) in snaps]
@@ -127,7 +138,7 @@ def score_ladder(asset: str, instant: datetime, ladder: dict, snaps: dict, up: f
     for k in ks:
         k_snaps = snaps[("kalshi", k.market_id)]
         plan, adm = select_pairs(k.level, ps, up, down)
-        k_ts = [t for t in k_snaps if t < instant]
+        k_ts = [t for t in k_snaps if t < instant and (count_window is None or count_window[0] <= t < count_window[1])]
         checks += sum(aligned_count(k_ts, pm_ts[p.market_id]) for xs in adm.values() for p in xs)
         pairs += len(plan)
         for p, kind, dirs in plan:

@@ -1,6 +1,6 @@
 # Do exact Kalshi-Polymarket matches carry arbitrage? Research note v1
 
-Generated 2026-10-20 10:46 UTC by `python -m venue_arb.report.note`. Every number below is computed from the tables named in Method at generation time; the queries are listed at the end. This is v1: the executable tier covers only the snapshots collected so far, and the note is re-run once about four weeks of snapshots exist.
+Generated 2026-10-20 10:53 UTC by `python -m venue_arb.report.note`. Every number below is computed from the tables named in Method at generation time; the queries are listed at the end. This is v1: the executable tier covers only the snapshots collected so far, and the note is re-run once about four weeks of snapshots exist.
 
 ## Question
 
@@ -75,7 +75,7 @@ On average BRTI sits below Binance at the settle (BTC -$48.02 (-5.8 bps), ETH -$
 
 - *Admissible checks.* A cross-strike check counts only if the strikes are far enough apart that the $0 state needs a basis move beyond the bound: `k_yes_pm_no` needs b - a >= down, `pm_yes_k_no` needs a - b >= up. These are stored as `kind = 'arb'`.
 - *Near-exact same-strike pairs* (|a - b| <= $1 after normalization, e.g. Kalshi `T81499.99` vs Polymarket "above 81,500") are classified first, scored in both directions and stored as `kind = 'near_exact'`. Both legs lose if the settle falls between the two indices, a band up to `down` (`k_yes_pm_no`) or `up` (`pm_yes_k_no`) dollars wide, so they are reported separately with that exposure and never as arbitrage, and they form no episodes.
-- *Pruning and the denominator.* Per Kalshi strike and direction only the 2 nearest admissible Polymarket strikes are scored and stored: the cost is Kalshi Yes(a) + Polymarket No(b), and No(b) rises with b, so the nearest admissible strike is the cheapest when books are monotone (the second is margin for books that are not). Every admissible check, scored or pruned, is counted by the scoring flow and recorded as the `ladder_admissible_checks` qa result; that count is the denominator. A check is one strike pair, one direction, one aligned snapshot.
+- *Pruning and the denominator.* Per Kalshi strike and direction only the 2 nearest admissible Polymarket strikes are scored and stored: the cost is Kalshi Yes(a) + Polymarket No(b), and No(b) rises with b, so the nearest admissible strike is the cheapest when books are monotone (the second is margin for books that are not). Every admissible check, scored or pruned, is counted by the scoring flow and recorded as the `ladder_admissible_checks` qa result; that count is the denominator. A check is one strike pair, one direction, one aligned snapshot. Each hourly run rescores the last 3 h but counts only snapshots in the 1-hour clock bucket before its start (the bucket is recorded with the count), so successive runs count disjoint hours and their sum counts each snapshot once; a manual re-run of a bucket is kept once. The numerator is restricted to the same hours. A failed or skipped run leaves its hour out of both, so the share covers counted hours only; tests record under a separate qa pipeline and never enter it.
 - *Execution rules* are the executable tier's: ask ladders walked together with taker fees on both legs, snapshots aligned within 30 s, edge threshold 0.01, the same episode definition. Only snapshots strictly before H count (from H on, the outcome is being fixed). Episodes are stored in `venue_arb.opportunities` with `source = 'ladder'`; every pair-tier query reads `source = 'pair'` only.
 - *Reading `venue_arb.ladder_edges` directly:* rows keep the bounds they were scored under (`basis_up`, `basis_down`), so filter by `kind` and by those stored bounds, not by today's bounds.
 
@@ -202,7 +202,7 @@ Clauses recorded as rare edge cases that keep each eligible pair exact (latest a
 - Few exact pairs (15), from Kalshi series `KXFEDDECISION`; nothing here generalizes to other categories.
 - Matches were adjudicated by a deterministic rule (rule:fed-v1 (prompt v3)); no human review sitting has happened yet: 0 of 15 eligible pairs reviewed, 15 unreviewed.
 - No execution latency, fill risk, partial fills, or capital lock-up costs beyond the annualized figure are modeled. The transfer cost is an assumption, reported as a sensitivity only.
-- Ladder tier: "pays in every state" holds only inside the measured basis range. The bound is the 0.999 quantile of 30 days of hourly settles; a basis move beyond it breaks the guarantee for any spread whose strike gap it exceeds. Observed diff range over the window: BTC -$151.18 to +$181.59; ETH -$6.72 to +$5.83. With fewer than 1,000 hours (BTC, ETH), the 0.999 nearest-rank quantile is the largest observed move, so each bound is set by a single hour, rounded up to $1: one larger hour, which a 30-day window gives no reason to rule out, breaks it.
+- Ladder tier: "pays in every state" holds only inside the measured basis range. The bound is the 0.999 quantile of 30 days of hourly settles; a basis move beyond it breaks the guarantee for any spread whose strike gap it exceeds. Observed diff range over the window: BTC -$151.18 to +$181.59; ETH -$6.72 to +$5.83. With BTC n = 694, ETH n = 694 hours, the 0.999 nearest-rank quantile is the largest observed move, so each bound is set by a single hour, rounded up to $1: one larger hour, which a 30-day window gives no reason to rule out, breaks it.
 - Ladder tier: only Kalshi strikes inside Polymarket's range (padded by the basis bound) are snapshotted, at most 60 per ladder, and only the nearest admissible strikes are scored; a violation that shows only at a farther strike in a non-monotone book is missed (the positive counts can only undercount).
 - Ladder tier window: 0.0 hours of ladder snapshots, i.e. none yet.
 
@@ -229,9 +229,13 @@ GROUP BY asset, instant, k_id, pm_id, direction, kind, a, b, basis_up, basis_dow
 SELECT kalshi_id, pm_id, direction, start_ts, end_ts, snapshots, max_edge, median_capacity_usd, annualized, us_executable, transfer_cost_usd FROM venue_arb.opportunities WHERE source = 'ladder' AND kalshi_id NOT LIKE 'ZZTEST-%'
 -- ladder tier: basis window (bounds via venue_arb.basis.bounds)
 SELECT asset, diff, binance FROM venue_arb.basis FINAL WHERE instant > now() - INTERVAL 30 DAY
--- ladder tier: admissible-check denominator (Postgres; since = first ladder row)
-SELECT count(*), coalesce(sum(observed), 0) FROM qa.check_results
-WHERE pipeline = 'venue_arb_ladder_score' AND check_name = 'ladder_admissible_checks' AND checked_at >= %(since)s
+-- ladder tier: numerator per hour
+SELECT toStartOfHour(ts) AS hour, count() AS scored, countIf(capacity_usd > 0) AS pos
+FROM venue_arb.ladder_edges FINAL WHERE kind = 'arb' AND k_id NOT LIKE 'ZZTEST-%' GROUP BY hour
+-- ladder tier: admissible-check denominator (Postgres)
+SELECT r.observed, r.detail FROM qa.check_results r
+WHERE r.pipeline = 'venue_arb_ladder_score' AND r.check_name = 'ladder_admissible_checks'
+  AND NOT EXISTS (SELECT 1 FROM qa.check_results f WHERE f.run_id = r.run_id AND NOT f.passed AND f.severity = 'error')
 ```
 
 Eligible pairs: `venue_arb/flows/exact_sql.py` (`ELIGIBLE_SQL`) filtered by `venue_arb/exact.py`; tail risks: `ADJ_SQL`; tier scope: `SCOPE_SQL`, both in `venue_arb/report/note.py`. Rows from the screened and executable queries above are kept only for pairs in tier scope (`_scoped`); ladder rows are not pair-scoped.

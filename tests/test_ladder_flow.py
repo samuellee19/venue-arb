@@ -49,11 +49,24 @@ def test_score_ladder_rows_kinds_and_episodes():
     assert ep.max_edge == pytest.approx(0.10)
     # near-exact KA/PA k_yes_pm_no also clears $0.01 (0.40 + 0.45) but is never an episode
     assert any(r["kind"] == "near_exact" and r["capacity_contracts"] > 0 for r in rows)
+    # count window [instant - 2 min, instant): the -3 min snapshot is still scored but adds 0 to the count
+    rows2, _, stats2 = le.score_ladder("ETH", instant, ladder, snaps, 6.0, 7.0, lambda _: NOFEE,
+                                       lambda _: (None, False), "v",
+                                       count_window=(instant - timedelta(minutes=2), instant))
+    assert stats2["admissible_checks"] == 3 * 2 and rows2 == rows
+
+
+def test_count_window_is_the_previous_clock_hour():
+    lo, hi = le.count_window(datetime(2026, 10, 20, 9, 50, 7, tzinfo=UTC))
+    assert (lo, hi) == (datetime(2026, 10, 20, 8, tzinfo=UTC), datetime(2026, 10, 20, 9, tzinfo=UTC))
+    # hourly runs a few seconds apart tile time: consecutive windows meet exactly
+    assert le.count_window(datetime(2026, 10, 20, 10, 50, 1, tzinfo=UTC))[0] == hi
 
 
 # Synthetic ladder for the integration test. Ids start with ZZTEST-; the instant (Mar 15, 2027 noon ET) has no real
 # ladder, and last_seen is 3 h old so the collector, matcher and exact-pair readers (last_seen > now() - 2 h) skip them.
 INSTANT = datetime(2027, 3, 15, 16, tzinfo=UTC)
+TEST_PIPELINE = "venue_arb_ladder_score_test"  # keeps synthetic runs out of the note's admissible-check denominator
 K_ID, PM_NEAR, PM_ARB = "ZZTEST-KXBTCD-T79999.99", "ZZTEST-PM-80000", "ZZTEST-PM-80200"
 
 
@@ -111,9 +124,9 @@ def test_ladder_flow_idempotent():
     _cleanup()  # a previous aborted run
     try:
         _seed(end)
-        first = ladder_score_flow(window_hours=2, end=end)  # raises if any error check fails
+        first = ladder_score_flow(window_hours=2, end=end, pipeline=TEST_PIPELINE)  # raises if any error check fails
         after_first = counts()
-        second = ladder_score_flow(window_hours=2, end=end)
+        second = ladder_score_flow(window_hours=2, end=end, pipeline=TEST_PIPELINE)
         print(f"first={first} second={second} counts={after_first}")
         assert first == second and first["ladders"] > 0
         assert counts() == after_first and after_first[1] == 0

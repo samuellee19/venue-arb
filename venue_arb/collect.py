@@ -14,6 +14,7 @@ from functools import partial
 from venue_arb import basis, http
 from venue_arb.books import to_rows, watchlist
 from venue_arb.config import (
+    BASIS_WINDOW_DAYS,
     BOOK_DEPTH,
     LADDER_MIN_BASIS,
     LADDER_PAD_DEFAULT,
@@ -65,7 +66,7 @@ def default_fetchers() -> dict:
 LISTING_COLS = ("venue", "market_id", "event_id", "category", "title", "yes_label", "close_time", "yes_token")
 LISTINGS_SQL = (f"SELECT {', '.join(LISTING_COLS)} FROM venue_arb.listings WHERE category = 'crypto_price' "
                 "AND last_seen > now() - INTERVAL '2 hours' AND close_time > now()")
-BASIS_SQL = "SELECT asset, diff FROM venue_arb.basis WHERE instant > now() - INTERVAL 30 DAY"
+BASIS_SQL = f"SELECT asset, diff FROM venue_arb.basis WHERE instant > now() - INTERVAL {BASIS_WINDOW_DAYS} DAY"
 
 
 def ladder_pads(basis_rows) -> dict[str, float]:

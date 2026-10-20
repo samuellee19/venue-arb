@@ -41,7 +41,10 @@ def _rank_up(xs: list[float], q: float) -> float:
     return float(max(0, math.ceil(s[math.ceil(round(q * len(s), 9)) - 1] - 1e-9)))
 
 
-def bounds(diffs: list[float], q: float = 0.999) -> tuple[float, float]:
+BASIS_Q = 0.999
+
+
+def bounds(diffs: list[float], q: float = BASIS_Q) -> tuple[float, float]:
     """Directional basis bounds (up, down) for diff = BRTI - Binance: BRTI exceeds Binance by at most `up`, falls short
     by at most `down`, each at quantile q, rounded up to $1."""
     return _rank_up(diffs, q), _rank_up([-d for d in diffs], q)
