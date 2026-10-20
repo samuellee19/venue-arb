@@ -47,6 +47,8 @@ def test_watchlist_ladder_clip_and_cap():
     assert ids[:2] == ["K1", "P1"] and ids[10:] == ["K2", "P2", "K3", "P3"]
     ladder = ids[2:10]
     assert len(ladder) == 8 and ("polymarket", "p2", "T2") in wl and ("kalshi", "k6", None) in wl  # 102 is nearest
-    assert "k0" not in ids and "k12" not in ids  # clipped (90.. kept only inside 90..114) / far from mid
+    assert {"p0", "p4"} <= set(ladder)  # every Polymarket strike survives, only far Kalshi strikes are trimmed
+    assert sum(m.startswith("k") for m in ladder) == 3 and "k0" not in ids and "k12" not in ids
+    assert watchlist(rows, [lad], cap=100, ladder_cap=3)[2:7] == [("polymarket", f"p{i}", f"T{i}") for i in range(5)]
     assert len(watchlist(rows, [lad], cap=5)) == 5
     assert watchlist(rows, [], cap=100) == watchlist(rows, cap=100)

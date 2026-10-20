@@ -171,13 +171,52 @@ def _ladder_listings():
 
 def test_load_watchlist_adds_clipped_ladders_with_basis_pad():
     from venue_arb.collect import load_watchlist
-    wl = load_watchlist(_Conn(_ladder_listings()), _Ch([("BTC", 30.0)] * 30))  # bounds 30 -> pad 30
+    wl = load_watchlist(_Conn(_ladder_listings()), lambda: _Ch([("BTC", 30.0)] * 30))  # bounds 30 -> pad 30
     assert {m for _, m, _ in wl} == {"K80000", "K81000", "P80000", "P81000"}  # 79000 < 80000-30, 90000 too far
-    wl = load_watchlist(_Conn(_ladder_listings()), _Ch([]))  # < 24 rows: default pad 50
+    wl = load_watchlist(_Conn(_ladder_listings()), lambda: _Ch([]))  # < 24 rows: default pad 50
     assert {m for _, m, _ in wl} == {"K80000", "K81000", "P80000", "P81000"}
     assert ("polymarket", "P80000", "T80000") in wl and ("kalshi", "K80000", None) in wl
 
 
+class _FedConn(_Conn):
+    def execute(self, sql):
+        if "candidates" in sql:
+            d = [SimpleNamespace(name=n) for n in ("a_venue", "a_id", "a_token", "b_venue", "b_id", "b_token",
+                                                   "relation", "score")]
+            return SimpleNamespace(description=d, fetchall=lambda: [("kalshi", "KF", None, "polymarket", "PF", "TF",
+                                                                      "exact", 0.9)])
+        return super().execute(sql)
+
+
+FED = [("kalshi", "KF", None), ("polymarket", "PF", "TF")]
+
+
 def test_load_watchlist_ladder_failure_falls_back():
     from venue_arb.collect import load_watchlist
-    assert load_watchlist(_Conn(_ladder_listings(), fail=True), _Ch([])) == []
+
+    def boom():
+        raise RuntimeError("clickhouse down")
+
+    assert load_watchlist(_FedConn(_ladder_listings(), fail=True), lambda: _Ch([])) == FED
+    assert load_watchlist(_FedConn(_ladder_listings()), boom) == FED
+
+
+def test_load_watchlist_basis_read_failure_uses_default_pad():
+    from venue_arb.collect import load_watchlist
+
+    class Bad:
+        def query(self, sql):
+            raise RuntimeError("no table")
+
+    extra = [_listing("kalshi", "K79960", "$79,960 or above", _ladder_listings()[0][6])]
+    wl = load_watchlist(_FedConn(_ladder_listings() + extra), lambda: Bad())
+    assert wl[:2] == FED and {"K80000", "K81000", "P80000", "P81000"} <= {m for _, m, _ in wl}
+    ids = {m for _, m, _ in wl}
+    assert "K79960" in ids and "K79000" not in ids  # default pad 50: kept down to 80000 - 50
+
+
+def test_ladder_pads_ignore_non_finite():
+    from venue_arb.collect import LADDER_PAD_DEFAULT, ladder_pads
+    assert ladder_pads([("BTC", float("nan")), ("BTC", float("inf")), ("BTC", None)] * 30) == {}
+    assert ladder_pads([("BTC", 5.0)] * 30 + [("BTC", float("nan"))] * 5) == {"BTC": 5.0}
+    assert LADDER_PAD_DEFAULT == 50.0

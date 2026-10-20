@@ -4,6 +4,7 @@ tick() and flush() are plain functions (fetchers, loader, recorder injected) so 
 """
 
 import logging
+import math
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -71,7 +72,8 @@ def ladder_pads(basis_rows) -> dict[str, float]:
     """Clip pad per asset: max(up, down) of the 30-day basis bounds; LADDER_PAD_DEFAULT with < LADDER_MIN_BASIS rows."""
     diffs: dict[str, list[float]] = {}
     for asset, diff in basis_rows:
-        diffs.setdefault(asset, []).append(diff)
+        if diff is not None and math.isfinite(diff):
+            diffs.setdefault(asset, []).append(diff)
     return {a: max(basis.bounds(d)) if len(d) >= LADDER_MIN_BASIS else LADDER_PAD_DEFAULT for a, d in diffs.items()}
 
 
@@ -87,17 +89,23 @@ def load_ladders(conn, ch) -> list[dict]:
     return [crypto_rule.clip(lad, pads.get(asset, LADDER_PAD_DEFAULT)) for (asset, _), lad in found.items()]
 
 
-def load_watchlist(conn, ch=None) -> list[tuple[str, str, str | None]]:
+def load_watchlist(conn, get_ch=None) -> list[tuple[str, str, str | None]]:
+    """Fed pairs always load; ladders are additive, so any ClickHouse or ladder failure only drops them.
+    `get_ch` is a callable returning the ClickHouse client (built inside the guard)."""
     cur = conn.execute(WATCH_SQL)
     cols = [c.name for c in cur.description]
     rows = [dict(zip(cols, r, strict=True)) for r in cur.fetchall()]
     ladders = []
-    if ch is not None:
+    if get_ch is not None:
         try:
-            ladders = load_ladders(conn, ch)
-        except Exception as e:  # noqa: BLE001 — ladders are additive; the Fed pairs must keep flowing
+            ladders = load_ladders(conn, get_ch())
+        except Exception as e:  # noqa: BLE001
             log.warning("ladder load failed, watchlist without ladders error=%s", type(e).__name__)
-    return watchlist(rows, ladders)
+    try:
+        return watchlist(rows, ladders)
+    except Exception as e:  # noqa: BLE001 — a malformed ladder must not take the Fed pairs down
+        log.warning("ladder merge failed, watchlist without ladders error=%s", type(e).__name__)
+        return watchlist(rows, [])
 
 
 def _fetch(fetchers: dict, venue: str, market_id: str, yes_token: str | None):
@@ -190,7 +198,7 @@ def run_forever(interval_s: int = SNAPSHOT_INTERVAL_S, flush_every: int = 5) -> 
         try:
             if n % 10 == 0:
                 with db.pg() as conn:
-                    watch = load_watchlist(conn, db.ch())
+                    watch = load_watchlist(conn, db.ch)
             n += 1
             tick(watch, fetchers, buf, stats)
             cycles.append(time.monotonic() - started)
