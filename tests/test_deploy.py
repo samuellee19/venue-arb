@@ -25,7 +25,5 @@ def test_unit_env_matches_mise(unit):
 
 
 def test_units_present():
-    assert [p.name for p in UNITS] == ["venue-arb-catalog.service", "venue-arb-collector.service",
-                                       "venue-arb-match.service", "venue-arb-score.service"]
-    assert sorted(p.name for p in (ROOT / "deploy").glob("*.timer")) == [
-        "venue-arb-catalog.timer", "venue-arb-match.timer", "venue-arb-score.timer"]
+    assert [p.name for p in UNITS] == ["venue-arb-collector.service", "venue-arb-flows.service"]
+    assert not list((ROOT / "deploy").glob("*.timer"))
