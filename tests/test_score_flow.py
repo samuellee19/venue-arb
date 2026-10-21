@@ -56,8 +56,15 @@ def test_upsert_opportunities_and_overlap_check():
             rows = conn.execute("SELECT end_ts FROM venue_arb.opportunities WHERE kalshi_id = 'ZZTEST-K'").fetchall()
             assert rows == [(t + timedelta(minutes=5),)]
             assert mine(conn, overlap_sql) == []
-            upsert_opportunities(conn, [opp(t + timedelta(minutes=2), t + timedelta(minutes=8))])
-            assert len(mine(conn, overlap_sql)) == 1
+            # a re-score that aligns the same episode to a later first snapshot replaces the old row
+            assert upsert_opportunities(conn, [opp(t + timedelta(minutes=2), t + timedelta(minutes=8))]) == 1
+            rows = conn.execute("SELECT start_ts, end_ts FROM venue_arb.opportunities WHERE kalshi_id = 'ZZTEST-K'").fetchall()
+            assert rows == [(t + timedelta(minutes=2), t + timedelta(minutes=8))]
+            assert mine(conn, overlap_sql) == []
+            # a disjoint later episode of the same pair is a second row
+            upsert_opportunities(conn, [opp(t + timedelta(minutes=20), t + timedelta(minutes=25))])
+            (n,) = conn.execute("SELECT count(*) FROM venue_arb.opportunities WHERE kalshi_id = 'ZZTEST-K'").fetchone()
+            assert n == 2 and mine(conn, overlap_sql) == []
             raise _Rollback
         (left,) = conn.execute("SELECT count(*) FROM venue_arb.opportunities WHERE kalshi_id = 'ZZTEST-K'").fetchone()
         assert left == 0

@@ -39,9 +39,21 @@ OPEN_START = (f"SELECT min(start_ts) FROM {OPPS} "
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
+# a re-score can align the same live episode to a different first snapshot (window start, late book rows), so the
+# row that overlaps the new episode under another start_ts is the same episode: replace it, don't keep both
+# (sql_checks/opportunities_no_overlap.sql is the guard)
+MERGE_OVERLAP = (f"DELETE FROM {OPPS} WHERE kalshi_id = %(kalshi_id)s AND pm_id = %(pm_id)s AND direction = %(direction)s "
+                 "AND source = %(source)s AND start_ts <> %(start_ts)s AND start_ts <= coalesce(%(end_ts)s, now()) "
+                 "AND coalesce(end_ts, now()) >= %(start_ts)s")
+
+
 def upsert_opportunities(conn, opps: list[dict]) -> int:
-    """Upsert episodes; returns rows written in this call. Caller holds one transaction so now() is fixed."""
-    conn.cursor().executemany(UPSERT, [tuple(o[c] for c in OPP_COLS) for o in opps])
+    """Upsert episodes, replacing any row of the same pair, direction and source that overlaps a new episode under a
+    different start_ts; returns rows written in this call. Caller holds one transaction so now() is fixed."""
+    cur = conn.cursor()
+    cur.executemany(MERGE_OVERLAP, [{k: o[k] for k in ("kalshi_id", "pm_id", "direction", "source", "start_ts", "end_ts")}
+                                    for o in opps])
+    cur.executemany(UPSERT, [tuple(o[c] for c in OPP_COLS) for o in opps])
     (n,) = conn.execute(f"SELECT count(*) FROM {OPPS} WHERE scored_at = now()").fetchone()
     return n
 
