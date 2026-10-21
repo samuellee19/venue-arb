@@ -30,14 +30,14 @@ from venue_arb.bundle import Annotation, Basis, Episode, LiveBundle, Snap, pair_
 from venue_arb.config import BASIS_WINDOW_DAYS, PIPELINE_PREFIX
 from venue_arb.episodes import ALIGN_S
 from venue_arb.exact import eligible
-from venue_arb.flows.exact_sql import load_eligible
 from venue_arb.ladder_edges import _LEGS, count_window
 from venue_arb.matching import crypto_rule
 from venue_arb.matching.adjudicate import PROMPT_VERSION
 from venue_arb.scoring import snapshots
 from venue_arb.sources import kalshi
 
-# qa and flows.ladder_score (which imports qa) are imported lazily: unit tests (and CI) run without the platform.
+# qa and venue_arb.flows.* (the flows package imports obs and qa) are imported lazily: unit tests (and CI) run
+# without the platform checkout.
 
 log = logging.getLogger("venue_arb.publish")
 logging.getLogger("httpx").setLevel(logging.WARNING)
@@ -423,6 +423,7 @@ def load_sides(conn) -> dict[tuple[str, str], str]:
 
 def default_readers(db) -> dict:
     """tick()'s readers on the live databases (`db` = qa.db); each opens its own connection."""
+    from venue_arb.flows.exact_sql import load_eligible
     from venue_arb.flows.ladder_score import BASIS_SQL, LISTINGS_SQL, bounds_by_asset
 
     def pairs():
