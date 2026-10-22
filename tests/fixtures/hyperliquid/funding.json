@@ -1,0 +1,20 @@
+[
+ {
+  "coin": "xyz:NVDA",
+  "fundingRate": "0.0000062",
+  "premium": "0.00008",
+  "time": 1792681212345
+ },
+ {
+  "coin": "xyz:NVDA",
+  "fundingRate": "0.0000063",
+  "premium": "0.00007",
+  "time": 1792684812345
+ },
+ {
+  "coin": "xyz:NVDA",
+  "fundingRate": "0.0000064",
+  "premium": "0.00006",
+  "time": 1792688412345
+ }
+]

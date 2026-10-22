@@ -1,0 +1,64 @@
+[
+ {
+  "universe": [
+   {
+    "name": "xyz:NVDA",
+    "szDecimals": 3,
+    "maxLeverage": 20,
+    "growthMode": "enabled"
+   },
+   {
+    "name": "xyz:GOLD",
+    "szDecimals": 4,
+    "maxLeverage": 25
+   },
+   {
+    "name": "xyz:NEWCO",
+    "szDecimals": 2,
+    "maxLeverage": 10,
+    "growthMode": "enabled"
+   }
+  ]
+ },
+ [
+  {
+   "funding": "0.0000062",
+   "openInterest": "411000",
+   "prevDayPx": "219.1",
+   "dayNtlVlm": "79100000",
+   "premium": "0.00008",
+   "oraclePx": "212.81",
+   "markPx": "212.83",
+   "midPx": "212.83",
+   "impactPxs": [
+    "212.8",
+    "212.86"
+   ]
+  },
+  {
+   "funding": "0.00000625",
+   "openInterest": "52000",
+   "prevDayPx": "4012.5",
+   "dayNtlVlm": "310500000",
+   "premium": "-0.00012",
+   "oraclePx": "4020.1",
+   "markPx": "4019.8",
+   "midPx": null,
+   "impactPxs": null
+  },
+  {
+   "funding": "0.0000125",
+   "openInterest": "1500",
+   "prevDayPx": "48.2",
+   "dayNtlVlm": "250000",
+   "premium": null,
+   "oraclePx": "47.9",
+   "markPx": "47.95",
+   "midPx": "47.96",
+   "impactPxs": [
+    "47.9",
+    "48.0"
+   ]
+  }
+ ]
+]

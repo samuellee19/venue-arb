@@ -1,0 +1,34 @@
+xyz:SPCX  # pre-IPO
+xyz:QNT  # pre-IPO
+xyz:CBRS  # pre-IPO
+xyz:SP500  # index
+xyz:XYZ100  # index
+xyz:JP225  # index
+xyz:KR200  # index
+xyz:NIFTY  # index
+xyz:IBOV  # index
+xyz:VIX  # index
+xyz:DXY  # index
+xyz:EUR  # FX
+xyz:GBP  # FX
+xyz:JPY  # FX
+xyz:KRW  # FX
+xyz:GOLD  # commodity
+xyz:SILVER  # commodity
+xyz:COPPER  # commodity
+xyz:CL  # commodity
+xyz:BRENTOIL  # commodity
+xyz:HO  # commodity
+xyz:NATGAS  # commodity
+xyz:TTF  # commodity
+xyz:CORN  # commodity
+xyz:WHEAT  # commodity
+xyz:URANIUM  # commodity
+xyz:PLATINUM  # commodity
+xyz:PALLADIUM  # commodity
+xyz:ALUMINIUM  # commodity
+xyz:DIESEL  # commodity
+xyz:DRAM  # spot index
+xyz:H100  # spot index
+xyz:MUU  # unresolved: not in the Specification Index at build time
+xyz:VOL  # unresolved: not in the Specification Index at build time

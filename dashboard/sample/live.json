@@ -51,6 +51,7 @@
   "categories": {
     "crypto_price": "Crypto",
     "fed_macro": "Fed & macro",
+    "stock_perps": "Stock perps",
     "weather": "Weather"
   },
   "caveats": [
