@@ -1,8 +1,10 @@
 // venue-arb dashboard: boot, load/poll of /api/live, tabs, header, theme, banners (dashboard/api/app.py serves it).
-// No edge, fee or basis logic here: every number comes from the bundle. Plotly is the vendored global (Explorer).
-import {$, esc, num, seg, byKey, S, REPO, POLL_MS, STALE_S, DEAD_S, BOOKS_S, STALE_BANNER, NO_BOOKS,
-  NOT_COMPUTED} from "./common.js";
+// No edge, fee or basis logic here: every number comes from the bundle. Plotly is the vendored global (Explorer,
+// Research). Showing a tab renders it; the poll refreshes the visible one; a theme switch re-draws its charts.
+import {$, esc, num, seg, S, REPO, POLL_MS, STALE_S, DEAD_S, BOOKS_S, STALE_BANNER, NO_BOOKS} from "./common.js";
 import {renderScanner} from "./scanner.js";
+import {renderExplorer} from "./explorer.js";
+import {renderResearch} from "./research.js";
 
 const TABS = ["scanner", "explorer", "research"];
 
@@ -46,10 +48,8 @@ function renderTab() {
     document.querySelector(`nav a[href="#${x}"]`).classList.toggle("on", x === t);
   }
   if (!S.bundle) return;
-  // ponytail: placeholders until Task 6 wires explorer.js and adds research.js
-  const p = S.sel && byKey(S.sel);
-  $("tab-explorer").innerHTML = `<p class="mut">The Explorer is coming in the next task.${p ? ` Selected: ${esc(p.title)}` : ""}</p>`;
-  $("tab-research").innerHTML = `<p class="mut">${S.bundle.research ? "The Research tab is coming in the next task." : NOT_COMPUTED}</p>`;
+  if (t === "explorer") renderExplorer();
+  else if (t === "research") renderResearch(S.bundle);
 }
 
 function renderFoot() {
@@ -68,6 +68,7 @@ $("theme").onclick = () => {
   const root = document.documentElement;
   root.dataset.theme = root.dataset.theme === "dark" ? "light" : "dark";
   try { localStorage.setItem("theme", root.dataset.theme); } catch { /* private mode: not persisted */ }
+  renderTab();  // Plotly reads the colour tokens at draw time
 };
 addEventListener("hashchange", renderTab);
 

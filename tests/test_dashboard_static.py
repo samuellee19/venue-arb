@@ -13,6 +13,10 @@ SCANNER_COPY = ("Example — what a row looks like when a pair clears the rule",
                 "per-leg quotes are not published (venue display terms)", "ROI = net edge ÷ all-in cost per contract",
                 "admissible ladder checks in the last scored hour", "violations", "no scored hour yet",
                 "research summary not computed yet")
+RESEARCH_COPY = ("How it's measured", '"Matching"', '"Edge"', '"Crypto ladders"', '"What is not shown"',
+                 "Match review: precision", "no review sitting yet",
+                 "recomputed hourly from the same tables the Scanner reads", "NOT_COMPUTED")
+MIDDOT_OK = tuple(v for v in VERDICTS if "·" in v)  # mid-dots live only inside the verbatim verdict labels
 ALLOWED_URL = re.compile(r"https://(kalshi\.com|polymarket\.com|github\.com/samuellee19/venue-arb)(/|$)")
 URL = re.compile(r"https?://[^\s'\"`)]+")
 IMPORT = re.compile(r'^import\s[^;]*?\sfrom\s+"([^"]+)"', re.MULTILINE)
@@ -41,7 +45,7 @@ def test_vendor_md_sha256_matches_plotly():
 
 
 def test_no_external_urls_but_venue_and_repo_links():
-    assert {"app.js", "common.js", "scanner.js"} <= set(TEXT)
+    assert {"app.js", "common.js", "scanner.js", "explorer.js", "research.js"} <= set(TEXT)
     for name in TEXT:  # index.html: its inline script too
         for url in URL.findall(_read(name)):
             assert ALLOWED_URL.match(url), (name, url)
@@ -63,7 +67,7 @@ def test_module_imports_resolve():
     html = _read("index.html")
     assert '<script type="module" src="/static/app.js">' in html
     imports = {n: IMPORT.findall(_read(n)) for n in TEXT if n.endswith(".js")}
-    assert {"./common.js", "./scanner.js"} <= set(imports["app.js"])
+    assert {"./common.js", "./scanner.js", "./explorer.js", "./research.js"} <= set(imports["app.js"])
     for name, specs in imports.items():
         for spec in specs:
             assert spec.startswith("./"), (name, spec)  # relative only, no CDN
@@ -82,3 +86,29 @@ def test_js_carries_the_copy():
     js = _js()
     for text in VERDICTS + BANNERS + SCANNER_COPY:
         assert text in js, text
+
+
+def test_verdict_labels_verbatim_in_common():
+    common = _read("common.js")  # common.js alone: a label split across modules would not count
+    for text in VERDICTS:
+        assert f'"{text}"' in common, text
+
+
+def test_research_tab_copy():
+    js = _read("research.js")
+    for text in RESEARCH_COPY:
+        assert text in js, text
+    assert len(js.splitlines()) <= 250
+
+
+def test_charts_share_one_base_layout():
+    assert "export function baseLayout(" in _read("common.js")
+    for name in ("explorer.js", "research.js"):
+        assert "baseLayout()" in _read(name), name
+
+
+def test_no_mid_dot_outside_verdict_labels():
+    for name in (n for n in TEXT if n.endswith(".js")):
+        for i, line in enumerate(_read(name).splitlines(), 1):
+            if "·" in line:
+                assert any(v in line for v in MIDDOT_OK) or "VERDICT_TONES = [" in line, (name, i, line)

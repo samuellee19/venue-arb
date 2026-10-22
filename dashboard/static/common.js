@@ -1,4 +1,5 @@
-// Shared state, constants, copy and formatting helpers for the dashboard modules (app.js, scanner.js, explorer.js).
+// Shared state, constants, copy and formatting helpers for the dashboard modules (app.js, scanner.js, explorer.js,
+// research.js).
 // No edge, fee or basis logic here: every number comes from the bundle (dashboard/api/app.py serves it).
 export const REPO = "https://github.com/samuellee19/venue-arb";
 export const POLL_MS = 30000, STALE_S = 120, DEAD_S = 3600, BOOKS_S = 300;  // BOOKS_S = bundle.LIVE_MAX_AGE_S
@@ -49,5 +50,16 @@ export function settles(iso) {  // v1's long form, for the Explorer
   const when = iso.slice(0, 10) === new Date(now()).toISOString().slice(0, 10) ? hm(d) : day(d);
   if (ms <= 0) return `settled ${when}`;
   const m = Math.round(ms / 60000);
-  return `settles ${when} · in ${m >= 2880 ? `${Math.round(m / 1440)} d` : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")} m`}`;
+  return `settles ${when}, in ${m >= 2880 ? `${Math.round(m / 1440)} d` : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")} m`}`;
 }
+
+// one Plotly layout for every chart (Explorer, Research): Inter 13, 8-px margins, no modebar (PLOT_CFG); colours are
+// read from the CSS tokens at draw time, so a re-draw after a theme switch picks up the other theme
+export function baseLayout() {
+  const line = css("--line"), ax = {gridcolor: line, linecolor: line, zerolinecolor: line};
+  return {margin: {l: 48, r: 16, t: 16, b: 32}, paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)",
+    font: {family: "Inter, -apple-system, Segoe UI, sans-serif", size: 13, color: css("--mut")},
+    hoverlabel: {bgcolor: css("--panel"), bordercolor: line, font: {color: css("--txt"), size: 13}},
+    showlegend: false, hovermode: "closest", xaxis: {...ax}, yaxis: {...ax}, uirevision: "keep"};
+}
+export const PLOT_CFG = {displayModeBar: false, responsive: true};

@@ -44,7 +44,18 @@
     </table>
     <p class="foot" id="sfoot"></p>
   </section>
-  <section id="tab-explorer" hidden></section>
+  <section id="tab-explorer" hidden>
+    <div class="ex">
+      <aside class="pane list">
+        <div class="hd">
+          <input class="search" id="q" type="search" placeholder="Search pairs" aria-label="search pairs">
+          <label class="size" id="sizebox">size <input id="size" type="number" min="1" step="1" value="1000" inputmode="numeric"> contracts</label>
+        </div>
+        <div id="rows"></div>
+      </aside>
+      <div class="pane detail" id="detail"><div class="empty">Loading the live bundle</div></div>
+    </div>
+  </section>
   <section id="tab-research" hidden></section>
 </main>
 <footer id="foot"></footer>

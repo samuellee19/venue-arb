@@ -1,14 +1,10 @@
-// Explorer (v1 pair list + detail pane), moved verbatim from the v1 app.js by Task 5 and NOT imported yet:
-// Task 6 wires it into app.js (row -> select -> #explorer), re-skins it and replaces its v1 DOM ids.
-// The v1 helpers it used (v1 app.js:25-47, settles) now live in common.js; the v1 header/KPI/footer code is gone.
-import {$, esc, enc, num, usd, signed, cents, bpsOf, tone, css, pz, now, hm, day, seg, safeUrl, pairs, byKey, greyed,
-  label, legsTxt, settles, S, NOT_US} from "./common.js";
+// Explorer tab: the v1 pair list (collapsed ladder groups) and detail pane (verdict, cost panel, size re-walk, net-edge
+// chart with snapshot click), moved from the v1 app.js; behaviour unchanged, re-skinned to the v2 system.
+// app.js calls renderExplorer() when the tab is shown and on each poll while it is visible.
+import {$, esc, enc, num, usd, signed, cents, bpsOf, tone, css, pz, hm, seg, safeUrl, pairs, byKey, greyed,
+  label, legsTxt, settles, baseLayout, S, VERDICT_TONES, PLOT_CFG} from "./common.js";
 
 const NO_WALK = "size re-walk needs published books";
-// verdict label (prefix) -> badge tone; the labels venue_arb/bundle.verdict writes, plus the client-side US one
-const TONES = [["Exact match · no edge", "mut"], ["Executable edge", "pos"], ["Not an arbitrage · basis exposure", "warn"],
-  ["Spread · within basis bound · no edge", "mut"], ["No asks on one side", "neg"],
-  ["Stale · a leg has no snapshot in 5 min", "neg"], [NOT_US, "warn"]];
 const KIND = {exact: "exact", near_exact: "near-exact", ladder: "ladder"};
 const CHECK = {same_instant: "Same instant", exact_match: "Exact match", basis_bound: "Basis bound",
   fees_depth: "Fees & depth walked", jurisdiction: "Jurisdiction"};
@@ -16,6 +12,22 @@ const ICON = {ok: ["✓", "pos"], fail: ["✗", "neg"], partial: ["◐", "warn"]
 
 let hist = [];  // [{key, h}] history of the selected row and its other-direction sibling
 let walkTimer;
+let shown = {};  // the pair and bundle (computed_at) the detail pane was last built or refreshed for
+
+// v1 load(): a missing selection takes the default; a new bundle refreshes the detail. New in v2: a selection made on
+// the Scanner (S.sel set while this tab was hidden) is built here; an unchanged pane only re-draws (theme, resize).
+export function renderExplorer() {
+  const b = S.bundle;
+  $("size").disabled = !b.show_books;
+  $("size").title = $("sizebox").title = b.show_books ? "" : NO_WALK;
+  if (!S.sel || !byKey(S.sel)) select(defaultSel());
+  else if (S.sel !== shown.sel) {  // picked on the Scanner: open its ladder group so the row shows
+    if (byKey(S.sel).kind === "ladder") S.open.add(byKey(S.sel).ladder);
+    select(S.sel);
+  }
+  else { renderList(); if (b.computed_at !== shown.at) refreshDetail(); else drawChart(); }
+  shown = {sel: S.sel, at: b.computed_at};
+}
 
 // an edge in the chosen unit, the other unit small beneath (or beside, inside the cost box)
 function fig(c, bps) {
@@ -46,7 +58,7 @@ function renderList() {
   for (const [lad, rs] of groups) {
     const [asset, at] = lad.split("~"), open = S.open.has(lad);
     const strikes = new Set(rs.map(p => p.legs[0].market_id)).size;
-    html += `<div class="grp" data-g="${esc(lad)}">${open ? "▾" : "▸"} ${esc(asset)} · ${hm(new Date(at))} · ${strikes} strike${strikes === 1 ? "" : "s"}</div>`;
+    html += `<div class="grp" data-g="${esc(lad)}">${open ? "▾" : "▸"} ${esc(asset)} ${hm(new Date(at))}, ${strikes} strike${strikes === 1 ? "" : "s"}</div>`;
     if (open) html += rs.map(row).join("");
   }
   $("rows").innerHTML = html || `<div class="empty">No pair matches.</div>`;
@@ -54,8 +66,8 @@ function renderList() {
 
 function row(p) {
   return `<div class="row${p.key === S.sel ? " sel" : ""}${greyed(p) ? " grey" : ""}" data-k="${esc(p.key)}">`
-    + `<div><div class="n">${esc(p.title)} <span class="badge ${p.kind}">${KIND[p.kind]}</span></div>`
-    + `<div class="m">${settles(p.settles_at)} · ${legsTxt(p)}${p.live ? "" : " · stale"}</div></div>`
+    + `<div><div class="n">${esc(p.title)} <span class="kind k-${p.kind}">${KIND[p.kind]}</span></div>`
+    + `<div class="m"><span>${settles(p.settles_at)}</span><span>${legsTxt(p)}</span>${p.live ? "" : "<span>stale</span>"}</div></div>`
     + `<div class="e ${tone(p.net_edge_cents)}">${fig(p.net_edge_cents, p.net_edge_bps)}</div>${spark(p)}</div>`;
 }
 
@@ -76,6 +88,7 @@ function spark(p) {
 
 function select(key) {
   S.sel = key; S.snap = null; S.walk = null;
+  shown = {sel: key, at: S.bundle.computed_at};
   renderList();
   buildDetail();
 }
@@ -87,10 +100,10 @@ function buildDetail() {
   if (!S.sel) { $("detail").innerHTML = `<div class="empty">No pairs in this bundle.</div>`; return; }
   const ranges = ["1h", "24h", "7d", "all"].map(r => `<button data-r="${r}"${r === S.range ? ' class="on"' : ""}>${r.replace(/(\d+)/, "$1 ")}</button>`);
   $("detail").innerHTML = `<div id="dhead"></div><div id="boxes"></div>`
-    + `<div class="chart"><div class="tools"><h4>Net edge after fees · ¢ per contract · UTC</h4>`
+    + `<div class="chart"><div class="tools"><h4>Net edge after fees, ¢ per contract, UTC</h4>`
     + `<span class="seg" id="range">${ranges.join("")}</span><button class="chip${S.ann ? " on" : ""}" id="ann">annotations</button></div>`
-    + `<div id="plot"></div><div class="legend"><span>dashed red: +1¢ episode threshold</span><span>dotted: settlement · listing · basis change</span>`
-    + `<span>shaded: collector gap</span><span>▲ episode</span><span>${S.bundle.show_books ? "hover for the books" : "hover for the row's values"} · click a point to load that snapshot</span></div></div>`
+    + `<div id="plot"></div><div class="legend"><span>dashed red: +1¢ episode threshold</span><span>dotted: settlement, listing, basis change</span>`
+    + `<span>shaded: collector gap</span><span>▲ episode</span><span>${S.bundle.show_books ? "hover for the books" : "hover for the row's values"}</span><span>click a point to load that snapshot</span></div></div>`
     + `<div class="why" id="why"></div>`;
   $("range").onclick = e => {
     if (!e.target.dataset.r) return;
@@ -107,17 +120,17 @@ function refreshDetail() {
 }
 
 function renderHead() {
-  const p = byKey(S.sel), lab = label(p), t = TONES.find(([l]) => lab.startsWith(l))?.[1] ?? "mut";
+  const p = byKey(S.sel), lab = label(p), t = VERDICT_TONES.find(([l]) => lab.startsWith(l))?.[1] ?? "none";
   const legs = p.legs.map(l => {
     const k = l.venue === "kalshi", id = k ? l.market_id : l.url.split("/event/")[1] || l.market_id;
     return `<a class="leg" href="${esc(safeUrl(l.url))}" target="_blank" rel="noopener"><span class="sw" style="background:var(--${k ? "k" : "pm"})"></span>`
-      + `${k ? "Kalshi" : "Polymarket"} · buy ${l.side.toUpperCase()} <span class="id">${esc(id)}</span> <span class="ext">↗ ${k ? "kalshi.com" : "polymarket.com"}</span></a>`;
+      + `${k ? "Kalshi" : "Polymarket"}, buy ${esc(l.side.toUpperCase())} <span class="id">${esc(id)}</span> <span class="ext">↗ ${k ? "kalshi.com" : "polymarket.com"}</span></a>`;
   }).join("");
   const src = p.legs.map(l => l.settlement_source).filter(Boolean);
-  const checks = p.verdict.checks.map(c => `${CHECK[c.name].toLowerCase()} ${ICON[c.status][0]}`).join(" · ");
+  const checks = p.verdict.checks.map(c => `<span>${CHECK[c.name].toLowerCase()} ${ICON[c.status][0]}</span>`).join("");
   $("dhead").innerHTML = `<div class="title"><div><h2>${esc(p.title)}</h2><div class="legs">${legs}`
     + (src.length ? `<span class="leg mut">settles: ${src.map(esc).join(" ↔ ")}</span>` : "") + `</div></div>`
-    + `<div class="verdict"><div class="big ${t}">${esc(lab)}</div><div class="cd">${checks} · ${settles(p.settles_at)}</div></div></div>`;
+    + `<div class="verdict"><div class="big badge b-${t}">${esc(lab)}</div><div class="cd">${checks}<span>${settles(p.settles_at)}</span></div></div></div>`;
 }
 
 function renderWhy() {
@@ -135,15 +148,15 @@ function book(venue, side, levels, filled, empty = "no asks") {
   const rows = levels.map(l => {
     const hit = filled != null && cum < filled;
     cum += l.size;
-    return `<div class="lvl${hit ? " hit" : ""}"><span class="mono">${cents(100 * l.price)}</span><div class="bar">`
+    return `<div class="lvl${hit ? " hit" : ""}"><span class="mono">${cents(100 * l.price)}</span><div class="meter">`
       + `<i style="width:${100 * l.size / max}%;background:var(--${k ? "k" : "pm"}${hit ? "" : "2"})"></i></div>`
       + `<span class="mono" style="text-align:right">${num(l.size)}</span></div>`;
   }).join("");
-  return `<div class="box"><h4><span class="sw" style="background:var(--${k ? "k" : "pm"})"></span>${k ? "Kalshi" : "Polymarket"} · buy ${side.toUpperCase()}</h4>`
+  return `<div class="box"><h4><span class="sw" style="background:var(--${k ? "k" : "pm"})"></span>${k ? "Kalshi" : "Polymarket"}, buy ${esc(side.toUpperCase())}</h4>`
     + `${rows || `<div class="note">${empty}</div>`}<div class="legend"><span>contracts at each ask</span></div></div>`;
 }
 
-const capRow = p => r("Capacity at ≥ 1¢ net", `${num(p.capacity_contracts)} contracts · ${usd(p.capacity_usd)}`);
+const capRow = p => r("Capacity at ≥ 1¢ net", `${num(p.capacity_contracts)} contracts, ${usd(p.capacity_usd)}`);
 
 function costWalk(p) {  // books published: the fill at the chosen size from /api/walk
   const w = S.walk, [kl, pl] = p.legs;
@@ -154,8 +167,8 @@ function costWalk(p) {  // books published: the fill at the chosen size from /ap
   const pnl = f.net_cents * f.filled / 100;
   return r(`Kalshi ${kl.side.toUpperCase()} ask (avg over ${num(f.filled)})`, cents(100 * f.k_avg_price))
     + r(`Polymarket ${pl.side.toUpperCase()} ask (avg over ${num(f.filled)})`, cents(100 * f.pm_avg_price))
-    + r(`<span class="mut">Fees, both venues</span>`, `<span class="mut">+${cents(100 * f.fees_usd / f.filled)} · ${usd(f.fees_usd)}</span>`)
-    + r(`All-in, ${num(f.filled)} contracts`, `<span class="${tone(f.net_cents)}">${cents(100 * f.cost_usd / f.filled)} → ${fig(f.net_cents, f.net_bps)} · <b>${usd(pnl)}</b></span>`, "t")
+    + r(`<span class="mut">Fees, both venues</span>`, `<span class="mut">+${cents(100 * f.fees_usd / f.filled)}, ${usd(f.fees_usd)}</span>`)
+    + r(`All-in, ${num(f.filled)} contracts`, `<span class="${tone(f.net_cents)}">${cents(100 * f.cost_usd / f.filled)} → ${fig(f.net_cents, f.net_bps)}, <b>${usd(pnl)}</b></span>`, "t")
     + (f.insufficient_depth ? r(`<span class="warn">Insufficient visible depth</span>`, `<span class="warn">filled ${num(f.filled)} of ${num(f.requested)}</span>`) : "")
     + r(`<span class="mut">Cross-venue transfer: $10 + 10 bps</span>`, `<span class="mut">${usd(-f.transfer_cost_usd)}</span>`)
     + r("P&amp;L at size after transfer", `<span class="${pnl - f.transfer_cost_usd >= 0 ? "pos" : "neg"}">${usd(pnl - f.transfer_cost_usd)}</span>`, "t")
@@ -188,22 +201,22 @@ function renderBoxes() {
   const mid = (h, body, note = "") => `<div class="box"><h4>${h}</h4><div class="wf">${body}</div>${note}</div>`;
   if (S.snap) {
     const q = byKey(S.snap.key) ?? p, s = S.snap.row;
-    const note = `<div class="note">history: first ask level only · snapshot ${s.ts.slice(11, 19)}Z · ${legsTxt(q)} · <button id="golive">back to live</button></div>`;
+    const note = `<div class="note">history: first ask level only, snapshot ${s.ts.slice(11, 19)}Z, ${legsTxt(q)} <button id="golive">back to live</button></div>`;
     const lv = (a, z) => a == null ? [] : [{price: a, size: z ?? 0}];
     el.className = show ? "grid3" : "grid3 one";
     el.innerHTML = show
-      ? book("kalshi", q.legs[0].side, lv(s.k_ask, s.k_size), undefined, "no ask in this history row") + mid("Cost of both legs · per contract at this snapshot", costSnap(q, s), note)
+      ? book("kalshi", q.legs[0].side, lv(s.k_ask, s.k_size), undefined, "no ask in this history row") + mid("Cost of both legs, per contract at this snapshot", costSnap(q, s), note)
         + book("polymarket", q.legs[1].side, lv(s.pm_ask, s.pm_size), undefined, "no ask in this history row")
-      : mid("Derived at this snapshot · quotes not published", costSnap(q, s), note);
+      : mid("Derived at this snapshot, quotes not published", costSnap(q, s), note);
   } else if (show && p.books) {
     const filled = S.walk?.key === p.key ? S.walk.res?.filled : undefined;
     el.className = "grid3";
     el.innerHTML = book("kalshi", p.legs[0].side, p.books[0], filled)
-      + mid(`Cost of both legs · per contract and at <span class="mono" style="color:var(--txt)">${num(S.size)}</span>`, costWalk(p))
+      + mid(`Cost of both legs, per contract and at <span class="mono" style="color:var(--txt)">${num(S.size)}</span>`, costWalk(p))
       + book("polymarket", p.legs[1].side, p.books[1], filled);
   } else {
     el.className = "grid3 one";
-    el.innerHTML = mid("Cost of both legs · per contract, first slice", costDerived(p),
+    el.innerHTML = mid("Cost of both legs, per contract, first slice", costDerived(p),
       `<div class="note">Per-leg prices and sizes are not published (venue display terms, docs/venues.md); ${NO_WALK}.</div>`);
   }
 }
@@ -240,16 +253,16 @@ async function loadChart() {
 function hover(h, j) {
   const v = c => h[c]?.[j], net = v("net_edge_cents");
   const ask = (n, a, z) => a == null ? "" : `${n} ask ${cents(100 * a)} ×${z == null ? "?" : num(z)}`;
-  const asks = [ask("K", v("k_ask"), v("k_size")), ask("PM", v("pm_ask"), v("pm_size"))].filter(Boolean).join(" · ");
+  const asks = [ask("K", v("k_ask"), v("k_size")), ask("PM", v("pm_ask"), v("pm_size"))].filter(Boolean).join(", ");
   return `<b>${h.ts[j].slice(0, 16).replace("T", " ")} UTC</b><br>${asks || "asks not published"}<br>`
-    + `fees ${v("fees_cents") == null ? "—" : cents(v("fees_cents"))} · net ${net == null ? "—" : signed(net, 2, "¢")}`
-    + ` · capacity ≥ 1¢: ${v("capacity_usd") == null ? "—" : usd(v("capacity_usd"))}<br><i>click to load this snapshot</i>`;
+    + `fees ${v("fees_cents") == null ? "—" : cents(v("fees_cents"))}, net ${net == null ? "—" : signed(net, 2, "¢")}`
+    + `, capacity ≥ 1¢: ${v("capacity_usd") == null ? "—" : usd(v("capacity_usd"))}<br><i>click to load this snapshot</i>`;
 }
 
 function drawChart() {
   const el = $("plot");
   if (!el || !window.Plotly) return;
-  const mut = css("--mut"), grid = css("--line"), colors = [css("--pos"), mut];
+  const mut = css("--mut"), colors = [css("--pos"), mut];
   const traces = hist.filter(t => t.h.ts?.length).map((t, i) => ({
     type: "scatter", mode: "lines+markers", marker: {size: 3}, line: {color: colors[i], width: i ? 1.3 : 1.8},
     name: `net edge, ${legsTxt(byKey(t.key) ?? byKey(S.sel)).replace(" / ", " + ")}`,
@@ -264,11 +277,11 @@ function drawChart() {
   el.querySelector(":scope > .empty")?.remove();
   const xs = traces.flatMap(t => t.x).sort(), x0 = xs[0], x1 = xs.at(-1), keys = hist.map(t => t.key);
   const shapes = [{type: "line", xref: "paper", x0: 0, x1: 1, y0: 1, y1: 1, line: {color: css("--neg"), width: 1, dash: "dash"}}];
-  const notes = [{xref: "paper", x: 0, y: 1, yanchor: "bottom", xanchor: "left", text: "+1¢", showarrow: false, font: {size: 10, color: css("--neg")}}];
+  const notes = [{xref: "paper", x: 0, y: 1, yanchor: "bottom", xanchor: "left", text: "+1¢", showarrow: false, font: {size: 13, color: css("--neg")}}];
   if (S.ann) {
     let n = 0;
     const tag = (x, text, color = mut) => notes.push({x, y: 1 - 0.08 * (n++ % 4), xref: "x", yref: "paper", showarrow: false,
-      text: esc(text.length > 34 ? text.slice(0, 33) + "…" : text), hovertext: esc(text), xanchor: "left", yanchor: "top", font: {size: 10, color}});
+      text: esc(text.length > 34 ? text.slice(0, 33) + "…" : text), hovertext: esc(text), xanchor: "left", yanchor: "top", font: {size: 13, color}});
     // global notes (key null) only where they apply: settlement at this pair's instant, basis change on its ladder's asset
     const p = byKey(S.sel), asset = p.ladder?.split("~")[0];
     const mine = a => a.key != null ? keys.includes(a.key)
@@ -286,18 +299,16 @@ function drawChart() {
       tag(at, a.label, a.kind === "settlement" ? css("--warn") : mut);
     }
     for (const e of S.bundle.episodes.filter(e => keys.includes(e.key) && pz(e.start) >= x0 && pz(e.start) <= x1)) {
-      notes.push({x: pz(e.start), y: e.max_edge_cents, text: `▲ episode +${num(e.max_edge_cents, 1)}¢ · ${usd(e.median_capacity_usd)}`,
-        showarrow: true, arrowhead: 0, ax: 30, ay: 48, xanchor: "left", arrowcolor: css("--pos"), font: {size: 10, color: css("--pos")}});
+      notes.push({x: pz(e.start), y: e.max_edge_cents, text: `▲ episode +${num(e.max_edge_cents, 1)}¢, ${usd(e.median_capacity_usd)}`,
+        showarrow: true, arrowhead: 0, ax: 30, ay: 48, xanchor: "left", arrowcolor: css("--pos"), font: {size: 13, color: css("--pos")}});
     }
   }
+  const L = baseLayout();
   Plotly.react(el, traces, {
-    margin: {l: 44, r: 10, t: 16, b: 30}, paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)",
-    font: {color: mut, size: 11}, showlegend: true, legend: {orientation: "h", x: 0, y: -0.18}, hovermode: "closest",
-    hoverlabel: {bgcolor: css("--panel"), bordercolor: css("--on-line"), font: {color: css("--txt")}},
-    xaxis: {type: "date", gridcolor: grid, linecolor: grid, range: [x0, x1]},
-    yaxis: {gridcolor: grid, zerolinecolor: grid, ticksuffix: "¢"}, shapes, annotations: notes,
+    ...L, showlegend: true, legend: {orientation: "h", x: 0, y: -0.18},
+    xaxis: {...L.xaxis, type: "date", range: [x0, x1]}, yaxis: {...L.yaxis, ticksuffix: "¢"}, shapes, annotations: notes,
     uirevision: S.sel + S.range,  // the minute re-render keeps the user's zoom
-  }, {displayModeBar: false, responsive: true});
+  }, PLOT_CFG);
   if (!el.dataset.bound) {
     el.dataset.bound = "1";
     el.on("plotly_click", async ev => {
