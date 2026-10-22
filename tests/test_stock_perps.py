@@ -62,7 +62,13 @@ def test_score_walks_perp_bids_and_caps_on_stock_size():
     e = sp.score(replace(CTX, mark=215.0), BOOK, REF_SCHWAB)
     assert e.direction == "short_perp_long_stock" and e.basis_bps == pytest.approx(101.5, abs=0.1)
     assert e.capacity_usd == pytest.approx(min(63_855.0, sum(b.price * b.size for b in BIDS)), rel=1e-6)
-    assert e.net_bps == pytest.approx(e.basis_bps - e.perp_fee_bps - e.stock_spread_bps - e.funding_bps - e.borrow_bps)
+    fill_bps = (e.capacity_usd / e.capacity_contracts / e.reference - 1) * 1e4
+    assert e.net_bps == pytest.approx(fill_bps - e.perp_fee_bps - e.perp_spread_bps - e.stock_spread_bps - e.funding_bps - e.borrow_bps)
+    # hand-computed constant: the whole bid side fills (53,710 < 63,855), avg (214.9*100 + 214.8*150)/250 = 214.84
+    # fill 2/212.84 = 93.967 bps; fee 2e4*0.00009 = 1.8; perp exit half-spread 0.2/(2*215) = 4.651; stock spread
+    # 0.02/212.84 = 0.940; funding (short receives) -6.2e-6*24*1e4 = -1.488; borrow 0
+    assert e.net_bps == pytest.approx(93.9673 - 1.8 - 4.6512 - 0.9397 + 1.488, abs=1e-3) and e.net_bps == pytest.approx(88.0645, abs=1e-3)
+    assert e.perp_spread_bps == pytest.approx(4.6512, abs=1e-3)
 
 
 def test_score_stock_cap_binds_and_long_perp_side():
@@ -71,7 +77,8 @@ def test_score_stock_cap_binds_and_long_perp_side():
     e = sp.score(replace(CTX, mark=210.0), BOOK, REF_SCHWAB)  # mark below stock: long perp (walk asks), short stock
     assert e.direction == "long_perp_short_stock" and e.stock_cap_usd == pytest.approx(200 * 212.83)
     assert e.capacity_usd == pytest.approx(200 * 212.83)
-    assert e.net_bps == pytest.approx(-e.basis_bps - e.perp_fee_bps - e.stock_spread_bps - e.funding_bps - e.borrow_bps)
+    fill_bps = -(e.capacity_usd / e.capacity_contracts / e.reference - 1) * 1e4  # walked asks, long perp
+    assert e.net_bps == pytest.approx(fill_bps - e.perp_fee_bps - e.perp_spread_bps - e.stock_spread_bps - e.funding_bps - e.borrow_bps)
     assert e.borrow_bps > 0 and e.funding_bps > 0
 
 
@@ -83,6 +90,39 @@ def test_zero_stock_size_gives_zero_capacity():
 def test_oracle_reference_has_no_capacity_or_spread():
     e = sp.score(replace(CTX, mark=215.0), BOOK, REF_ORACLE)
     assert e.stock_spread_bps is None and e.capacity_usd == 0.0 and e.ref_kind == "oracle"
+    # nothing walked: entry at the best bid 214.9 vs oracle 212.81, then fee, exit half-spread, funding
+    assert e.net_bps == pytest.approx((214.9 / 212.81 - 1) * 1e4 - 1.8 - 4.6512 + 1.488, abs=1e-3)
+
+
+def test_one_sided_or_crossed_quote_falls_back_to_oracle():
+    fresh = NOW - timedelta(seconds=5)
+    for bid, ask in [(0.0, 212.85), (212.90, 212.85), (-1.0, 212.85)]:
+        q = Quote("NVDA", bid, ask, 200, 300, None, fresh)
+        assert sp.reference(CTX, q, LABEL_SCHWAB, NOW).kind == "oracle"
+    locked = Quote("NVDA", 212.85, 212.85, 200, 300, None, fresh)
+    assert sp.reference(CTX, locked, LABEL_SCHWAB, NOW).kind == "schwab"
+
+
+def test_zero_reference_is_absent_and_zero_oracle_gives_a_null_edge():
+    bad = replace(REF_SCHWAB, price=0.0, bid=0.0, ask=0.0)
+    e = sp.score(replace(CTX, mark=215.0), BOOK, bad)
+    assert e.ref_kind == "oracle" and e.reference == CTX.oracle
+    e = sp.score(replace(CTX, mark=215.0, oracle=0.0), BOOK, replace(REF_ORACLE, price=0.0))
+    assert e.basis_bps == 0.0 and e.net_bps == 0.0 and e.capacity_usd == 0.0 and e.capacity_contracts == 0.0
+
+
+def test_walk_perp_residue_does_not_take_a_dust_slice():
+    lv = [PerpLevel("bid", 0, 0.1, 3.0), PerpLevel("bid", 1, 0.2, 5.0)]
+    c, usd, _ = sp.walk_perp(lv, "bid", 0.1 * 3.0)
+    assert c == 3.0 and usd == pytest.approx(0.3)
+
+
+def test_gross_to_net_matches_a_fresh_score_and_rejects_zero_hold():
+    for mark in (215.0, 210.0):
+        a = sp.score(replace(CTX, mark=mark), BOOK, REF_SCHWAB)
+        assert sp.gross_to_net(a, 168) == pytest.approx(sp.score(replace(CTX, mark=mark), BOOK, REF_SCHWAB, hold_h=168).net_bps)
+    with pytest.raises(ValueError):
+        sp.gross_to_net(replace(a, hold_h=0), 24)
 
 
 def test_growth_mode_picks_the_fee_tier():
@@ -107,6 +147,6 @@ def test_episodes_from_edge_rows_use_ten_bps_rule():
 
 def test_edge_row_columns():
     r = sp.edge_row(NOW, E_OK, "v")
-    assert set(r) == {"ts", "symbol", "direction", "ref_kind", "reference", "mark", "basis_bps", "perp_fee_bps",
+    assert set(r) == {"ts", "symbol", "direction", "ref_kind", "reference", "mark", "basis_bps", "perp_fee_bps", "perp_spread_bps",
                       "stock_spread_bps", "funding_bps", "borrow_bps", "net_bps", "capacity_contracts",
                       "capacity_usd", "fee_version"}

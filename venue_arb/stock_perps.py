@@ -34,6 +34,7 @@ class StockPerpEdge:
     mark: float
     basis_bps: float
     perp_fee_bps: float
+    perp_spread_bps: float  # exit half-spread of the perp's top of book
     stock_spread_bps: float | None
     funding_bps: float  # signed cost: negative when the position receives funding
     borrow_bps: float
@@ -45,7 +46,9 @@ class StockPerpEdge:
 
 
 def reference(ctx: PerpCtx, quote: Quote | None, label: Label, now: datetime, max_age_s: int = REF_MAX_AGE_S) -> Reference:
-    if label.ref_kind == "schwab" and quote and now - quote.quote_time <= timedelta(seconds=max_age_s):
+    # a one-sided (bid 0) or crossed quote is not a price: fall back to the oracle
+    if (label.ref_kind == "schwab" and quote and 0 < quote.bid <= quote.ask
+            and now - quote.quote_time <= timedelta(seconds=max_age_s)):
         return Reference("schwab", quote.symbol, (quote.bid + quote.ask) / 2, quote.bid, quote.ask,
                          quote.bid_size, quote.ask_size, quote.quote_time)
     return Reference("oracle", ctx.symbol, ctx.oracle, None, None, None, None, now)
@@ -63,9 +66,9 @@ def walk_perp(levels: list[PerpLevel], side: Literal["bid", "ask"], cap_usd: flo
     """(contracts, usd, avg_price) down the ladder until cap_usd is spent; None = the whole displayed book."""
     contracts = usd = 0.0
     for lv in sorted((lv for lv in levels if lv.side == side), key=lambda lv: lv.level):
+        if cap_usd is not None and usd >= cap_usd:
+            break  # checked before `take`, so float residue cannot buy a dust slice of the next level
         take = lv.size if cap_usd is None else min(lv.size, (cap_usd - usd) / lv.price)
-        if take <= 0:
-            break
         contracts += take
         usd += take * lv.price
     return contracts, usd, usd / contracts if contracts else 0.0
@@ -85,29 +88,51 @@ def _net(side: Direction, basis: float, c: dict) -> float:
 
 def score(ctx: PerpCtx, book: list[PerpLevel], ref: Reference, *, hold_h: float = STOCK_PERP_HOLD_H,
           borrow_bps_yr: float = STOCK_PERP_BORROW_BPS_YR) -> StockPerpEdge:
+    """Net is taken from the walked average fill, not the mark: entry spread and depth are in it, the exit half-spread
+    is a cost line. `basis_bps` stays mark vs reference as the displayed basis."""
+    if ref.price <= 0:  # a zero reference is absent: use the oracle
+        ref = Reference("oracle", ctx.symbol, ctx.oracle, None, None, None, None, ref.asof)
+    if ref.price <= 0:
+        return StockPerpEdge(ctx.symbol, "long_perp_short_stock", ref.kind, ref.price, ctx.mark, 0.0, 0.0, 0.0, None,
+                             0.0, 0.0, 0.0, 0.0, 0.0, None, hold_h)
     basis = basis_bps(ctx.mark, ref.price)
     side = direction(basis)
+    short_perp = side == "short_perp_long_stock"
     spread = (ref.ask - ref.bid) / ref.price * 1e4 if ref.kind == "schwab" else None
     c = costs_bps(taker=HYPERLIQUID_TAKER["growth" if ctx.growth_mode else "standard"], spread_bps=spread,
                   funding_h=ctx.funding_h, borrow_bps_yr=borrow_bps_yr, hold_h=hold_h, side=side)
+    walked = "bid" if short_perp else "ask"
     if ref.kind != "schwab":
         cap = None  # an oracle price has no size: no capacity claim
         contracts = usd = 0.0
+        fill = None
     else:
-        cap = ref.ask_size * ref.ask if side == "short_perp_long_stock" else ref.bid_size * ref.bid
-        contracts, usd, _ = walk_perp(book, "bid" if side == "short_perp_long_stock" else "ask", cap)
-    return StockPerpEdge(ctx.symbol, side, ref.kind, ref.price, ctx.mark, basis, c["perp_fee"], spread,
-                         c["funding"], c["borrow"], _net(side, basis, c), contracts, usd, cap, hold_h)
+        cap = ref.ask_size * ref.ask if short_perp else ref.bid_size * ref.bid
+        contracts, usd, fill = walk_perp(book, walked, cap)
+    if not contracts:  # nothing walked: price the entry at the best level on that side, else the mark
+        top = sorted((lv for lv in book if lv.side == walked), key=lambda lv: lv.level)
+        fill = top[0].price if top else ctx.mark
+    bids = sorted((lv for lv in book if lv.side == "bid"), key=lambda lv: lv.level)
+    asks = sorted((lv for lv in book if lv.side == "ask"), key=lambda lv: lv.level)
+    perp_spread = (asks[0].price - bids[0].price) / (asks[0].price + bids[0].price) * 1e4 if bids and asks else 0.0
+    fill_bps = (1 if short_perp else -1) * basis_bps(fill, ref.price)
+    net = fill_bps - c["perp_fee"] - perp_spread - c["stock_spread"] - c["funding"] - c["borrow"]
+    return StockPerpEdge(ctx.symbol, side, ref.kind, ref.price, ctx.mark, basis, c["perp_fee"], perp_spread, spread,
+                         c["funding"], c["borrow"], net, contracts, usd, cap, hold_h)
 
 
 def gross_to_net(edge: StockPerpEdge, hold_h: float) -> float:
-    """Net bps had the position been held hold_h: funding and borrow scale with the hold, the rest does not."""
+    """Net bps had the position been held hold_h: funding and borrow scale with the hold; the fill, the perp fee,
+    the perp exit spread and the stock spread (all inside net_bps) do not."""
+    if edge.hold_h <= 0:
+        raise ValueError("edge.hold_h must be positive")
     return edge.net_bps - (edge.funding_bps + edge.borrow_bps) * (hold_h / edge.hold_h - 1)
 
 
 def edge_row(ts: datetime, e: StockPerpEdge, fee_version: str) -> dict:
     return {"ts": ts, "symbol": e.symbol, "direction": e.direction, "ref_kind": e.ref_kind, "reference": e.reference,
             "mark": e.mark, "basis_bps": e.basis_bps, "perp_fee_bps": e.perp_fee_bps,
+            "perp_spread_bps": e.perp_spread_bps,
             "stock_spread_bps": e.stock_spread_bps, "funding_bps": e.funding_bps, "borrow_bps": e.borrow_bps,
             "net_bps": e.net_bps, "capacity_contracts": e.capacity_contracts, "capacity_usd": e.capacity_usd,
             "fee_version": fee_version}

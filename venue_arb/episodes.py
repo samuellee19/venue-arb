@@ -58,7 +58,7 @@ def find(points: list[tuple[datetime, Edge]], close_time: datetime, *, kalshi_id
         if len(r) < min_snapshots:
             continue
         edges = [e for _, e in r]
-        if annualize:
+        if annualize is not None:
             ann = annualize(edges, r[-1][0])
         else:
             cost = median(e.capacity_usd / e.capacity_contracts for e in edges)

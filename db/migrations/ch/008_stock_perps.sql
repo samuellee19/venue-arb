@@ -70,6 +70,7 @@ CREATE TABLE IF NOT EXISTS venue_arb.stock_perp_edges (
     mark Float64,
     basis_bps Float64,
     perp_fee_bps Float64,
+    perp_spread_bps Nullable(Float64),
     stock_spread_bps Nullable(Float64),
     funding_bps Float64,
     borrow_bps Float64,
