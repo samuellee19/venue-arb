@@ -1,4 +1,5 @@
-"""Dashboard publisher: live.json every 60 s and one history Parquet per clock hour, pushed outbound with rsync.
+"""Dashboard publisher: live.json every 60 s, and per clock hour one history Parquet and the research summary (in
+live.json), pushed outbound with rsync.
 
     secrets uv run python -m venue_arb.publish                     # loop (dest from VENUE_ARB_PUBLISH_DEST)
     secrets uv run python -m venue_arb.publish history --hours 168  # backfill, hour by hour, idempotent
@@ -26,7 +27,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from venue_arb import bundle, config
-from venue_arb.bundle import Annotation, Basis, Episode, LiveBundle, Snap, pair_key
+from venue_arb.bundle import Annotation, Basis, Episode, LiveBundle, ResearchSummary, Snap, pair_key
 from venue_arb.config import BASIS_WINDOW_DAYS, PIPELINE_PREFIX
 from venue_arb.episodes import ALIGN_S
 from venue_arb.exact import eligible
@@ -53,6 +54,7 @@ HISTORY_KEEP = timedelta(days=HISTORY_DAYS + 1)
 LIVE_BYTES_BUDGET = 800_000  # real bundles are ~460 KB with ~215 pair rows; headroom for the research block
 HISTORY_LAG = timedelta(minutes=55)  # an hour is written once score (:40) and ladder_score (:50) have scored it
 GAP = timedelta(minutes=3)
+RESEARCH_TIMEOUT_WARN_S = 30  # the hourly research summary blocks one cycle; warn when it takes longer
 PUSH_TIMEOUT_S = 120  # rsync's --timeout covers stalled I/O, not a black-holed ssh connect
 OUT_DIR = Path("data/bundle")
 LIVE_TARGET, HISTORY_TARGET = "bundle/live.json", "bundle/history"
@@ -425,7 +427,21 @@ def tick(state: dict, readers: dict, now: datetime) -> LiveBundle:
     return bundle.build_live(now=now, exact_rows=exact, ladder_rows=ladder, basis=state["basis"],
                              episodes=ctx["episodes"], annotations=notes, kpi_inputs=ctx["kpi_inputs"],
                              attribution=ATTRIBUTION, caveats=CAVEATS,
-                             collector_last=max((b[0] for b in books.values()), default=None))
+                             collector_last=max((b[0] for b in books.values()), default=None),
+                             research=state.get("research"))
+
+
+def compute_research(readers: dict, now: datetime) -> ResearchSummary:
+    """The note's numbers reduced to the bundle's research block. Readers: research_inputs() -> note.load's dict,
+    review_labels() -> (labels of current-verdict reviews, newest reviewed_at)."""
+    from venue_arb.matching.review import precision
+    from venue_arb.report import note, research  # lazily: numpy off the import path, as load_context
+
+    s = note.summarize(**readers["research_inputs"](), generated_at=now)
+    labels, asof = readers["review_labels"]()
+    p, n = precision(labels)
+    return research.from_summary(s, review={"precision": p, "labels": n, "asof": asof} if n else None,
+                                 computed_at=now)
 
 
 def _dicts(cur) -> list[dict]:
@@ -465,53 +481,83 @@ def default_readers(db) -> dict:
         with db.pg() as conn:
             return load_context(conn, db.ch(), now)
 
+    def research_inputs():
+        from venue_arb.report import note
+
+        with db.pg() as conn:  # one connection for the whole load, closed on return
+            return note.load(conn, db.ch())
+
+    def review_labels():
+        from venue_arb.flows.review_cli import all_review_labels  # imports qa at module level
+
+        with db.pg() as conn:
+            return (all_review_labels(conn),
+                    conn.execute("SELECT max(reviewed_at) FROM venue_arb.reviews").fetchone()[0])
+
     return {"pairs": pairs, "ladders": ladders, "listings": listings, "series_fee": kalshi.fetch_series,
-            "books": books, "context": context}
+            "books": books, "context": context, "research_inputs": research_inputs, "review_labels": review_labels}
+
+
+def cycle(state: dict, readers: dict, out_dir: Path, dest: str | None, now: datetime, *, checks, db=None,
+          write=write_atomic, push=push, clock=time.monotonic) -> list:
+    """One loop iteration, in order: tick -> live.json -> push -> due history hours -> research (once per
+    history_hour, so the summary lands in the next tick's bundle). Each step after the push has its own try, so its
+    failure never stops live.json. Returns the qa results of failed steps; the last good bundle, push outcomes and
+    cycle seconds go to state ("live", "pushes", "cycles") for _results."""
+    pending = []
+    started = clock()
+    try:
+        live = tick(state, readers, now)
+        data = live.model_dump_json().encode()
+        state["live"], state["live_bytes"] = live, len(data)
+        write(out_dir / "live.json", data)
+        if dest:  # history files written below go out with the next tick's push
+            state.setdefault("pushes", []).append(push(out_dir, dest))
+        state.setdefault("cycles", []).append(clock() - started)
+    except Exception as e:
+        log.exception("publish cycle failed")
+        pending.append(checks.Result("cycle_exception", False, detail=type(e).__name__, target=PIPELINE))
+    try:
+        if due := history_due(out_dir, now, state.get("history_hour")):
+            with db.pg() as conn:
+                sides = load_sides(conn)
+            ch = db.ch()
+            for hour in due:
+                write_history_hour(ch, out_dir, hour, sides)
+            state["history_hour"] = history_hour(now)
+            prune_history(out_dir, now)
+            pending += _history_results(checks, out_dir, now)
+    except Exception as e:
+        log.exception("history write failed")
+        pending.append(checks.Result("history_exception", False, detail=type(e).__name__, target=HISTORY_TARGET))
+    if history_hour(now) != state.get("research_hour"):
+        t0 = clock()
+        try:  # a failure keeps the previous summary and retries next cycle
+            state["research"] = compute_research(readers, now)
+            state["research_hour"], state["research_seconds"] = history_hour(now), clock() - t0
+        except Exception:
+            log.exception("research summary failed, keeping the previous one")
+            state["research_failed"] = state.get("research_failed", 0) + 1
+    return pending
 
 
 def run_forever(out_dir: Path, dest: str | None, interval_s: int = INTERVAL_S) -> None:
     from qa import checks, db, store
 
-    readers, state, n = default_readers(db), {}, 0
-    live, pending, cycles, pushes = None, [], [], []  # pushes: True/False per attempted push since the last record
+    readers, state, n, pending = default_readers(db), {}, 0, []
     out_dir.mkdir(parents=True, exist_ok=True)
     if not dest:
         log.warning("VENUE_ARB_PUBLISH_DEST unset: writing %s locally, no push", out_dir)
     while True:
         started = time.monotonic()
         n += 1
-        now = datetime.now(UTC)
-        try:
-            live = tick(state, readers, now)
-            data = live.model_dump_json().encode()
-            state["live_bytes"] = len(data)
-            write_atomic(out_dir / "live.json", data)
-            if dest:  # history files written below go out with the next tick's push
-                pushes.append(push(out_dir, dest))
-            cycles.append(time.monotonic() - started)
-        except Exception as e:
-            log.exception("publish cycle failed")
-            pending.append(checks.Result("cycle_exception", False, detail=type(e).__name__, target=PIPELINE))
-        try:  # separate: a history failure never stops live.json
-            if due := history_due(out_dir, now, state.get("history_hour")):
-                with db.pg() as conn:
-                    sides = load_sides(conn)
-                ch = db.ch()
-                for hour in due:
-                    write_history_hour(ch, out_dir, hour, sides)
-                state["history_hour"] = history_hour(now)
-                prune_history(out_dir, now)
-                pending += _history_results(checks, out_dir, now)
-        except Exception as e:
-            log.exception("history write failed")
-            pending.append(checks.Result("history_exception", False, detail=type(e).__name__,
-                                         target=HISTORY_TARGET))
+        pending += cycle(state, readers, out_dir, dest, datetime.now(UTC), checks=checks, db=db)
         try:
             if n % RECORD_EVERY == 0:
-                results = pending + _results(checks, live, state, pushes, cycles, interval_s)
+                results = pending + _results(checks, state, interval_s)
                 with db.pg() as conn:
                     store.record(conn, PIPELINE, str(uuid.uuid4()), results)
-                pending, cycles, pushes = [], [], []
+                pending, state["pushes"], state["cycles"] = [], [], []
         except Exception:
             log.exception("qa record failed")
         time.sleep(max(0.0, interval_s - (time.monotonic() - started)))
@@ -526,9 +572,9 @@ def _history_results(checks, out_dir: Path, now: datetime) -> list:
                           target=HISTORY_TARGET)]
 
 
-def _results(checks, live: LiveBundle | None, state: dict, pushes: list[bool], cycles: list[float],
-             interval_s: int) -> list:
-    out = []
+def _results(checks, state: dict, interval_s: int) -> list:
+    """qa results since the last record. state["pushes"]: True/False per attempted push; state["cycles"]: seconds."""
+    live, pushes, cycles, out = state.get("live"), state.get("pushes", []), state.get("cycles", []), []
     if live is not None:  # the last good bundle: a stale one fails bundle_fresh
         out.append(replace(checks.expect_rows(len(live.pairs), LIVE_TARGET), check="bundle_pairs",
                            detail=f"{len(live.pairs)} pair rows; skipped {state.get('skipped')}"))
@@ -542,6 +588,14 @@ def _results(checks, live: LiveBundle | None, state: dict, pushes: list[bool], c
     out.append(checks.Result("refresh_failed", not errs, len(errs), 0,
                              f"{len(errs)} refreshes failed, previous pairs kept: {sorted(set(errs))}",
                              severity="warn", target=LIVE_TARGET))
+    failed = state.pop("research_failed", 0)
+    out.append(checks.Result("research_failed", not failed, failed, 0,
+                             f"{failed} research computations failed, previous summary kept", severity="warn",
+                             target=LIVE_TARGET))
+    if (secs := state.pop("research_seconds", None)) is not None:  # only when one ran since the last record
+        out.append(checks.Result("research_seconds", secs <= RESEARCH_TIMEOUT_WARN_S, round(secs, 1),
+                                 RESEARCH_TIMEOUT_WARN_S, f"research summary took {secs:.1f}s", severity="warn",
+                                 target=LIVE_TARGET))
     if pushes:
         bad = pushes.count(False)
         out.append(checks.Result("push", bad == 0, bad, 0, f"{bad}/{len(pushes)} pushes failed", target=LIVE_TARGET))

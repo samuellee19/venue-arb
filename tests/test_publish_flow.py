@@ -33,3 +33,20 @@ def test_tick_on_live_readers_and_history_hour(tmp_path):
           f"7d projection={size * publish.HISTORY_DAYS * 24 / 1e6:.1f} MB")
     assert pq.read_metadata(path).num_rows == edges + ladder
     assert size < publish.HISTORY_SIZE_BUDGET_MB * 1e6
+
+
+def test_compute_research_live():
+    import time
+
+    from qa import db
+
+    from venue_arb import publish
+    from venue_arb.bundle import ResearchSummary
+
+    started = time.monotonic()
+    r = publish.compute_research(publish.default_readers(db), datetime.now(UTC))
+    seconds = time.monotonic() - started
+    j = r.model_dump_json()
+    print(f"research: {seconds:.1f}s snapshots={r.snapshots} pairs={r.pairs_eligible} review={r.review} bytes={len(j)}")
+    ResearchSummary.model_validate_json(j)
+    assert r.snapshots > 0 and len(j) < 150_000

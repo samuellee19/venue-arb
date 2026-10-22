@@ -273,3 +273,77 @@ def test_episodes_7d_counts_open_episode():
     scope = {("K1", "P1"): {"exact": True, "bad_review": False}, ("K1", "P2"): {"exact": True, "bad_review": True}}
     kept = publish.scope_episodes(rows, scope)
     assert [(r["source"], r["kalshi_id"], r["pm_id"]) for r in kept] == [("pair", "K1", "P1"), ("ladder", "KX9", "P1")]
+
+
+# a stand-in for qa.checks (unit tests run without the platform): Result keeps what _results passes
+CHECKS = SimpleNamespace(Result=lambda check, passed, observed=None, threshold=None, detail="", **kw: SimpleNamespace(
+    check=check, passed=passed, observed=observed, threshold=threshold, detail=detail, **kw))
+
+
+def research_readers(calls: list, fail=None, slow=None):
+    from tests.test_note import edge, episode, pair, screened
+
+    def inputs():
+        calls.append("research")
+        if slow:
+            slow()
+        if fail:
+            raise ConnectionError("pg down")
+        return {"pairs": [pair()], "screened_rows": [screened()], "edge_rows": [edge()], "episodes": [episode()]}
+
+    return readers() | {"research_inputs": inputs, "review_labels": lambda: (["correct", "correct", "unsure"], NOW)}
+
+
+def _cycle(state, rd, tmp_path, now, calls, clock=None):
+    return publish.cycle(state, rd, tmp_path, "u@h:./", now, checks=CHECKS,
+                         write=lambda path, data: calls.append(("write", path.name, data)),
+                         push=lambda src, dest: calls.append("push") or True,
+                         **({"clock": clock} if clock else {}))
+
+
+def test_research_runs_after_push_on_hour_change(tmp_path):
+    calls, state = [], {"history_hour": publish.history_hour(NOW)}  # no history due: these tests have no db
+    rd = research_readers(calls)
+    assert _cycle(state, rd, tmp_path, NOW, calls) == []
+    assert [c if isinstance(c, str) else c[:2] for c in calls] == [("write", "live.json"), "push", "research"]
+    assert LiveBundle.model_validate_json(calls[0][2]).research is None  # computed after this tick's push
+    r = state["research"]
+    assert r.computed_at == NOW and r.snapshots == 1 and r.review == {"precision": 1.0, "labels": 2, "asof": NOW}
+    assert state["research_hour"] == publish.history_hour(NOW)
+    calls.clear()
+    _cycle(state, rd, tmp_path, NOW + timedelta(minutes=1), calls)  # same hour: no recompute; the bundle carries it
+    assert "research" not in calls  # compare as JSON: review's datetime comes back as a string (test_research)
+    assert LiveBundle.model_validate_json(calls[0][2]).research.model_dump_json() == r.model_dump_json()
+    calls.clear()
+    later = NOW + timedelta(hours=1)
+    state["history_hour"] = publish.history_hour(later)
+    _cycle(state, rd, tmp_path, later, calls)
+    assert calls[-1] == "research" and state["research"].computed_at == later
+
+
+def test_research_failure_keeps_previous(tmp_path):
+    calls, state = [], {"history_hour": publish.history_hour(NOW)}
+    _cycle(state, research_readers(calls), tmp_path, NOW, calls)
+    good = state["research"]
+    later = NOW + timedelta(hours=1)
+    state["history_hour"] = publish.history_hour(later)
+    assert _cycle(state, research_readers(calls, fail=True), tmp_path, later, calls) == []
+    assert state["research"] is good and state["research_hour"] == publish.history_hour(NOW)
+    del state["live"]  # bundle checks need qa.checks' expect_* helpers; only the research results matter here
+    [res] = [r for r in publish._results(CHECKS, state, 60) if r.check == "research_failed"]
+    assert (res.passed, res.observed, res.severity) == (False, 1, "warn")
+    assert res.detail == "1 research computations failed, previous summary kept"
+    assert "research_seconds" not in {r.check for r in publish._results(CHECKS, state, 60)}  # none ran since
+    [ok] = [r for r in publish._results(CHECKS, state, 60) if r.check == "research_failed"]
+    assert ok.passed and ok.observed == 0  # counted since the last record only
+
+
+def test_research_seconds_warn(tmp_path):
+    t = [0.0]
+    calls, state = [], {"history_hour": publish.history_hour(NOW)}
+    rd = research_readers(calls, slow=lambda: t.__setitem__(0, t[0] + publish.RESEARCH_TIMEOUT_WARN_S + 1))
+    _cycle(state, rd, tmp_path, NOW, calls, clock=lambda: t[0])
+    del state["live"]
+    [res] = [r for r in publish._results(CHECKS, state, 60) if r.check == "research_seconds"]
+    assert (res.passed, res.observed, res.severity) == (False, publish.RESEARCH_TIMEOUT_WARN_S + 1, "warn")
+    assert publish.RESEARCH_TIMEOUT_WARN_S == 30
