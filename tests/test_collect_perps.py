@@ -46,7 +46,7 @@ def fresh():
 def test_tick_fills_three_buffers_and_quotes_once():
     buf, stats = fresh()
     calls = []
-    perps = cp.tick(None, LABELS, lambda: CTXS, lambda s: (NOW, BOOK), lambda syms: calls.append(syms) or QUOTES,
+    perps = cp.tick(None, LABELS, lambda: CTXS, lambda s: (NOW - timedelta(seconds=2), BOOK), lambda syms: calls.append(syms) or QUOTES,
                     buf, stats, NOW)
     assert calls == [["NVDA", "AAPL"]] and len(buf["ctx"]) == 3 and len(buf["books"]) == 3 * len(BOOK)
     assert {r["symbol"] for r in buf["refs"]} == {"xyz:NVDA", "xyz:AAPL"}
@@ -55,6 +55,7 @@ def test_tick_fills_three_buffers_and_quotes_once():
     assert stats["unlabelled"] == ["xyz:NEWCO"] and stats["books"] == [3, 0, 0] and stats["ctx"] == [1, 0, 0]
     aapl = next(r for r in buf["ctx"] if r["symbol"] == "xyz:AAPL")
     assert aapl["mid"] is None and aapl["growth_mode"] == 1
+    assert {r["ts"] for k in ("books", "ctx", "refs") for r in buf[k]} == {NOW}  # one tick time across the tables
     assert set(buf["books"][0]) == set(cp.CONTRACTS["books"]) and set(buf["ctx"][0]) == set(cp.CONTRACTS["ctx"])
     assert set(buf["refs"][0]) == set(cp.CONTRACTS["refs"])
 

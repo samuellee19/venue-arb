@@ -34,11 +34,11 @@ NULLABLE = {"books": frozenset(), "ctx": frozenset({"mid", "premium"}), "refs": 
 WARN_TOKEN_LEFT = timedelta(hours=24)
 
 
-def _book_rows(fetch_book, symbol: str):
-    """(rows, None) or (None, error type); rows carry the venue's own book time."""
+def _book_rows(fetch_book, now: datetime, symbol: str):
+    """(rows, None) or (None, error type); rows carry the tick time, shared with the ctx and refs rows."""
     try:
-        ts, levels = fetch_book(symbol)
-        return [{"ts": ts, "symbol": symbol, "side": lv.side, "level": lv.level, "price": lv.price, "size": lv.size}
+        _, levels = fetch_book(symbol)  # the venue's book time is dropped: the table has no column for it
+        return [{"ts": now, "symbol": symbol, "side": lv.side, "level": lv.level, "price": lv.price, "size": lv.size}
                 for lv in levels], None
     except Exception as e:  # noqa: BLE001 — one bad book must not stop the loop
         return None, type(e).__name__
@@ -96,7 +96,7 @@ def tick(perps: list[PerpCtx] | None, labels: dict, fetch_ctxs, fetch_book, quot
         buf["ctx"] += [_ctx_row(c, now) for c in perps]
     perps = perps or []
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        results = pool.map(partial(_book_rows, fetch_book), [c.symbol for c in perps])
+        results = pool.map(partial(_book_rows, fetch_book, now), [c.symbol for c in perps])
         for c, (rows, err) in zip(perps, results, strict=True):
             stats["books"][0] += 1
             if err:
@@ -191,7 +191,7 @@ def run_forever(interval_s: int = SNAPSHOT_INTERVAL_S, flush_every: int = 5) -> 
             cycles.append(time.monotonic() - started)
             if n % flush_every == 0:
                 with obs.run("venue-arb.perps"):
-                    flush(buf, loader_for, record, lambda: sql.run_all(pattern="stock_perp_*.sql", directory=SQL_CHECKS),
+                    flush(buf, loader_for, record, lambda: sql.run_all(pattern="stock_perp_books_fresh.sql", directory=SQL_CHECKS),
                           checks, stats, issued_at, datetime.now(UTC), cycles, interval_s)
                 cycles.clear()
         except Exception:
