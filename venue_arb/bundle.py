@@ -134,7 +134,10 @@ class ResearchLadderSeries(_M):
 
 class ResearchSummary(_M):
     computed_at: datetime
-    window_start: datetime | None
+    window_start: datetime | None  # executable tier: first order-book snapshot in scope
+    screened_start: datetime | None  # screened tier: first and last hourly row
+    screened_end: datetime | None
+    ladder_start: datetime | None  # ladder tier: first aligned snapshot
     headline: list[str]  # 2-3 sentences, numbers already formatted, publisher-owned
     pairs_eligible: int
     pairs_reviewed: int
@@ -152,6 +155,7 @@ class ResearchSummary(_M):
     ladder_violations: int
     ladder_scored: int
     basis: dict[str, Basis]
+    basis_q: float  # the basis bound's quantile (basis.BASIS_Q); the client words it as a percentile
     review: dict | None  # {"precision": float, "labels": int, "asof": datetime} or None
     exec_hourly: ResearchSeries  # max net edge (¢) per hour over all scoped pairs, whole history
     screened_hist: ResearchHist  # net-gap histogram, 1¢ bins, 23 edges -11..11 (end bins open: < -10¢, >= +10¢)
@@ -171,8 +175,8 @@ class LiveBundle(_M):
     annotations: list[Annotation]
     attribution: list[str]
     caveats: list[str]
-    categories: dict[str, str]  # category slug -> display name
-    research: ResearchSummary | None
+    categories: dict[str, str] = {}  # category slug -> display name
+    research: ResearchSummary | None = None
 
 
 def roi(net_edge_cents: float | None) -> float | None:

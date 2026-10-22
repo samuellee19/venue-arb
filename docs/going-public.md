@@ -25,3 +25,5 @@ Before the repo's visibility changes (Sam's action, after every box is ticked). 
 - [ ] **Serve from a domain or `<ip>.sslip.io`** (Let's Encrypt) before linking from a resume: a bare IP shows a
   self-signed warning.
 - [ ] **Repo links the page.** Replace the `https://<server>` placeholder under "Live dashboard" in `README.md` with the deployed URL, and check that it opens.
+- [ ] **Backlog (2026-10-22): decimate `exec_hourly` to daily past 60 days** (research section passes 150 KB around
+  early Feb 2027; `research_bytes` warns).

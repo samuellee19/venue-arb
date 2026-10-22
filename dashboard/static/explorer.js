@@ -1,8 +1,8 @@
 // Explorer tab: the v1 pair list (collapsed ladder groups) and detail pane (verdict, cost panel, size re-walk, net-edge
 // chart with snapshot click), moved from the v1 app.js; behaviour unchanged, re-skinned to the v2 system.
 // app.js calls renderExplorer() when the tab is shown and on each poll while it is visible.
-import {$, esc, enc, num, usd, signed, cents, bpsOf, tone, css, pz, hm, seg, safeUrl, pairs, byKey, greyed,
-  label, legsTxt, settles, baseLayout, S, VERDICT_TONES, PLOT_CFG} from "./common.js";
+import {$, esc, enc, num, usd, signed, cents, bpsOf, tone, css, pz, hm, seg, safeUrl, pairs, byKey,
+  legsTxt, settles, baseLayout, S, VERDICT_TONES, PLOT_CFG} from "./common.js";
 
 const NO_WALK = "size re-walk needs published books";
 const KIND = {exact: "exact", near_exact: "near-exact", ladder: "ladder"};
@@ -47,8 +47,7 @@ const flatRows = ps => ps.filter(p => p.kind !== "ladder" || p.net_edge_cents >=
 
 function renderList() {
   const q = S.q.trim().toLowerCase();
-  const ps = pairs().filter(p => (S.cat === "all" || p.category === S.cat)
-    && (!q || [p.title, p.key, ...p.legs.map(l => l.title)].join(" ").toLowerCase().includes(q)));
+  const ps = pairs().filter(p => !q || [p.title, p.key, ...p.legs.map(l => l.title)].join(" ").toLowerCase().includes(q));
   let html = flatRows(ps).map(row).join("");
   const groups = new Map();
   for (const p of ps.filter(p => p.kind === "ladder").sort(byEdge)) {
@@ -65,7 +64,7 @@ function renderList() {
 }
 
 function row(p) {
-  return `<div class="row${p.key === S.sel ? " sel" : ""}${greyed(p) ? " grey" : ""}" data-k="${esc(p.key)}">`
+  return `<div class="row${p.key === S.sel ? " sel" : ""}" data-k="${esc(p.key)}">`
     + `<div><div class="n">${esc(p.title)} <span class="kind k-${p.kind}">${KIND[p.kind]}</span></div>`
     + `<div class="m"><span>${settles(p.settles_at)}</span><span>${legsTxt(p)}</span>${p.live ? "" : "<span>stale</span>"}</div></div>`
     + `<div class="e ${tone(p.net_edge_cents)}">${fig(p.net_edge_cents, p.net_edge_bps)}</div>${spark(p)}</div>`;
@@ -120,7 +119,7 @@ function refreshDetail() {
 }
 
 function renderHead() {
-  const p = byKey(S.sel), lab = label(p), t = VERDICT_TONES.find(([l]) => lab.startsWith(l))?.[1] ?? "none";
+  const p = byKey(S.sel), lab = p.verdict.label, t = VERDICT_TONES.find(([l]) => lab.startsWith(l))?.[1] ?? "none";
   const legs = p.legs.map(l => {
     const k = l.venue === "kalshi", id = k ? l.market_id : l.url.split("/event/")[1] || l.market_id;
     return `<a class="leg" href="${esc(safeUrl(l.url))}" target="_blank" rel="noopener"><span class="sw" style="background:var(--${k ? "k" : "pm"})"></span>`

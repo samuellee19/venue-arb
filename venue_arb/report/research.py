@@ -3,6 +3,7 @@ from datetime import datetime
 
 import numpy as np
 
+from venue_arb.basis import BASIS_Q
 from venue_arb.bundle import Basis, ResearchHist, ResearchLadderSeries, ResearchSeries, ResearchSummary
 from venue_arb.config import BASIS_WINDOW_DAYS
 from venue_arb.report import copy
@@ -44,16 +45,21 @@ def from_summary(s: dict, *, review: dict | None, computed_at: datetime) -> Rese
     max_edge = f"{100 * ex['best_edge_max']:.1f}¢" if ex["best_edge_max"] is not None else "—"
     headline = [
         copy.HEADLINE["question"],
-        copy.HEADLINE["answer"].format(pairs=_n(s["pairs"]["eligible"], "exact pair"),
+        # pairs with snapshots in scope, the pairs the snapshots and episodes come from (not every eligible pair)
+        copy.HEADLINE["answer"].format(pairs=_n(ex["pairs"], "exact pair"),
                                        snapshots=_n(ex["snapshots"], "order-book snapshot"), since=since,
                                        max_edge=max_edge, episodes=_n(ex["episodes"], "episode"),
                                        us_episodes=f"{s['jurisdiction']['us_episodes']:,}"),
-        copy.HEADLINE["ladders"].format(violations=f"{lad['pos_counted']:,}", checks=f"{lad['admissible_checks']:,}")
-        if lad["admissible_checks"] is not None else copy.HEADLINE["ladders_none"],
+        (copy.HEADLINE["ladders"].format(violations=f"{lad['pos_counted']:,}", checks=f"{lad['admissible_checks']:,}")
+         if lad["admissible_checks"] is not None else copy.HEADLINE["ladders_none"])
+        + (copy.HEADLINE["ladder_episodes"].format(episodes=_n(lad["episodes"], "episode")) if lad["episodes"] else ""),
     ]
     return ResearchSummary(
         computed_at=computed_at,
         window_start=ex["start"],
+        screened_start=sc["start"],
+        screened_end=sc["end"],
+        ladder_start=lad["start"],
         headline=headline,
         pairs_eligible=s["pairs"]["eligible"],
         pairs_reviewed=s["pairs"]["reviewed"],
@@ -73,6 +79,7 @@ def from_summary(s: dict, *, review: dict | None, computed_at: datetime) -> Rese
         # an asset below LADDER_MIN_BASIS hours has no bound (its ladders are not scored), so it is left out
         basis={a: Basis(up=v["up"], down=v["down"], window_days=BASIS_WINDOW_DAYS, asof=computed_at)
                for a, v in lad["basis"].items() if v["up"] is not None},
+        basis_q=BASIS_Q,
         review=review,
         exec_hourly=_exec_hourly(ex["series"]),
         screened_hist=_screened_hist(sc["values"]),

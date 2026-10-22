@@ -55,9 +55,9 @@ const exampleRow = () => `<tr class="example" data-example><td><span class="titl
 
 export function renderScanner() {
   const b = S.bundle, k = b.kpis, {rows, counts, example} = scannerRows(b.pairs, S);
-  const cats = Object.keys({...b.categories, ...counts}).filter(c => c !== "all");
+  const cats = Object.keys({...b.categories, ...counts}).filter(c => c !== "all" && counts[c]);  // only categories present
   $("chips").innerHTML = [["all", "All"], ...cats.map(c => [c, b.categories[c] ?? c])]
-    .map(([c, name]) => `<button class="chip${c === S.cat ? " on" : ""}" data-c="${esc(c)}">${esc(name)} <span>${counts[c] ?? 0}</span></button>`).join("");
+    .map(([c, name]) => `<button class="chip${c === S.cat ? " on" : ""}" data-c="${esc(c)}">${esc(name)} <span>${counts[c]}</span></button>`).join("");
   $("usban").hidden = !usBlocked();
   $("usban").textContent = US_BANNER;
   $("srows").innerHTML = (rows.map(row).join("") || `<tr><td colspan="7" class="mut">No pair in this category.</td></tr>`)

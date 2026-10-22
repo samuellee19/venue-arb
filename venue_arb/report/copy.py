@@ -4,15 +4,19 @@ METHOD is shipped in the bundle by the publisher; `note.render` uses `edge` and 
 equivalent method sentences (`matching` and `not_shown` have no equivalent in the note), so both say the same thing.
 HEADLINE holds str.format templates the reducer (`venue_arb.report.research`) fills.
 """
+from venue_arb.basis import BASIS_Q
 from venue_arb.config import BASIS_WINDOW_DAYS
+
+PERCENTILE = f"{100 * BASIS_Q:g}th percentile"  # 0.999 -> "99.9th percentile"
 
 METHOD: dict[str, str] = {
     "matching": (
         "Candidate pairs are proposed within a category, by a deterministic rule for Fed rate brackets and by "
         "embedding similarity of the market text for everything else. Each candidate is then judged, Fed brackets "
         "by that fixed rule and every other pair by a language model, on whether both markets resolve on the same "
-        "event, outcome, decision date and authority. A sample of verdicts is checked by hand at review sittings; "
-        "the latest sitting's precision is shown with these figures."),
+        "event, outcome, decision date and authority. Crypto price ladders are matched by a deterministic parser of "
+        "the asset, strike and settlement instant, not by the language model. A sample of verdicts is checked by "
+        "hand at review sittings; the precision shown with these figures covers every review of a current verdict."),
     "edge": (
         "Prices come from our own snapshots of both venues' order books, taken every 60 seconds, not from last "
         "trades or midpoints. For each exact pair we buy Yes on one venue and No on the other, walking up both "
@@ -22,7 +26,7 @@ METHOD: dict[str, str] = {
     "crypto": (
         "Both venues list Bitcoin and Ethereum price ladders, but they settle on different price indexes, so only "
         "ladders that settle at the same instant are compared. A Kalshi strike against a different Polymarket "
-        "strike counts only when the gap between the two strikes is at least the 99.9th percentile of the "
+        f"strike counts only when the gap between the two strikes is at least the {PERCENTILE} of the "
         f"difference between the two settlement indexes over the past {BASIS_WINDOW_DAYS} days. Then at least one "
         "leg pays out in every state, as long as the indexes stay within that measured range."),
     "not_shown": (
@@ -43,6 +47,5 @@ HEADLINE: dict[str, str] = {
                 "edge of at least 1¢."),
     "ladders_none": ("On same-instant crypto ladders there are no counted hours yet, so no admissible checks to "
                      "report."),
+    "ladder_episodes": " On ladders, {episodes} met the same episode rule.",  # appended when there are any
 }
-
-NOT_COMPUTED = "research summary not computed yet"

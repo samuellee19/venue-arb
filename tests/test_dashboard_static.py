@@ -2,6 +2,9 @@ import hashlib
 import re
 from pathlib import Path
 
+from venue_arb.bundle import Pair, ResearchSummary
+from venue_arb.report import copy
+
 STATIC = Path(__file__).parent.parent / "dashboard" / "static"
 TEXT = ("index.html", "styles.css", *sorted(p.name for p in STATIC.glob("*.js") if p.name != "plotly-basic.min.js"))
 VERDICTS = ("Exact match · no edge", "Executable edge", "Not an arbitrage · basis exposure",
@@ -110,5 +113,14 @@ def test_charts_share_one_base_layout():
 def test_no_mid_dot_outside_verdict_labels():
     for name in (n for n in TEXT if n.endswith(".js")):
         for i, line in enumerate(_read(name).splitlines(), 1):
-            if "·" in line:
-                assert any(v in line for v in MIDDOT_OK) or "VERDICT_TONES = [" in line, (name, i, line)
+            for v in MIDDOT_OK:
+                line = line.replace(v, "")
+            assert "·" not in line, (name, i, line)
+    assert "·" not in "".join(copy.METHOD.values()) + "".join(copy.HEADLINE.values())
+
+
+def test_js_reads_only_model_fields():
+    # the seam: every r.<field> the Research tab reads and every p.<field> the Scanner reads exists on the model
+    for name, var, model in (("research.js", "r", ResearchSummary), ("scanner.js", "p", Pair)):
+        read = set(re.findall(rf"\b{var}\.([a-z_0-9]+)", _read(name)))
+        assert read and read <= set(model.model_fields), (name, read - set(model.model_fields))

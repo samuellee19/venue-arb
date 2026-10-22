@@ -51,10 +51,11 @@ HISTORY_SIZE_BUDGET_MB = 50
 # local hour files older than this are deleted; the server's prune cron cutoff (8 d, Task 9) must be no shorter, or
 # rsync (no --delete) copies back every file the cron removed
 HISTORY_KEEP = timedelta(days=HISTORY_DAYS + 1)
-LIVE_BYTES_BUDGET = 800_000  # real bundles are ~460 KB with ~215 pair rows; headroom for the research block
+LIVE_BYTES_BUDGET = 800_000  # real bundles are ~70–100 KB today (research included); headroom for growth
 HISTORY_LAG = timedelta(minutes=55)  # an hour is written once score (:40) and ladder_score (:50) have scored it
 GAP = timedelta(minutes=3)
 RESEARCH_TIMEOUT_WARN_S = 30  # the hourly research summary blocks one cycle; warn when it takes longer
+RESEARCH_BYTES_WARN = 150_000  # research block JSON; exec_hourly grows ~1 point/hour (docs/going-public.md backlog)
 PUSH_TIMEOUT_S = 120  # rsync's --timeout covers stalled I/O, not a black-holed ssh connect
 OUT_DIR = Path("data/bundle")
 LIVE_TARGET, HISTORY_TARGET = "bundle/live.json", "bundle/history"
@@ -505,6 +506,7 @@ def default_readers(db) -> dict:
 #   research          last good ResearchSummary (tick puts it in the bundle)
 #   research_hour     history_hour of the last research attempt, success or failure
 #   research_failed   failed attempts since the last record   research_seconds   last attempt's seconds, until recorded
+#   research_bytes    last computed summary's JSON size, until recorded
 def cycle(state: dict, readers: dict, out_dir: Path, dest: str | None, now: datetime, *, checks, db=None,
           write=write_atomic, push=push, clock=time.monotonic) -> list:
     """One loop iteration, in order: tick -> live.json -> push -> due history hours -> research (once per
@@ -542,6 +544,7 @@ def cycle(state: dict, readers: dict, out_dir: Path, dest: str | None, now: date
         state["research_hour"], t0 = history_hour(now), clock()
         try:
             state["research"] = compute_research(readers, now)
+            state["research_bytes"] = len(state["research"].model_dump_json())
         except Exception:
             log.exception("research summary failed, keeping the previous one")
             state["research_failed"] = state.get("research_failed", 0) + 1
@@ -604,6 +607,9 @@ def _results(checks, state: dict, interval_s: int) -> list:
         out.append(checks.Result("research_seconds", secs <= RESEARCH_TIMEOUT_WARN_S, round(secs, 1),
                                  RESEARCH_TIMEOUT_WARN_S, f"research summary took {secs:.1f}s", severity="warn",
                                  target=LIVE_TARGET))
+    if (size := state.pop("research_bytes", None)) is not None:  # only after a successful computation
+        out.append(checks.Result("research_bytes", size <= RESEARCH_BYTES_WARN, size, RESEARCH_BYTES_WARN,
+                                 f"research summary is {size:,} bytes", severity="warn", target=LIVE_TARGET))
     if pushes:
         bad = pushes.count(False)
         out.append(checks.Result("push", bad == 0, bad, 0, f"{bad}/{len(pushes)} pushes failed", target=LIVE_TARGET))

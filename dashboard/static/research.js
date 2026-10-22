@@ -6,8 +6,15 @@ const METHOD = [["matching", "Matching"], ["edge", "Edge"], ["crypto", "Crypto l
 const dash = (x, f) => x == null ? "—" : f(x);
 const count = (n, word) => `${num(n)} <span>${word}${n === 1 ? "" : "s"}</span>`;
 const at = iso => `${day(new Date(iso))} ${hm(new Date(iso))}`;
+const since = iso => iso ? `since ${day(new Date(iso))}` : "no data yet";
+const month = iso => new Date(iso).toLocaleDateString("en-GB", {month: "short", year: "numeric", timeZone: "UTC"});
+const span = (a, b) => {  // "Jun–Oct 2026"; the year once when both ends share it
+  if (!a) return "no data yet";
+  const [x, y] = [month(a), month(b)];
+  return x === y ? y : x.slice(-4) === y.slice(-4) ? `${x.slice(0, -5)}–${y}` : `${x}–${y}`;
+};
 
-const card = (id, title, figure, qualifier, caption) => `<div class="card"><h3>${title}</h3><div class="v">${figure}</div>`
+const card = (id, title, win, figure, qualifier, caption) => `<div class="card"><h3>${title}, ${win}</h3><div class="v">${figure}</div>`
   + `<p>${qualifier}</p><div class="rchart" id="${id}"></div><p class="cap">${caption}</p></div>`;
 
 export function renderResearch(bundle) {
@@ -16,22 +23,23 @@ export function renderResearch(bundle) {
   if (!r) { el.innerHTML = `<p class="mut">${NOT_COMPUTED}</p>`; return; }
   const [question, ...answer] = r.headline;
   const basis = Object.entries(r.basis).map(([a, b]) =>
-    `basis ${esc(a)} +${usd(b.up)}/${usd(-b.down)}, 99.9th percentile over ${num(b.window_days)} d`);
-  const ladderQ = r.ladder_checks == null ? "no counted hours yet"
-    : [`${num(r.ladder_checks)} admissible checks`, ...basis].join("; ");
+    `basis ${esc(a)} +${usd(b.up)}/${usd(-b.down)}, ${num(100 * r.basis_q, 1)}th percentile over ${num(b.window_days)} d`);
+  const ladderQ = [count(r.episodes_ladder, "episode"), ...(r.ladder_checks == null ? ["no counted hours yet"]
+    : [`${num(r.ladder_checks)} admissible checks`, ...basis])].join("; ");
   const rv = r.review;
   el.innerHTML = `<div class="hero"><h2>${esc(question)}</h2><p>${answer.map(esc).join(" ")}</p>`
     + `<p class="asof">as of ${at(r.computed_at)} — recomputed hourly from the same tables the Scanner reads — dated note: `
     + `<a href="${REPO}/blob/main/${esc(r.note_path)}">${esc(r.note_path)}</a></p></div>`
     + `<div class="cards">`
-    + card("rc-exec", "Executable", count(r.episodes_pair + r.episodes_ladder, "episode"),
+    + card("rc-exec", "Executable", since(r.window_start), count(r.episodes_pair, "episode"),
       `median ${dash(r.episode_median_minutes, m => `${num(m)} min`)}, median capacity ${dash(r.episode_median_capacity_usd, usd)}, `
         + `max net edge ${dash(r.max_net_edge_cents, c => cents(c))}`,
       "max net edge per hour, ¢; dashed: the 1¢ threshold")
-    + card("rc-screen", "Screened history", dash(r.screened_share_ge_1c, s => `${num(100 * s, 1)}%`),
-      `of ${num(r.screened_rows)} rows; ${dash(r.screened_share_early, s => `${num(100 * s)}%`)} in a pair's first week`,
+    + card("rc-screen", "Screened history", span(r.screened_start, r.screened_end),
+      dash(r.screened_share_ge_1c, s => `${num(100 * s, 1)}%`),
+      `of ${num(r.screened_rows)} rows at ≥ 1¢; ${dash(r.screened_share_early, s => `${num(100 * s)}%`)} of those in a pair's first week`,
       "rows by net gap, ¢; 1¢ and above tinted")
-    + card("rc-ladder", "Same-instant ladders", count(r.ladder_violations, "violation"), ladderQ,
+    + card("rc-ladder", "Same-instant ladders", since(r.ladder_start), count(r.ladder_violations, "violation"), ladderQ,
       "admissible checks per counted hour; red marks: violations")
     + `</div><div class="method"><h3>How it's measured</h3>`
     + METHOD.map(([k, h]) => `<h4>${h}</h4><p>${esc(r.method[k])}</p>`).join("")

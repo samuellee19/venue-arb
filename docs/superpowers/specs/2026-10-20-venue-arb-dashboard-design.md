@@ -45,6 +45,8 @@ why the answer is usually "no", and can dig into any pair down to the two books 
 
 ## 3. What the visitor sees
 
+> Superseded in part (2026-10-22): dark default, KPI tiles and ≈200 KB superseded by v2 §3/§7.2.
+
 Dark theme by default **(Claude's call;** theme is CSS variables, light is a swap). Desktop-first.
 
 **Header:** project name, live dot + "books HH:MM:SS PT · next tick in N s", category filter chips, unit toggle

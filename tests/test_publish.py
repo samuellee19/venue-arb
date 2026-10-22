@@ -353,3 +353,21 @@ def test_research_seconds_warn(tmp_path):
     [res] = [r for r in publish._results(CHECKS, state, 60) if r.check == "research_seconds"]
     assert (res.passed, res.observed, res.severity) == (False, publish.RESEARCH_TIMEOUT_WARN_S + 1, "warn")
     assert publish.RESEARCH_TIMEOUT_WARN_S == 30
+
+
+def test_research_bytes_warn(tmp_path, monkeypatch):
+    assert publish.RESEARCH_BYTES_WARN == 150_000
+    calls, state = [], {"history_hour": publish.history_hour(NOW)}
+    _cycle(state, research_readers(calls), tmp_path, NOW, calls)
+    size = len(state["research"].model_dump_json())
+    assert state["research_bytes"] == size
+    del state["live"]
+    monkeypatch.setattr(publish, "RESEARCH_BYTES_WARN", size - 1)
+    [res] = [r for r in publish._results(CHECKS, state, 60) if r.check == "research_bytes"]
+    assert (res.passed, res.observed, res.severity) == (False, size, "warn")
+    assert "research_bytes" not in {r.check for r in publish._results(CHECKS, state, 60)}  # none computed since
+    calls.clear()
+    later = NOW + timedelta(hours=1)
+    state["history_hour"] = publish.history_hour(later)
+    _cycle(state, research_readers(calls, fail=True), tmp_path, later, calls)
+    assert "research_bytes" not in state  # a failed computation measures nothing

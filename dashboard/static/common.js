@@ -14,7 +14,7 @@ export const VERDICT_TONES = [["Exact match · no edge", "none"], [EXEC, "exec"]
   ["Spread · within basis bound · no edge", "none"], ["No asks on one side", "stale"],
   ["Stale · a leg has no snapshot in 5 min", "stale"], [NOT_US, "stale"]];
 export const EXAMPLE = "Example — what a row looks like when a pair clears the rule";
-export const FOOT = "{n} pairs — per-leg quotes are not published (venue display terms) — ROI = net edge ÷ all-in cost per contract — ";
+export const FOOT = "{n} pairs listed — per-leg quotes are not published (venue display terms) — ROI = net edge ÷ all-in cost per contract — ";
 export const FOOT_CHECKS = "{checks} admissible ladder checks in the last scored hour, {violations} violations";
 export const FOOT_NO_HOUR = "no scored hour yet";
 

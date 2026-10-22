@@ -1244,6 +1244,7 @@
         "window_days": 30
       }
     },
+    "basis_q": 0.999,
     "computed_at": "2026-10-20T15:30:00Z",
     "episode_median_capacity_usd": 410.0,
     "episode_median_minutes": 300.0,
@@ -1385,12 +1386,13 @@
       ]
     },
     "ladder_scored": 3754,
+    "ladder_start": "2026-10-20T09:00:00Z",
     "ladder_violations": 1,
     "max_net_edge_cents": 2.79,
     "method": {
       "crypto": "Both venues list Bitcoin and Ethereum price ladders, but they settle on different price indexes, so only ladders that settle at the same instant are compared. A Kalshi strike against a different Polymarket strike counts only when the gap between the two strikes is at least the 99.9th percentile of the difference between the two settlement indexes over the past 30 days. Then at least one leg pays out in every state, as long as the indexes stay within that measured range.",
       "edge": "Prices come from our own snapshots of both venues' order books, taken every 60 seconds, not from last trades or midpoints. For each exact pair we buy Yes on one venue and No on the other, walking up both venues' lists of offers slice by slice and paying each venue's taker fee, so the edge is what is left per $1 contract after the cost of trading. An episode is a stretch where that net edge is at least 1¢, at least $100 can be filled, and both hold in at least 2 consecutive snapshots.",
-      "matching": "Candidate pairs are proposed within a category, by a deterministic rule for Fed rate brackets and by embedding similarity of the market text for everything else. Each candidate is then judged, Fed brackets by that fixed rule and every other pair by a language model, on whether both markets resolve on the same event, outcome, decision date and authority. A sample of verdicts is checked by hand at review sittings; the latest sitting's precision is shown with these figures.",
+      "matching": "Candidate pairs are proposed within a category, by a deterministic rule for Fed rate brackets and by embedding similarity of the market text for everything else. Each candidate is then judged, Fed brackets by that fixed rule and every other pair by a language model, on whether both markets resolve on the same event, outcome, decision date and authority. Crypto price ladders are matched by a deterministic parser of the asset, strike and settlement instant, not by the language model. A sample of verdicts is checked by hand at review sittings; the precision shown with these figures covers every review of a current verdict.",
       "not_shown": "The page does not show either venue's quotes or order books, only numbers derived from them, such as net edge, fees and fillable size. Kalshi's data terms do not permit public display of its prices without written permission, and Polymarket's terms could not be read, so quotes from both venues are withheld until that is settled. Kalshi's taker fee coefficient is secondhand and unverified, because its fee schedule could not be fetched, and Polymarket's fee rounding rule is unverified, so an edge could be off by up to about a cent per contract."
     },
     "note_path": "reports/research-note-v1.md",
@@ -1401,6 +1403,7 @@
       "labels": 31,
       "precision": 1.0
     },
+    "screened_end": "2026-10-20T15:00:00Z",
     "screened_hist": {
       "counts": [
         5,
@@ -1455,6 +1458,7 @@
     "screened_rows": 300,
     "screened_share_early": 1.0,
     "screened_share_ge_1c": 0.013333333333333334,
+    "screened_start": "2026-10-16T12:00:00Z",
     "snapshots": 144,
     "window_start": "2026-10-18T16:00:00Z"
   },

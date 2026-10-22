@@ -7,6 +7,9 @@ import {renderExplorer} from "./explorer.js";
 import {renderResearch} from "./research.js";
 
 const TABS = ["scanner", "explorer", "research"];
+// what is on screen: a poll re-renders the Scanner rows only for a new bundle, the Research tab only for a new summary
+// or theme (the Explorer guards itself); a rebuild on every poll would drop keyboard focus and re-draw the charts
+const shown = {scanner: null, research: null};
 
 async function load() {
   try {
@@ -15,7 +18,9 @@ async function load() {
     const {bundle, age_s} = await res.json();
     S.bundle = bundle; S.age = age_s; S.fetchedAt = Date.now();
     S.skew = Date.parse(bundle.computed_at) + age_s * 1000 - Date.now();  // server clock, via age_s
-    renderHeader(); renderScanner(); renderTab(); renderFoot(); tick();
+    renderHeader();
+    if (bundle.computed_at !== shown.scanner) { shown.scanner = bundle.computed_at; renderScanner(); }
+    renderTab(); renderFoot(); tick();
   } catch (e) {
     $("clock").textContent = `cannot load the live bundle (${e.message}); retrying in 30 s`;
   }
@@ -49,7 +54,10 @@ function renderTab() {
   }
   if (!S.bundle) return;
   if (t === "explorer") renderExplorer();
-  else if (t === "research") renderResearch(S.bundle);
+  else if (t === "research") {
+    const k = `${S.bundle.research?.computed_at}|${document.documentElement.dataset.theme}`;
+    if (k !== shown.research) { shown.research = k; renderResearch(S.bundle); }
+  }
 }
 
 function renderFoot() {

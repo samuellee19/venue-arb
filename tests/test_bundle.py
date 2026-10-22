@@ -215,11 +215,13 @@ def test_categories_from_taxonomy_display():
 def test_research_optional():
     b = _live(_ex(), _lad())
     assert b.research is None and LiveBundle.model_validate_json(b.model_dump_json()) == b
+    bare = b.model_dump(exclude={"categories", "research"})  # Ruling 5: both default when absent
+    assert LiveBundle.model_validate(bare).categories == {} and LiveBundle.model_validate(bare).research is None
     rs = ResearchSummary(
-        computed_at=NOW, window_start=None, headline=["a.", "b."], pairs_eligible=3, pairs_reviewed=1, snapshots=10,
+        computed_at=NOW, window_start=None, screened_start=None, screened_end=None, ladder_start=None, headline=["a.", "b."], pairs_eligible=3, pairs_reviewed=1, snapshots=10,
         max_net_edge_cents=None, episodes_pair=0, episodes_ladder=1, episodes_us=0, episode_median_minutes=None,
         episode_median_capacity_usd=None, screened_rows=0, screened_share_ge_1c=None, screened_share_early=None,
-        ladder_checks=None, ladder_violations=0, ladder_scored=0, basis=BASIS, review=None,
+        ladder_checks=None, ladder_violations=0, ladder_scored=0, basis=BASIS, basis_q=0.999, review=None,
         exec_hourly=ResearchSeries(ts=[NOW], values=[None]),
         screened_hist=ResearchHist(edges=[float(x) for x in range(-10, 12)], counts=[0] * 21),
         ladder_hourly=ResearchLadderSeries(ts=[], checks=[], violations=[]),

@@ -42,14 +42,16 @@ note is re-run once about four weeks of snapshots exist.
   not a negative result. The measured basis is already informative: BRTI sits below Binance at the settle by about
   6 bps on average (BTC -$48.06, ETH -$1.52), so same-strike pairs are not arbitrage. The 0.999 bounds are BTC
   +$182 / -$152 and ETH +$6 / -$7 per settle.
-- **Limits.** 0 of 15 pairs are human-reviewed; the Kalshi fee coefficient is unverified (below); nothing here
+- **Limits.** 15 of 15 pairs human-reviewed; match review precision 1.00 on 31 labels (20 Oct 2026); the Kalshi fee coefficient is unverified (below); nothing here
   generalizes beyond Fed decisions yet.
 
 ## Live dashboard
 
-`https://<server>` (placeholder, filled in at deploy). While the venues' data terms are unresolved the page does
-not show quotes: it shows edges, capacities and episodes, and the per-leg book boxes collapse to one derived cost
-panel.
+`https://<server>` (placeholder, filled in at deploy), titled "venue-arb · Prediction Market Arbitrage", with three
+tabs: **Scanner** (one row per matched pair, sortable, by category), **Explorer** (one pair's edge history, verdict
+and cost) and **Research** (the research note's headline numbers, recomputed hourly). While the venues' data terms
+are unresolved the page does not show quotes: it shows edges, capacities and episodes, and the per-leg book boxes
+collapse to one derived cost panel.
 
 ## Architecture
 
@@ -59,12 +61,13 @@ OptiPlex (home, outbound only)                      Oracle Always Free VM (publi
 │ collector (60 s books)          │ ─────────────▶ │ /srv/venue-arb/bundle/live.json  │
 │ Prefect flows (hourly scoring)  │   every 60 s   │ /srv/venue-arb/bundle/history/   │
 │ publish loop:                   │   + hourly     │   pairs-YYYYMMDDHH.parquet       │
-│   live bundle (≈460 KB JSON)    │                │ app: FastAPI + DuckDB + static   │
+│   live bundle (~70–100 KB JSON) │                │ app: FastAPI + DuckDB + static   │
 │   history Parquet (hourly)      │                │ Caddy (auto-HTTPS) → :443        │
 └─────────────────────────────────┘                └──────────────────────────────────┘
 ```
 
-Collector, Postgres, ClickHouse and Prefect run at home; the server never connects back. The server holds no
+The live bundle is ~70–100 KB today (research included). Collector, Postgres, ClickHouse and Prefect run at home;
+the server never connects back. The server holds no
 database: the bundle directory is the state, and its one computation (`/api/walk`) imports `venue_arb.edges`, so
 the walk is a single implementation. Repo layout: `venue_arb/` (pipeline, `publish.py` producer), `dashboard/`
 (`api/`, `static/`, `sample/`), `deploy/` (OptiPlex units; `deploy/server/` for the VM), `docs/`, `reports/`,
@@ -156,7 +159,8 @@ cd ~/platform && docker compose exec postgres psql -U postgres -d app -c \
 ### Dashboard publisher
 
 `venue-arb-publish` (`python -m venue_arb.publish`) writes `live.json` every 60 s and one history Parquet per clock
-hour, then pushes them outbound with rsync to `VENUE_ARB_PUBLISH_DEST` (`venue-arb@host:./`; rrsync on the server takes the path relative to the bundle dir, so an absolute path would land in `bundle/srv/...`). The value
+hour, and once an hour recomputes the research summary (the note's numbers, in `live.json`'s `research` block for the
+Research tab; a failure keeps the previous one), then pushes them outbound with rsync to `VENUE_ARB_PUBLISH_DEST` (`venue-arb@host:./`; rrsync on the server takes the path relative to the bundle dir, so an absolute path would land in `bundle/srv/...`). The value
 in `mise.toml [env]` and the three units is the placeholder `venue-arb@SERVER_IP:./` (a shared
 env var; only the publisher reads it, and `tests/test_deploy.py` needs it identical everywhere). Once the server
 exists, set the real host on the box in both `mise.toml` and the unit (the `venue-arb-push-host` ssh alias of

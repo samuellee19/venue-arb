@@ -1,6 +1,7 @@
 from datetime import UTC, datetime, timedelta
 
-from tests.test_note import ADM, BASIS, HOURS, T0, edge, episode, pair, screened
+from tests.test_note import ADM, BASIS, HOURS, T0, edge, episode, lepisode, lgroup, pair, screened
+from venue_arb.basis import BASIS_Q
 from venue_arb.bundle import ResearchSummary
 from venue_arb.report import copy, note, research
 
@@ -19,6 +20,9 @@ def test_from_summary_headline_numbers():
     assert "3 episodes" in r.headline[1] and "1.9¢" in r.headline[1] and "19 Oct" in r.headline[1]
     assert r.max_net_edge_cents == 1.92 and r.episodes_pair == 3 and r.episodes_us == 1 and r.snapshots == 2
     assert r.pairs_eligible == 2 and r.window_start == T0 and r.method == copy.METHOD
+    # the headline counts pairs with snapshots in scope (K-1 only), not every eligible pair
+    assert "Across 1 exact pair and 2 order-book snapshots" in r.headline[1]
+    assert r.basis_q == BASIS_Q and copy.PERCENTILE == "99.9th percentile" and copy.PERCENTILE in copy.METHOD["crypto"]
     assert r.note_path == "reports/research-note-v1.md"
     empty = reduce(note.summarize([], [], [], []))
     assert "—" in empty.headline[1] and "0 episodes" in empty.headline[1] and empty.max_net_edge_cents is None
@@ -72,3 +76,17 @@ def test_from_summary_validates():
     j = r.model_dump_json()
     # compare as JSON: `review` is a plain dict, so its datetime comes back as a string
     assert ResearchSummary.model_validate_json(j).model_dump_json() == j and len(j) < 150_000
+
+
+def test_tier_windows_and_ladder_episodes():
+    s = note.summarize([pair()], [screened(h=0), screened(h=5)], [edge(m=30)], [episode()],
+                       ladder_rows=[lgroup()], ladder_episodes=[lepisode(), lepisode()], admissible=ADM,
+                       ladder_hours=HOURS)
+    r = reduce(s)
+    assert r.window_start == T0 + timedelta(minutes=30) and r.ladder_start == T0
+    assert (r.screened_start, r.screened_end) == (T0, T0 + timedelta(hours=5))
+    assert r.episodes_pair == 1 and r.episodes_ladder == 2
+    assert r.headline[2].endswith(copy.HEADLINE["ladder_episodes"].format(episodes="2 episodes"))
+    empty = reduce(note.summarize([], [], [], []))
+    assert empty.screened_start is empty.screened_end is empty.ladder_start is None
+    assert empty.headline[2] == copy.HEADLINE["ladders_none"]  # no ladder episodes: no episode clause
