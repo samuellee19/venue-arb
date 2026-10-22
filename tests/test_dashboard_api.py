@@ -58,7 +58,8 @@ def test_no_bundle_yet_is_503(monkeypatch, tmp_path):
 
 
 def test_history_ranges(client):
-    cols = {"ts", "net_edge_cents", "capacity_usd", "k_ask", "k_size", "pm_ask", "pm_size", "fees_cents"}
+    cols = {"ts", "net_edge_cents", "capacity_usd", "k_ask", "k_size", "pm_ask", "pm_size", "fees_cents", "basis_bps",
+            "net_bps"}  # the last two are null in files written before they existed
     day = client.get(f"/api/pair/{_p(CPI_KEY)}/history", params={"range": "24h"}).json()
     assert set(day) == cols and len({len(v) for v in day.values()}) == 1
     assert 0 < len(day["ts"]) <= 1440 and len(day["ts"]) == 120 and day["ts"] == sorted(day["ts"])

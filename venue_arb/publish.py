@@ -35,7 +35,9 @@ from venue_arb.ladder_edges import _LEGS, count_window
 from venue_arb.matching import crypto_rule
 from venue_arb.matching.adjudicate import PROMPT_VERSION
 from venue_arb.scoring import snapshots
-from venue_arb.sources import kalshi
+from venue_arb.sources import hyperliquid, kalshi
+from venue_arb.sources.hyperliquid import PerpCtx, PerpLevel
+from venue_arb.sources.schwab import Quote
 
 # qa and venue_arb.flows.* (the flows package imports obs and qa) are imported lazily: unit tests (and CI) run
 # without the platform checkout.
@@ -51,7 +53,8 @@ HISTORY_SIZE_BUDGET_MB = 50
 # local hour files older than this are deleted; the server's prune cron cutoff (8 d, Task 9) must be no shorter, or
 # rsync (no --delete) copies back every file the cron removed
 HISTORY_KEEP = timedelta(days=HISTORY_DAYS + 1)
-LIVE_BYTES_BUDGET = 800_000  # real bundles are ~70–100 KB today (research included); headroom for growth
+# measured 868 KB at 399 pair rows on 2026-10-22 (before stock perps; ~2.2 KB per row); room for ~100 stock-perp rows
+LIVE_BYTES_BUDGET = 1_200_000
 HISTORY_LAG = timedelta(minutes=55)  # an hour is written once score (:40) and ladder_score (:50) have scored it
 GAP = timedelta(minutes=3)
 RESEARCH_TIMEOUT_WARN_S = 30  # the hourly research summary blocks one cycle; warn when it takes longer
@@ -81,14 +84,24 @@ SELECT k, p, d, toStartOfHour(ts) AS h, avg(e) FROM (
   UNION ALL
   SELECT ts, k_id, pm_id, direction, best_edge FROM venue_arb.ladder_edges FINAL
   WHERE ts >= {start:DateTime64(3, 'UTC')} AND k_id NOT LIKE 'ZZTEST-%'
+  UNION ALL
+  SELECT toStartOfHour(ts) AS hts, symbol, '', direction, max(net_bps) / 1e4 FROM venue_arb.stock_perp_edges FINAL
+  WHERE ts >= {start:DateTime64(3, 'UTC')} GROUP BY hts, symbol, direction
 ) GROUP BY k, p, d, h
 """
+# the stock-perp tier: rows with p = '' take their reference symbol from labels (spark_series refs); the hourly max of
+# net_bps / 1e4 reads, x100 like the pair rows, as net_bps / 100
 # both sources; pair-source rows are scoped in Python (scope_episodes) with note.SCOPE_SQL's rows, as the note does
 EPISODES_SQL = """
 SELECT source, kalshi_id, pm_id, direction, start_ts, end_ts, max_edge, median_capacity_usd, transfer_cost_usd
 FROM venue_arb.opportunities
-WHERE kalshi_id NOT LIKE 'ZZTEST-%' AND coalesce(end_ts, now()) > now() - interval '7 days'
+WHERE kalshi_id NOT LIKE 'ZZTEST-%' AND source <> 'stock_perp' AND coalesce(end_ts, now()) > now() - interval '7 days'
 ORDER BY start_ts
+"""
+# the stock-perp tier's episodes (kalshi_id = perp symbol), counted apart from the pair tiers' (bps, not ¢)
+STOCK_PERP_EPISODES_SQL = """
+SELECT count(*) FROM venue_arb.opportunities
+WHERE source = 'stock_perp' AND coalesce(end_ts, now()) > now() - interval '7 days'
 """
 # the latest ladder_score run's denominator, from runs without a failed error-severity check (as note.ADMISSIBLE_SQL)
 LADDER_KPI_SQL = f"""
@@ -111,6 +124,26 @@ WHERE ts > now() - INTERVAL 7 DAY AND k_id NOT LIKE 'ZZTEST-%'
 GROUP BY asset, basis_up, basis_down ORDER BY first_ts
 """
 # history: an hour's scored rows, and the first ask level of each leg around them
+STOCK_PERP_HOUR_SQL = """
+SELECT ts, symbol, direction, basis_bps, net_bps, capacity_usd FROM venue_arb.stock_perp_edges FINAL
+WHERE ts >= {lo:DateTime64(3, 'UTC')} AND ts < {hi:DateTime64(3, 'UTC')}
+"""
+# the perps() reader: the last LIVE_MAX_AGE_S of contexts and books (the newest tick per symbol is kept in Python,
+# its books are those at the same ts), and each symbol's latest Schwab quote (reference() checks its age)
+PERP_CTX_SQL = f"""
+SELECT ts, symbol, mark, oracle, mid, funding_h, premium, open_interest, day_volume_usd, growth_mode
+FROM venue_arb.stock_perp_ctx WHERE ts > now64(3) - INTERVAL {bundle.LIVE_MAX_AGE_S} SECOND ORDER BY symbol, ts
+"""
+PERP_BOOKS_SQL = f"""
+SELECT ts, symbol, toString(side), level, price, size FROM venue_arb.stock_perp_books
+WHERE ts > now64(3) - INTERVAL {bundle.LIVE_MAX_AGE_S} SECOND
+"""
+PERP_QUOTES_SQL = f"""
+SELECT symbol, argMax(ref_symbol, ts), argMax(bid, ts), argMax(ask, ts), argMax(bid_size, ts), argMax(ask_size, ts),
+       argMax(last, ts), argMax(quote_time, ts)
+FROM venue_arb.stock_perp_refs WHERE ref_kind = 'schwab' AND ts > now64(3) - INTERVAL {bundle.LIVE_MAX_AGE_S} SECOND
+GROUP BY symbol
+"""
 EDGES_HOUR_SQL = """
 SELECT ts, kalshi_id, pm_id, direction, best_edge, capacity_usd FROM venue_arb.edges FINAL
 WHERE ts >= {lo:DateTime64(3, 'UTC')} AND ts < {hi:DateTime64(3, 'UTC')}
@@ -133,7 +166,8 @@ ORDER BY a_id, b_id, created_at DESC
 HISTORY_SCHEMA = pa.schema([("ts", pa.timestamp("ms", tz="UTC")), ("key", pa.string()), ("kind", pa.string()),
                             ("direction", pa.string())]
                            + [(c, pa.float64()) for c in ("net_edge_cents", "capacity_usd", "k_ask", "k_size",
-                                                          "pm_ask", "pm_size", "fees_cents")])
+                                                          "pm_ask", "pm_size", "fees_cents", "basis_bps",
+                                                          "net_bps")])  # the last two: stock-perp rows only
 LADDER_KIND = {"arb": "ladder", "near_exact": "near_exact"}
 
 
@@ -191,11 +225,14 @@ def _first_ask(snaps: dict | None, t: datetime, side: str):
     return next((lv for lv in snaps[min(near, key=lambda x: abs(x - t))] if lv.side == side), None)
 
 
-def history_table(edge_rows, ladder_rows, books, sides: dict | None = None) -> pa.Table:
+def history_table(edge_rows, ladder_rows, books, sides: dict | None = None, stock_rows=(),
+                  refs: dict | None = None) -> pa.Table:
     """EDGES_HOUR_SQL and LADDER_HOUR_SQL rows + scoring.snapshots books -> one row per scored snapshot.
     k_ask/pm_ask = each leg's first ask at that snapshot, for exact and near-exact rows only; an exact row needs its
     pair's yes mapping in `sides` {(kalshi_id, pm_id): "yes"|"no"} to know the Polymarket side, else asks are null.
-    Asks and sizes are null while config.DASHBOARD_SHOW_BOOKS is False; fees_cents (derived) is kept."""
+    Asks and sizes are null while config.DASHBOARD_SHOW_BOOKS is False; fees_cents (derived) is kept.
+    `stock_rows` = STOCK_PERP_HOUR_SQL rows (ts, symbol, direction, basis_bps, net_bps, capacity_usd), keyed with
+    `refs` {perp: reference symbol} as the bundle rows are; net_edge_cents is net_bps / 100, asks and fees null."""
     sides, flip = sides or {}, {"yes": "no", "no": "yes"}
     show = config.DASHBOARD_SHOW_BOOKS  # read at call time (tests monkeypatch it); fees stay, quotes go
     rows = []
@@ -219,7 +256,15 @@ def history_table(edge_rows, ladder_rows, books, sides: dict | None = None) -> p
                      ("net_edge_cents", None if best is None else round(100 * best, 4)), ("capacity_usd", cap),
                      ("k_ask", ka.price if show and ka else None), ("k_size", ka.size if show and ka else None),
                      ("pm_ask", pa_.price if show and pa_ else None),
-                     ("pm_size", pa_.size if show and pa_ else None), ("fees_cents", fee)):
+                     ("pm_size", pa_.size if show and pa_ else None), ("fees_cents", fee), ("basis_bps", None),
+                     ("net_bps", None)):
+            cols[c].append(v)
+    refs = refs or {}
+    for ts, sym, d, basis, net, cap in stock_rows:
+        for c, v in (("ts", _utc(ts)), ("key", pair_key(sym, refs.get(sym, sym), d)), ("kind", "stock_perp"),
+                     ("direction", d), ("net_edge_cents", None if net is None else net / 100), ("capacity_usd", cap),
+                     ("k_ask", None), ("k_size", None), ("pm_ask", None), ("pm_size", None), ("fees_cents", None),
+                     ("basis_bps", basis), ("net_bps", net)):
             cols[c].append(v)
     return pa.table(cols, schema=HISTORY_SCHEMA)
 
@@ -236,8 +281,12 @@ def write_history_hour(ch, out_dir: Path, hour: datetime, sides: dict | None = N
     books = snapshots(ch.query(HISTORY_BOOKS_SQL, parameters={
         "lo": round((lo - pad).timestamp() * 1000), "hi": round((hi + pad).timestamp() * 1000), "k": k, "p": p}
     ).result_rows) if k else {}
+    stock, refs = [], {}
+    if config.DASHBOARD_SHOW_STOCK_PERPS:  # the parquet is public output: gated like the bundle rows
+        stock = ch.query(STOCK_PERP_HOUR_SQL, parameters={"lo": lo, "hi": hi}).result_rows
+        refs = stock_refs()
     buf = io.BytesIO()
-    pq.write_table(history_table(edge, lad, books, sides), buf, compression="zstd")
+    pq.write_table(history_table(edge, lad, books, sides, stock, refs), buf, compression="zstd")
     path = _hour_file(out_dir, lo)
     path.parent.mkdir(parents=True, exist_ok=True)
     write_atomic(path, buf.getvalue())
@@ -286,10 +335,17 @@ def history_size_mb(out_dir: Path, now: datetime) -> float:
     return sum(f.stat().st_size for f in (out_dir / "history").glob("pairs-*.parquet") if f.name > cutoff) / 1e6
 
 
-def spark_series(rows, start: datetime) -> dict[str, list[float | None]]:
-    """SPARKS_SQL rows (k, p, direction, hour, avg best_edge) -> {key: SPARK_HOURS hourly ¢ points from `start`}."""
+def stock_refs() -> dict[str, str]:
+    """{perp symbol: reference symbol} from the labels; a perp without a stock symbol is its own reference."""
+    return {perp: lb.ref_symbol or perp for perp, lb in hyperliquid.load_labels().items()}
+
+
+def spark_series(rows, start: datetime, refs: dict | None = None) -> dict[str, list[float | None]]:
+    """SPARKS_SQL rows (k, p, direction, hour, avg best_edge) -> {key: SPARK_HOURS hourly ¢ points from `start`}.
+    A stock-perp row has p = '' and takes its reference symbol from `refs` {perp: reference symbol}."""
     out: dict[str, list[float | None]] = {}
     for k, p, d, h, avg in rows:
+        p = p or (refs or {}).get(k, k)
         i = int((_utc(h) - start) / timedelta(hours=1))
         if 0 <= i < bundle.SPARK_HOURS and avg is not None and math.isfinite(avg):
             out.setdefault(pair_key(k, p, d), [None] * bundle.SPARK_HOURS)[i] = round(100 * avg, 4)
@@ -306,11 +362,11 @@ def gap_annotations(minutes) -> list[Annotation]:
 def scope_episodes(rows: list[dict], scope: dict) -> list[dict]:
     """EPISODES_SQL rows -> the note's scope: pair-source rows only for (kalshi_id, pm_id) pairs whose latest
     adjudication is exact with no bad review (scope: {(a_id, b_id): {"exact", "bad_review"}}); ladder-source rows
-    always (the note scopes only the pair tier)."""
+    always (the note scopes only the pair tier); stock-perp rows never (their own KPI, STOCK_PERP_EPISODES_SQL)."""
     def ok(r):
         s = scope.get((r["kalshi_id"], r["pm_id"]))
         return s is not None and s["exact"] and not s["bad_review"]
-    return [r for r in rows if r["source"] != "pair" or ok(r)]
+    return [r for r in rows if r["source"] != "stock_perp" and (r["source"] != "pair" or ok(r))]
 
 
 def load_context(conn, ch, now: datetime) -> dict:
@@ -318,7 +374,8 @@ def load_context(conn, ch, now: datetime) -> dict:
     from venue_arb.report.note import SCOPE_SQL  # lazily: keeps the report module (numpy) off the import path
 
     start = _hour(now) - timedelta(hours=bundle.SPARK_HOURS - 1)
-    sparks = spark_series(ch.query(SPARKS_SQL, parameters={"start": start}).result_rows, start)
+    sparks = spark_series(ch.query(SPARKS_SQL, parameters={"start": start}).result_rows, start,
+                          stock_refs() if config.DASHBOARD_SHOW_STOCK_PERPS else None)
     scope = {(k, p): {"exact": rel == "exact", "bad_review": bad}
              for k, p, rel, bad, _closed in conn.execute(SCOPE_SQL, {"pv": PROMPT_VERSION}).fetchall()}
     episodes = [Episode(key=pair_key(r["kalshi_id"], r["pm_id"], r["direction"]), start=r["start_ts"],
@@ -329,7 +386,8 @@ def load_context(conn, ch, now: datetime) -> dict:
     notes += [Annotation(kind="basis_change", at=_utc(t), until=None, key=None,
                          label=f"{asset} basis bound: up ${up:,.0f} / down ${down:,.0f}")
               for asset, up, down, t in ch.query(BASIS_CHANGES_SQL).result_rows]
-    kpi: dict = {}
+    (stock_eps,) = conn.execute(STOCK_PERP_EPISODES_SQL).fetchone()
+    kpi: dict = {"stock_perps": {"episodes_7d": int(stock_eps)}}
     if row := conn.execute(LADDER_KPI_SQL).fetchone():
         observed, checked_at = row
         # ponytail: the window is re-derived from the result's time, so a run that crosses the hour mid-run is off
@@ -425,11 +483,18 @@ def tick(state: dict, readers: dict, now: datetime) -> LiveBundle:
     notes = ctx["annotations"] + [Annotation(kind="settlement", at=t, until=None, key=None, label="settles")
                                   for t in sorted({p.settles_at for p in exact + ladder})]
     notes += [a for p in exact + ladder for a in _listing_note(p, titles, now)]
+    stock = None  # None: the tier is off (the reader is not called)
+    if config.DASHBOARD_SHOW_STOCK_PERPS:
+        try:
+            stock = bundle.stock_perp_rows(readers["perps"](), ctx["sparks"], now)
+        except Exception as e:  # noqa: BLE001 — a perp-side fault must not stop the pair tiers' live.json
+            log.warning("stock perps skipped error=%s", type(e).__name__)
+            stock = []
     return bundle.build_live(now=now, exact_rows=exact, ladder_rows=ladder, basis=state["basis"],
                              episodes=ctx["episodes"], annotations=notes, kpi_inputs=ctx["kpi_inputs"],
                              attribution=ATTRIBUTION, caveats=CAVEATS,
                              collector_last=max((b[0] for b in books.values()), default=None),
-                             research=state.get("research"))
+                             research=state.get("research"), stock_rows=stock)
 
 
 def compute_research(readers: dict, now: datetime) -> ResearchSummary:
@@ -495,7 +560,22 @@ def default_readers(db) -> dict:
             rows = conn.execute(ALL_REVIEWS_SQL).fetchall()
         return [r[0] for r in rows], max((r[1] for r in rows), default=None)
 
-    return {"pairs": pairs, "ladders": ladders, "listings": listings, "series_fee": kalshi.fetch_series,
+    def perps():
+        """Per perp: the newest context within LIVE_MAX_AGE_S, its books at that ts, the latest Schwab quote."""
+        ch = db.ch()
+        ctxs = {}
+        for ts, sym, mark, oracle, mid, fund, prem, oi, vol, growth in ch.query(PERP_CTX_SQL).result_rows:
+            ctxs[sym] = (_utc(ts), PerpCtx(sym, mark, oracle, mid, fund, prem, oi, vol, bool(growth), 0))
+        books: dict[tuple[str, datetime], list[PerpLevel]] = {}
+        for ts, sym, side, level, price, size in ch.query(PERP_BOOKS_SQL).result_rows:
+            books.setdefault((sym, _utc(ts)), []).append(PerpLevel(side, level, price, size))
+        quotes = {sym: Quote(ref, bid, ask, bs, asz, last, _utc(qt))
+                  for sym, ref, bid, ask, bs, asz, last, qt in ch.query(PERP_QUOTES_SQL).result_rows}
+        labels = hyperliquid.load_labels()
+        return [(ctx, hyperliquid.label_or_none(sym, labels), (ts, books.get((sym, ts), [])), quotes.get(sym))
+                for sym, (ts, ctx) in sorted(ctxs.items())]
+
+    return {"pairs": pairs, "ladders": ladders, "listings": listings, "perps": perps, "series_fee": kalshi.fetch_series,
             "books": books, "context": context, "research_inputs": research_inputs, "review_labels": review_labels}
 
 

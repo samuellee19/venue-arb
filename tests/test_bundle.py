@@ -1,5 +1,6 @@
 import json
 import re
+from dataclasses import replace
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -10,6 +11,7 @@ from venue_arb.bundle import (
     LIVE_MAX_AGE_S,
     Basis,
     LiveBundle,
+    Pair,
     ResearchHist,
     ResearchLadderSeries,
     ResearchSeries,
@@ -19,6 +21,7 @@ from venue_arb.bundle import (
     ladder_pair_rows,
     market_url,
     roi,
+    stock_perp_rows,
     verdict,
 )
 from venue_arb.edges import Edge
@@ -26,6 +29,8 @@ from venue_arb.exact import ExactPair
 from venue_arb.fees import transfer_cost
 from venue_arb.matching.crypto_rule import Strike
 from venue_arb.models import Level
+from venue_arb.sources.hyperliquid import Label, PerpCtx, PerpLevel
+from venue_arb.sources.schwab import Quote
 
 FIX = Path(__file__).parent / "fixtures" / "bundle"
 EXF = json.loads((FIX / "exact_pair.json").read_text())
@@ -231,3 +236,93 @@ def test_research_optional():
     b2 = build_live(now=NOW, exact_rows=_ex(), ladder_rows=[], basis=BASIS, episodes=[], annotations=[],
                     kpi_inputs=KPI, attribution=[], caveats=[], collector_last=NOW, research=rs)
     assert LiveBundle.model_validate_json(b2.model_dump_json()) == b2 and b2.research == rs
+
+
+SPF = json.loads((FIX / "stock_perp.json").read_text())
+SP_NOW = datetime.fromisoformat(SPF["now"])
+CTX215 = PerpCtx(**SPF["ctx"])
+LABEL_NVDA = Label(**SPF["label"])
+QUOTE = Quote(**{**SPF["quote"], "quote_time": datetime.fromisoformat(SPF["quote"]["quote_time"])})
+SP_BOOK = [PerpLevel(**x) for x in SPF["book"]]
+SP_SNAP = (datetime.fromisoformat(SPF["book_ts"]), SP_BOOK)
+
+
+def test_stock_perp_row_executable():  # NVDA mark 215 vs Schwab 212.84, growth fee, 300 shares displayed
+    [p] = stock_perp_rows([(CTX215, LABEL_NVDA, SP_SNAP, QUOTE)], {}, SP_NOW)
+    assert p.kind == "stock_perp" and p.category == "stock_perps" and p.settles_at is None and p.books is None
+    assert p.key == "xyz:NVDA~NVDA~short_perp_long_stock" and p.title == "NVIDIA (NASDAQ)" and p.live
+    assert p.trade == "short xyz:NVDA / long NVDA" and p.reference["kind"] == "schwab" and p.hold_hours == 24
+    assert p.reference == {"kind": "schwab", "symbol": "NVDA", "asof": QUOTE.quote_time.isoformat()}
+    assert re.fullmatch(r"Executable edge · \+\d+ bps · \$[\d,]+ at top of book", p.verdict.label)
+    assert [c.name for c in p.verdict.checks] == ["reference", "fees_carry", "fees_depth", "jurisdiction"]
+    assert p.verdict.checks[0].detail == "Schwab quote 14 s old"
+    assert p.net_edge_bps == pytest.approx(p.net_bps) and p.net_edge_cents == pytest.approx(p.net_bps / 100)
+    assert p.net_edge_roi == pytest.approx(p.net_bps / 1e4) and p.capacity_usd == pytest.approx(300 * 212.88, rel=1e-3)  # the stock leg's 300 shares cap the walk
+    assert p.us_executable is False and p.legs[0].url == "https://app.hyperliquid.xyz/trade/xyz:NVDA"
+    assert p.legs[1].url is None and (p.legs[0].side, p.legs[1].side) == ("short", "long")
+    assert (p.legs[0].venue, p.legs[1].venue, p.legs[1].market_id) == ("hyperliquid", "nasdaq", "NVDA")
+    assert p.fee_params == {"perp": {"taker": 0.00009, "growth_mode": True}, "stock": {"borrow_bps_yr": 50.0}}
+    assert p.next_funding_at == datetime.fromisoformat("2026-10-22T16:00:00+00:00")
+    assert p.funding_bps_h == pytest.approx(0.1) and p.spark == [None] * 24
+    s = p.sensitivity
+    assert set(s) == {"net_bps_1h", "net_bps_7d", "net_bps_borrow_x10"}
+    assert s["net_bps_borrow_x10"] == pytest.approx(p.net_bps)  # short perp / long stock pays no borrow
+    assert p.fees_cents == pytest.approx((1.8 + 3.7594) / 100, abs=1e-3)  # 2 x 0.9 bps taker + 0.08/212.84 spread
+    assert Pair.model_validate_json(p.model_dump_json()) == p
+
+
+def test_stock_perp_row_borrow_x10_on_long_perp():  # mark below the stock: long perp / short stock pays borrow
+    ctx = replace(CTX215, mark=210.0)
+    [p] = stock_perp_rows([(ctx, LABEL_NVDA, SP_SNAP, QUOTE)], {}, SP_NOW)
+    assert p.trade == "long xyz:NVDA / short NVDA"
+    borrow = 50.0 * 24 / (24 * 365)
+    assert p.sensitivity["net_bps_borrow_x10"] == pytest.approx(p.net_bps - 9 * borrow)
+
+
+def test_stock_perp_row_oracle_only_never_executable():
+    for label, quote in ((replace(LABEL_NVDA, ref_kind="none"), QUOTE),
+                         (LABEL_NVDA, replace(QUOTE, quote_time=SP_NOW - timedelta(seconds=121)))):
+        [p] = stock_perp_rows([(CTX215, label, SP_SNAP, quote)], {}, SP_NOW)
+        assert p.verdict.label == "Reference closed · oracle only" and p.capacity_usd == 0 and p.reference["kind"] == "oracle"
+        assert p.verdict.checks[0].status == "partial"
+        assert p.verdict.checks[0].detail == "oracle only: stock market closed or no quote"
+
+
+def test_stock_perp_row_within_costs():
+    book = [replace(lv, price=round(lv.price - 2.1, 2)) for lv in SP_BOOK]  # the book follows the mark
+    [p] = stock_perp_rows([(replace(CTX215, mark=212.9), LABEL_NVDA, (SP_SNAP[0], book), QUOTE)], {}, SP_NOW)
+    assert p.verdict.label == "Basis · within costs · no edge" and p.live
+    assert [c.status for c in p.verdict.checks][1:3] == ["fail", "fail"]
+
+
+def test_stock_perp_row_stale():
+    old = (SP_NOW - timedelta(seconds=301), SP_BOOK)
+    [p] = stock_perp_rows([(CTX215, LABEL_NVDA, old, QUOTE)], {}, SP_NOW)
+    assert p.verdict.label == "Stale · a leg has no snapshot in 5 min" and not p.live
+    assert p.net_bps is None and p.net_edge_cents is None and p.net_edge_bps is None and p.sensitivity is None
+
+
+def test_stock_perp_row_label_none_and_spark():
+    lab = Label("xyz:FOO", "none", None, "", "USD", "xyz:FOO")
+    [p] = stock_perp_rows([(replace(CTX215, symbol="xyz:FOO"), lab, SP_SNAP, None)], {"xyz:FOO~xyz:FOO~short_perp_long_stock": [1.0] * 24}, SP_NOW)
+    assert p.key == "xyz:FOO~xyz:FOO~short_perp_long_stock" and p.title == "xyz:FOO" and p.spark == [1.0] * 24
+    assert p.trade == "short xyz:FOO / long xyz:FOO"
+
+
+def test_build_live_stock_perps_kpi_and_best_edge_ignores_them():
+    [sp] = stock_perp_rows([(CTX215, LABEL_NVDA, SP_SNAP, QUOTE)], {}, SP_NOW)
+    b = build_live(now=SP_NOW, exact_rows=[], ladder_rows=[], basis=BASIS, episodes=[], annotations=[],
+                   kpi_inputs={"stock_perps": {"episodes_7d": 3}}, attribution=[], caveats=[], collector_last=None,
+                   stock_rows=[sp])
+    assert b.kpis.stock_perps == {"names_live": 1, "episodes_7d": 3} and b.kpis.best_edge is None
+    assert b.kpis.pairs_live == {"exact": 0, "near_exact": 0, "ladder": 0} and len(b.pairs) == 1
+    assert LiveBundle.model_validate_json(b.model_dump_json()) == b
+    off = build_live(now=SP_NOW, exact_rows=[], ladder_rows=[], basis=BASIS, episodes=[], annotations=[],
+                     kpi_inputs={}, attribution=[], caveats=[], collector_last=None)
+    assert off.kpis.stock_perps is None
+
+
+def test_old_live_json_without_new_fields_still_validates():
+    sample = Path(__file__).parent.parent / "dashboard" / "sample" / "live.json"
+    b = LiveBundle.model_validate_json(sample.read_text(encoding="utf-8"))
+    assert b.kpis.stock_perps is None and b.pairs[0].reference is None and b.pairs[0].basis_bps is None

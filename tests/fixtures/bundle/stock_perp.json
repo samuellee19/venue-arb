@@ -1,0 +1,17 @@
+{
+  "now": "2026-10-22T15:00:30+00:00",
+  "ctx": {"symbol": "xyz:NVDA", "mark": 215.0, "oracle": 214.9, "mid": 215.0, "funding_h": 0.00001, "premium": 0.0005,
+          "open_interest": 1000000.0, "day_volume_usd": 5000000.0, "growth_mode": true, "max_leverage": 10},
+  "label": {"perp": "xyz:NVDA", "ref_kind": "schwab", "ref_symbol": "NVDA", "exchange": "NASDAQ", "currency": "USD",
+            "name": "NVIDIA"},
+  "quote": {"symbol": "NVDA", "bid": 212.80, "ask": 212.88, "bid_size": 300.0, "ask_size": 300.0, "last": 212.84,
+            "quote_time": "2026-10-22T15:00:16+00:00"},
+  "book_ts": "2026-10-22T15:00:00+00:00",
+  "book": [
+    {"side": "bid", "level": 0, "price": 214.90, "size": 100.0},
+    {"side": "bid", "level": 1, "price": 214.80, "size": 100.0},
+    {"side": "bid", "level": 2, "price": 214.70, "size": 100.0},
+    {"side": "ask", "level": 0, "price": 215.10, "size": 100.0},
+    {"side": "ask", "level": 1, "price": 215.20, "size": 100.0}
+  ]
+}

@@ -12,13 +12,16 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
-from venue_arb import config, taxonomy
+from venue_arb import config, stock_perps, taxonomy
 from venue_arb.edges import Edge, score
 from venue_arb.episodes import MIN_EDGE
 from venue_arb.exact import ExactPair
-from venue_arb.fees import US_EXECUTABLE, transfer_cost
+from venue_arb.fees import HYPERLIQUID_TAKER, US_EXECUTABLE, transfer_cost
 from venue_arb.ladder_edges import _LEGS, admissible, score_spread, select_pairs
 from venue_arb.models import Level
+from venue_arb.sources.hyperliquid import Label, PerpCtx, PerpLevel
+from venue_arb.sources.schwab import Quote
+from venue_arb.stock_perps import Reference, StockPerpEdge
 
 LIVE_MAX_AGE_S = 300  # a leg's latest snapshot older than this -> not live
 PAIR_KEY_SEP = "~"  # key = f"{k_id}~{pm_id}~{direction}"
@@ -26,6 +29,7 @@ MIN_CAPACITY_USD = 100.0  # the episode rule (episodes.find's default): executab
 SPARK_HOURS = 24
 US = US_EXECUTABLE["kalshi"] and US_EXECUTABLE["polymarket"]
 Snap = tuple[datetime, list[Level]]  # (snapshot ts, levels of one market at that ts)
+SnapPerp = tuple[datetime, list[PerpLevel]]  # (collector tick ts, book levels of one perp at that ts)
 
 
 class _M(BaseModel):
@@ -35,9 +39,9 @@ class _M(BaseModel):
 class Leg(_M):
     venue: str
     market_id: str
-    side: Literal["yes", "no"]
+    side: Literal["yes", "no", "long", "short"]
     title: str
-    url: str
+    url: str | None  # None: no page to link (the stock leg of a stock perp)
     settlement_source: str | None
     snapshot_at: datetime | None
 
@@ -48,22 +52,23 @@ class BookLevel(_M):
 
 
 class Check(_M):
-    name: Literal["same_instant", "exact_match", "basis_bound", "fees_depth", "jurisdiction"]
+    name: Literal["same_instant", "exact_match", "basis_bound", "fees_depth", "jurisdiction", "reference", "fees_carry"]
     status: Literal["ok", "fail", "partial"]
     detail: str
 
 
 class Verdict(_M):
     label: str
-    checks: list[Check]  # fixed order: same_instant|exact_match, basis_bound, fees_depth, jurisdiction
+    checks: list[Check]  # fixed order: same_instant|exact_match, basis_bound, fees_depth, jurisdiction;
+    # stock perps: reference, fees_carry, fees_depth, jurisdiction
 
 
 class Pair(_M):
     key: str
-    kind: Literal["exact", "near_exact", "ladder"]
+    kind: Literal["exact", "near_exact", "ladder", "stock_perp"]
     category: str
     title: str
-    settles_at: datetime
+    settles_at: datetime | None  # None for a stock perp (perpetual)
     ladder: str | None  # "BTC~2026-10-20T16:00:00+00:00" for ladder/near_exact rows, else None
     legs: list[Leg]  # [kalshi, polymarket]
     direction: str
@@ -79,6 +84,15 @@ class Pair(_M):
     us_executable: bool
     fee_params: dict  # {"k": {"fee_type", "fee_multiplier"}, "pm": {"schedule", "fees_enabled"}} for /api/walk
     spark: list[float | None]  # 24 hourly points, oldest first; None = no scored row that hour
+    # stock-perp rows only (net_edge_cents / net_edge_bps / net_edge_roi carry net_bps in the pair rows' units)
+    basis_bps: float | None = None  # mark vs reference
+    net_bps: float | None = None  # after fees, spreads, funding and borrow over hold_hours
+    funding_bps_h: float | None = None  # the venue's hourly funding rate
+    next_funding_at: datetime | None = None
+    reference: dict | None = None  # {"kind": "schwab" | "oracle", "symbol", "asof"}
+    trade: str | None = None  # "short xyz:NVDA / long NVDA"
+    hold_hours: int | None = None
+    sensitivity: dict | None = None  # {"net_bps_1h", "net_bps_7d", "net_bps_borrow_x10"}
 
 
 class Basis(_M):
@@ -114,6 +128,7 @@ class Kpis(_M):
     violations: int | None
     screened_share_ge_1c: float | None
     screened_hours: int | None
+    stock_perps: dict | None = None  # {"names_live", "episodes_7d"}; None while the stock-perp tier is off
 
 
 class ResearchSeries(_M):
@@ -347,17 +362,95 @@ def _rank(edge: Edge | None) -> float:
     return edge.best_edge if edge and edge.best_edge is not None else float("-inf")
 
 
+def stock_perp_verdict(edge: StockPerpEdge, ref: Reference, live: bool, now: datetime) -> Verdict:
+    """The stock-perp analogue of verdict(): checks reference, fees_carry, fees_depth, jurisdiction. An oracle-only row
+    is never executable (no size behind the price)."""
+    schwab = ref.kind == "schwab"
+    ok = live and schwab and edge.net_bps >= config.STOCK_PERP_MIN_NET_BPS and edge.capacity_usd >= MIN_CAPACITY_USD
+    checks = [Check(name="reference", status="ok" if schwab else "partial",
+                    detail=f"Schwab quote {(now - ref.asof).total_seconds():.0f} s old" if schwab
+                    else "oracle only: stock market closed or no quote")]
+    if live:
+        net = edge.net_bps
+        checks.append(Check(name="fees_carry", status="ok" if net >= config.STOCK_PERP_MIN_NET_BPS else "fail",
+                            detail=f"net {net:+.1f} bps after 2× taker, spread, {edge.hold_h:g} h funding and borrow"))
+        cap = edge.capacity_usd
+        checks.append(Check(name="fees_depth", status="ok" if cap >= MIN_CAPACITY_USD else "fail",
+                            detail=f"${cap:,.0f} fillable vs ${MIN_CAPACITY_USD:,.0f} minimum"))
+    else:
+        checks += [Check(name="fees_carry", status="fail", detail="not scored: a leg is stale"),
+                   Check(name="fees_depth", status="fail", detail="not walked: a leg is stale")]
+    checks.append(Check(name="jurisdiction", status="partial",
+                        detail="anywhere: perp leg open · US: Hyperliquid blocks US traders"))
+    if not live:
+        label = "Stale · a leg has no snapshot in 5 min"
+    elif not schwab:
+        label = "Reference closed · oracle only"
+    elif ok:
+        label = f"Executable edge · {edge.net_bps:+.0f} bps · ${edge.capacity_usd:,.0f} at top of book"
+    else:
+        label = "Basis · within costs · no edge"
+    return Verdict(label=label, checks=checks)
+
+
+def stock_perp_rows(perps: list[tuple[PerpCtx, Label, SnapPerp, Quote | None]], sparks: dict,
+                    now: datetime) -> list[Pair]:
+    """One row per perp name. net_edge_cents is net_bps / 100 (bps of notional read as ¢ per $100), so the Explorer's
+    ¢ axis and sparkline share a unit with the pair rows. Past LIVE_MAX_AGE_S the row is unscored (Stale, nets None)."""
+    rows = []
+    for ctx, label, (ts, levels), quote in perps:
+        ref = stock_perps.reference(ctx, quote, label, now)
+        edge = stock_perps.score(ctx, levels, ref)
+        live = now - ts <= timedelta(seconds=LIVE_MAX_AGE_S)
+        sym, stock = ctx.symbol, label.ref_symbol or ctx.symbol
+        short_perp = edge.direction == "short_perp_long_stock"
+        perp_side, stock_side = ("short", "long") if short_perp else ("long", "short")
+        key = pair_key(sym, stock, edge.direction)
+        net = round(edge.net_bps, 4) if live else None
+        taker = HYPERLIQUID_TAKER["growth" if ctx.growth_mode else "standard"]
+        hold = edge.hold_h
+        rows.append(Pair(
+            key=key, kind="stock_perp", category="stock_perps",
+            title=f"{label.name} ({label.exchange})" if label.exchange else label.name, settles_at=None, ladder=None,
+            legs=[Leg(venue="hyperliquid", market_id=sym, side=perp_side, title=sym,
+                      url=f"https://app.hyperliquid.xyz/trade/{sym}", settlement_source=None, snapshot_at=ts),
+                  Leg(venue=label.exchange.lower() or "stock", market_id=stock, side=stock_side, title=label.name,
+                      url=None, settlement_source=None,
+                      snapshot_at=ref.asof if ref.kind == "schwab" else None)],
+            direction=edge.direction, live=live,
+            net_edge_cents=None if net is None else net / 100, net_edge_bps=net,
+            net_edge_roi=None if net is None else net / 1e4,
+            fees_cents=None if net is None else round((edge.perp_fee_bps + (edge.stock_spread_bps or 0)) / 100, 4),
+            capacity_contracts=edge.capacity_contracts if live else 0.0,
+            capacity_usd=edge.capacity_usd if live else 0.0, books=None,
+            verdict=stock_perp_verdict(edge, ref, live, now), us_executable=False,
+            fee_params={"perp": {"taker": taker, "growth_mode": ctx.growth_mode},
+                        "stock": {"borrow_bps_yr": config.STOCK_PERP_BORROW_BPS_YR}},
+            spark=sparks.get(key, [None] * SPARK_HOURS),
+            basis_bps=round(edge.basis_bps, 4) if live else None, net_bps=net, funding_bps_h=ctx.funding_h * 1e4,
+            next_funding_at=now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1),
+            reference={"kind": ref.kind, "symbol": ref.symbol, "asof": ref.asof.isoformat()},
+            trade=f"{perp_side} {sym} / {stock_side} {stock}", hold_hours=int(hold),
+            sensitivity=None if not live else {
+                "net_bps_1h": round(stock_perps.gross_to_net(edge, 1), 4),
+                "net_bps_7d": round(stock_perps.gross_to_net(edge, 168), 4),
+                # borrow is linear in the hold and not in the fill walk's net: x10 subtracts the other 9 x
+                "net_bps_borrow_x10": round(edge.net_bps - 9 * edge.borrow_bps, 4)}))
+    return rows
+
+
 def build_live(*, now: datetime, exact_rows: list[Pair], ladder_rows: list[Pair], basis: dict[str, Basis],
                episodes: list[Episode], annotations: list[Annotation], kpi_inputs: dict,
                attribution: list[str], caveats: list[str], collector_last: datetime | None,
-               research: ResearchSummary | None = None) -> LiveBundle:
+               research: ResearchSummary | None = None, stock_rows: list[Pair] | None = None) -> LiveBundle:
     """`episodes` = the last 7 days of scoped opportunities (already the >= 1¢, >= $100, >= 2 snapshots rule);
     kpi_inputs keys (each optional): checks_window, admissible_checks, violations, screened_share_ge_1c,
-    screened_hours. pairs_live counts distinct market pairs (k_id, pm_id) per kind, not direction rows."""
-    pairs = exact_rows + ladder_rows
+    screened_hours, stock_perps ({"episodes_7d"}). pairs_live counts distinct market pairs (k_id, pm_id) per kind, not
+    direction rows. `stock_rows` None = the stock-perp tier is off; stock rows never feed best_edge (bps, not pair ¢)."""
+    pairs = exact_rows + ladder_rows + (stock_rows or [])
     live = [p for p in pairs if p.live]
-    # near-exact rows are basis exposure, never the headline edge
-    top = max((p for p in live if p.net_edge_cents is not None and p.kind != "near_exact"),
+    # near-exact rows are basis exposure, never the headline edge; stock perps are another tier
+    top = max((p for p in live if p.net_edge_cents is not None and p.kind not in ("near_exact", "stock_perp")),
               key=lambda p: p.net_edge_cents, default=None)
     kpis = Kpis(
         episodes_7d=len(episodes),
@@ -366,7 +459,10 @@ def build_live(*, now: datetime, exact_rows: list[Pair], ladder_rows: list[Pair]
         pairs_live={kind: len({(p.legs[0].market_id, p.legs[1].market_id) for p in live if p.kind == kind})
                     for kind in ("exact", "near_exact", "ladder")},
         **{f: kpi_inputs.get(f) for f in ("checks_window", "admissible_checks", "violations",
-                                          "screened_share_ge_1c", "screened_hours")})
+                                          "screened_share_ge_1c", "screened_hours")},
+        stock_perps=None if stock_rows is None else {
+            "names_live": sum(p.live for p in stock_rows),
+            "episodes_7d": kpi_inputs.get("stock_perps", {}).get("episodes_7d", 0)})
     return LiveBundle(computed_at=now, collector_last_snapshot_at=collector_last,
                       show_books=config.DASHBOARD_SHOW_BOOKS, basis=basis, kpis=kpis, pairs=pairs,
                       episodes=episodes, annotations=annotations, attribution=attribution, caveats=caveats,

@@ -7,7 +7,24 @@ from types import SimpleNamespace
 import pyarrow as pa
 import pytest
 
-from tests.test_bundle import BOOKS, INSTANT, K_BOOK, KPI, LADDER, LDF, NOW, PAIR, PM_BOOK, SERIES_FEE, TITLES
+from tests.test_bundle import (
+    BOOKS,
+    CTX215,
+    INSTANT,
+    K_BOOK,
+    KPI,
+    LABEL_NVDA,
+    LADDER,
+    LDF,
+    NOW,
+    PAIR,
+    PM_BOOK,
+    QUOTE,
+    SERIES_FEE,
+    SP_NOW,
+    SP_SNAP,
+    TITLES,
+)
 from venue_arb import config, publish
 from venue_arb.bundle import LiveBundle
 from venue_arb.models import Level
@@ -70,7 +87,7 @@ def test_history_table_schema_and_nulls(monkeypatch):
     t, edge_rows, ladder_rows, books = _history_fixture()
     tab = publish.history_table(edge_rows, ladder_rows, books, sides={("K1", "P1"): "yes"})
     assert tab.column_names == ["ts", "key", "kind", "direction", "net_edge_cents", "capacity_usd", "k_ask", "k_size",
-                                "pm_ask", "pm_size", "fees_cents"]
+                                "pm_ask", "pm_size", "fees_cents", "basis_bps", "net_bps"]
     assert tab.schema.field("ts").type == pa.timestamp("ms", tz="UTC")
     rows = tab.to_pylist()
     assert [r["kind"] for r in rows] == ["exact", "exact", "near_exact", "ladder"]
@@ -263,7 +280,7 @@ def test_write_history_hour_writes_zstd_parquet(tmp_path):
 
 def test_episodes_sql_window_and_budget():
     assert "coalesce(end_ts, now())" in publish.EPISODES_SQL and "source" in publish.EPISODES_SQL
-    assert publish.LIVE_BYTES_BUDGET == 800_000
+    assert publish.LIVE_BYTES_BUDGET == 1_200_000
 
 
 def test_episodes_7d_counts_open_episode():
@@ -371,3 +388,78 @@ def test_research_bytes_warn(tmp_path, monkeypatch):
     state["history_hour"] = publish.history_hour(later)
     _cycle(state, research_readers(calls, fail=True), tmp_path, later, calls)
     assert "research_bytes" not in state  # a failed computation measures nothing
+
+
+def _perps_readers(calls):
+    rd = readers()
+    rd["perps"] = lambda: calls.append("perps") or [(CTX215, LABEL_NVDA, SP_SNAP, QUOTE)]
+    return rd
+
+
+def test_tick_skips_stock_perps_while_flag_off(monkeypatch):
+    monkeypatch.setattr(config, "DASHBOARD_SHOW_STOCK_PERPS", False)
+    calls = []
+    out = publish.tick({}, _perps_readers(calls), NOW)
+    assert calls == [] and len(out.pairs) == 2 + 5 and out.kpis.stock_perps is None
+
+
+def test_tick_adds_stock_perp_rows_when_flag_on(monkeypatch):
+    monkeypatch.setattr(config, "DASHBOARD_SHOW_STOCK_PERPS", True)
+    calls = []
+    out = publish.tick({}, _perps_readers(calls), SP_NOW)
+    assert calls == ["perps"] and [p.category for p in out.pairs].count("stock_perps") == 1
+    assert out.kpis.stock_perps == {"names_live": 1, "episodes_7d": 0}
+    LiveBundle.model_validate_json(out.model_dump_json())
+
+
+def test_tick_survives_a_failing_perps_reader(monkeypatch):
+    monkeypatch.setattr(config, "DASHBOARD_SHOW_STOCK_PERPS", True)
+    rd = readers()
+    rd["perps"] = lambda: 1 / 0
+    out = publish.tick({}, rd, NOW)
+    assert len(out.pairs) == 2 + 5 and out.kpis.stock_perps == {"names_live": 0, "episodes_7d": 0}
+
+
+def test_episodes_sql_and_scope_exclude_stock_perp():
+    assert "source <> 'stock_perp'" in publish.EPISODES_SQL
+    assert "source = 'stock_perp'" in publish.STOCK_PERP_EPISODES_SQL and "7 days" in publish.STOCK_PERP_EPISODES_SQL
+    assert publish.scope_episodes([{"source": "stock_perp", "kalshi_id": "x", "pm_id": "y"}], {}) == []
+
+
+def test_spark_series_maps_stock_perp_rows_to_the_bundle_key():
+    start = datetime(2026, 10, 19, 16, tzinfo=UTC)
+    rows = [("xyz:NVDA", "", "short_perp_long_stock", start, 0.008432)]
+    s = publish.spark_series(rows, start, refs={"xyz:NVDA": "NVDA"})["xyz:NVDA~NVDA~short_perp_long_stock"]
+    assert s[0] == pytest.approx(0.8432)  # SPARKS_SQL emits net_bps / 1e4; x100 -> net_bps / 100 (¢ of the net)
+    assert "stock_perp_edges" in publish.SPARKS_SQL and "max(net_bps)" in publish.SPARKS_SQL
+
+
+def test_history_table_has_basis_columns_null_for_pairs():
+    t, edge_rows, ladder_rows, books = _history_fixture()
+    stock = [(t, "xyz:NVDA", "short_perp_long_stock", 101.2, 84.3, 63864.0)]
+    tab = publish.history_table(edge_rows, ladder_rows, books, sides={("K1", "P1"): "yes"}, stock_rows=stock,
+                                refs={"xyz:NVDA": "NVDA"})
+    rows = tab.to_pylist()
+    assert tab.schema.field("basis_bps").type == pa.float64() and tab.schema.field("net_bps").type == pa.float64()
+    assert all(r["basis_bps"] is None and r["net_bps"] is None for r in rows[:-1])
+    sp = rows[-1]
+    assert (sp["key"], sp["kind"], sp["direction"]) == ("xyz:NVDA~NVDA~short_perp_long_stock", "stock_perp",
+                                                        "short_perp_long_stock")
+    assert (sp["basis_bps"], sp["net_bps"], sp["capacity_usd"]) == (101.2, 84.3, 63864.0)
+    assert sp["net_edge_cents"] == pytest.approx(0.843) and sp["k_ask"] is None and sp["fees_cents"] is None
+
+
+def test_write_history_hour_reads_stock_perp_edges_only_while_flag_on(tmp_path, monkeypatch):
+    import pyarrow.parquet as pq
+
+    hour = datetime(2026, 10, 20, 15, tzinfo=UTC)
+    t = hour + timedelta(seconds=10)
+    results = {"venue_arb.edges": [], "venue_arb.ladder_edges": [], "venue_arb.book_levels_v2": [],
+               "venue_arb.stock_perp_edges": [(t, "xyz:NVDA", "short_perp_long_stock", 101.2, 84.3, 63864.0)]}
+    ch = SimpleNamespace(query=lambda sql, parameters=None: SimpleNamespace(
+        result_rows=next(v for k, v in results.items() if f"FROM {k} " in sql)))
+    monkeypatch.setattr(config, "DASHBOARD_SHOW_STOCK_PERPS", False)
+    assert pq.read_table(publish.write_history_hour(ch, tmp_path, hour)).num_rows == 0
+    monkeypatch.setattr(config, "DASHBOARD_SHOW_STOCK_PERPS", True)
+    [row] = pq.read_table(publish.write_history_hour(ch, tmp_path, hour)).to_pylist()
+    assert row["key"] == "xyz:NVDA~NVDA~short_perp_long_stock" and row["net_bps"] == 84.3  # labels/stock_perps.csv

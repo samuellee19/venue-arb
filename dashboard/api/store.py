@@ -21,7 +21,7 @@ import duckdb
 from venue_arb.bundle import LiveBundle
 
 log = logging.getLogger(__name__)
-COLS = ("net_edge_cents", "capacity_usd", "k_ask", "k_size", "pm_ask", "pm_size", "fees_cents")
+COLS = ("net_edge_cents", "capacity_usd", "k_ask", "k_size", "pm_ask", "pm_size", "fees_cents", "basis_bps", "net_bps")
 RANGES = {"1h": "1 hour", "24h": "24 hours", "7d": "7 days"}
 SNAPSHOT_MAX_S = 90
 ISO = "strftime(ts, '%Y-%m-%dT%H:%M:%SZ')"
@@ -59,8 +59,18 @@ class Store:
             return None
         glob = str(hist / "pairs-*.parquet").replace("'", "''")
         # ts as naive UTC: cursors do not inherit a session TimeZone, and TIMESTAMPTZ formats in local time;
-        # union_by_name: an hour file written before a column was added still reads (the missing column is null)
-        return f"(SELECT * REPLACE (timezone('UTC', ts) AS ts) FROM read_parquet('{glob}', union_by_name=true))"
+        # union_by_name: an hour file written before a column was added still reads (the missing column is null).
+        # When no file has a column yet (all written before it was added), union_by_name cannot supply it: add it null.
+        read = f"read_parquet('{glob}', union_by_name=true)"
+        cur = self._con.cursor()  # a cursor per call, as _query
+        try:
+            have = {r[0] for r in cur.execute(f"DESCRIBE SELECT * FROM {read}").fetchall()}
+        except duckdb.Error:  # a corrupt file: the query itself fails the same way, and _query serves no rows
+            have = set(COLS)
+        finally:
+            cur.close()
+        extra = "".join(f", NULL::DOUBLE AS {c}" for c in COLS if c not in have)
+        return f"(SELECT * REPLACE (timezone('UTC', ts) AS ts){extra} FROM {read})"
 
     def _query(self, sql: str, params: list) -> tuple[list[str], list[tuple]]:
         """No rows on a DuckDB error (a truncated or corrupt hour file): history() -> {}, snapshot() -> None, not 500."""
