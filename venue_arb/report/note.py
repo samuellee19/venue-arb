@@ -55,7 +55,7 @@ LADDER_OPPS_SQL = _OPPS + "WHERE source = 'ladder' AND kalshi_id NOT LIKE 'ZZTES
 # one row per strike pair, direction and the bounds the rows were scored under (ladder_edges is too long to read raw)
 LADDER_SQL = """
 SELECT asset, instant, k_id, pm_id, direction, kind, a, b, basis_up, basis_down, count() AS snapshots,
-       countIf(capacity_usd > 0) AS n_capacity_gt0, max(best_edge) AS best_edge_max, min(ts) AS first_ts,
+       countIf(capacity_contracts > 0) AS n_capacity_gt0, max(best_edge) AS best_edge_max, min(ts) AS first_ts,
        max(ts) AS last_ts
 FROM venue_arb.ladder_edges FINAL WHERE k_id NOT LIKE 'ZZTEST-%'
 GROUP BY asset, instant, k_id, pm_id, direction, kind, a, b, basis_up, basis_down
@@ -67,7 +67,7 @@ BASIS_SQL = ("SELECT asset, diff, binance FROM venue_arb.basis FINAL "
 # under the latest bounds of their (asset, instant) ladder count (stale rows from earlier bounds drop out, so the
 # numerator can only undercount)
 LADDER_HOURS_SQL = """
-SELECT toStartOfHour(ts) AS hour, count() AS scored, countIf(capacity_usd > 0) AS pos
+SELECT toStartOfHour(ts) AS hour, count() AS scored, countIf(capacity_contracts > 0) AS pos
 FROM venue_arb.ladder_edges FINAL WHERE kind = 'arb' AND k_id NOT LIKE 'ZZTEST-%'
   AND (asset, instant, basis_up, basis_down) IN (
     SELECT asset, instant, argMax(basis_up, ts), argMax(basis_down, ts)
@@ -215,9 +215,10 @@ def _basis(rows: list) -> dict:
 def _ladder(groups: list[dict], episodes: list[dict], basis_rows: list, admissible: list[dict],
             hours: list[dict]) -> dict:
     """groups: LADDER_SQL rows (one per strike pair x direction x stored bounds). A check = one strike pair, one
-    direction, one aligned snapshot. 'Positive' = capacity_usd > 0, i.e. the top-of-book edge after fees >= MIN_EDGE.
-    admissible: [{"hour", "checks"}] per counted clock hour; hours: LADDER_HOURS_SQL rows. The share against the
-    admissible count uses only scored rows in counted hours, so numerator and denominator cover the same hours."""
+    direction, one aligned snapshot. 'Positive' = capacity_contracts > 0, i.e. the top-of-book edge after fees
+    >= MIN_EDGE. admissible: [{"hour", "checks"}] per counted clock hour; hours: LADDER_HOURS_SQL rows. The share
+    against the admissible count uses only scored rows in counted hours, so numerator and denominator cover the same
+    hours."""
     arb = [g for g in groups if g["kind"] == "arb"]
     near = [g for g in groups if g["kind"] == "near_exact"]
     scored, pos = sum(g["snapshots"] for g in arb), sum(g["n_capacity_gt0"] for g in arb)

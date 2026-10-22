@@ -12,7 +12,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
-from venue_arb import config
+from venue_arb import config, taxonomy
 from venue_arb.edges import Edge, score
 from venue_arb.episodes import MIN_EDGE
 from venue_arb.exact import ExactPair
@@ -70,6 +70,7 @@ class Pair(_M):
     live: bool
     net_edge_cents: float | None
     net_edge_bps: float | None
+    net_edge_roi: float | None  # fraction: net_edge_cents / (100 - net_edge_cents); None with no edge
     fees_cents: float | None
     capacity_contracts: float
     capacity_usd: float
@@ -115,6 +116,50 @@ class Kpis(_M):
     screened_hours: int | None
 
 
+class ResearchSeries(_M):
+    ts: list[datetime]
+    values: list[float | None]
+
+
+class ResearchHist(_M):
+    edges: list[float]  # ¢; len(edges) == len(counts) + 1
+    counts: list[int]
+
+
+class ResearchLadderSeries(_M):
+    ts: list[datetime]
+    checks: list[int]
+    violations: list[int]
+
+
+class ResearchSummary(_M):
+    computed_at: datetime
+    window_start: datetime | None
+    headline: list[str]  # 2-3 sentences, numbers already formatted, publisher-owned
+    pairs_eligible: int
+    pairs_reviewed: int
+    snapshots: int
+    max_net_edge_cents: float | None
+    episodes_pair: int
+    episodes_ladder: int
+    episodes_us: int
+    episode_median_minutes: float | None
+    episode_median_capacity_usd: float | None
+    screened_rows: int
+    screened_share_ge_1c: float | None
+    screened_share_early: float | None
+    ladder_checks: int | None
+    ladder_violations: int
+    ladder_scored: int
+    basis: dict[str, Basis]
+    review: dict | None  # {"precision": float, "labels": int, "asof": datetime} or None
+    exec_hourly: ResearchSeries  # max net edge (¢) per hour over all scoped pairs, whole history
+    screened_hist: ResearchHist  # net-gap histogram, bins -10¢..+10¢ by 1¢ (22 edges incl. open ends)
+    ladder_hourly: ResearchLadderSeries  # admissible checks and violations per counted hour
+    method: dict[str, str]  # keys matching, edge, crypto, not_shown
+    note_path: str  # "reports/research-note-v1.md"
+
+
 class LiveBundle(_M):
     computed_at: datetime
     collector_last_snapshot_at: datetime | None
@@ -126,6 +171,13 @@ class LiveBundle(_M):
     annotations: list[Annotation]
     attribution: list[str]
     caveats: list[str]
+    categories: dict[str, str]  # category slug -> display name
+    research: ResearchSummary | None
+
+
+def roi(net_edge_cents: float | None) -> float | None:
+    """Net edge per dollar laid out: a pair pays $1 for an outlay of 1 - net, so 0.5¢ net -> 0.005 / 0.995."""
+    return None if net_edge_cents is None else net_edge_cents / (100 - net_edge_cents)
 
 
 def pair_key(k_id: str, pm_id: str, direction: str) -> str:
@@ -226,7 +278,7 @@ def _pair(kind, direction, k_id, pm_id, k_side, pm_side, titles, k_book, pm_book
         key=key, kind=kind, category=category, title=title, settles_at=settles_at, ladder=ladder,
         legs=[_leg("kalshi", k_id, k_side, titles[("kalshi", k_id)], k_book),
               _leg("polymarket", pm_id, pm_side, titles[("polymarket", pm_id)], pm_book)],
-        direction=direction, live=live, net_edge_cents=net, net_edge_bps=bps, fees_cents=fee,
+        direction=direction, live=live, net_edge_cents=net, net_edge_bps=bps, net_edge_roi=roi(net), fees_cents=fee,
         capacity_contracts=edge.capacity_contracts if edge else 0.0, capacity_usd=edge.capacity_usd if edge else 0.0,
         books=books,
         verdict=verdict(kind, direction, edge, a=a, b=b, up=up, down=down, us_executable=US, both_live=live,
@@ -293,9 +345,11 @@ def _rank(edge: Edge | None) -> float:
 
 def build_live(*, now: datetime, exact_rows: list[Pair], ladder_rows: list[Pair], basis: dict[str, Basis],
                episodes: list[Episode], annotations: list[Annotation], kpi_inputs: dict,
-               attribution: list[str], caveats: list[str], collector_last: datetime | None) -> LiveBundle:
-    """`episodes` = the last 7 days of opportunities (already the >= 1¢, >= $100, >= 2 snapshots rule); kpi_inputs
-    keys (each optional): checks_window, admissible_checks, violations, screened_share_ge_1c, screened_hours."""
+               attribution: list[str], caveats: list[str], collector_last: datetime | None,
+               research: ResearchSummary | None = None) -> LiveBundle:
+    """`episodes` = the last 7 days of scoped opportunities (already the >= 1¢, >= $100, >= 2 snapshots rule);
+    kpi_inputs keys (each optional): checks_window, admissible_checks, violations, screened_share_ge_1c,
+    screened_hours. pairs_live counts distinct market pairs (k_id, pm_id) per kind, not direction rows."""
     pairs = exact_rows + ladder_rows
     live = [p for p in pairs if p.live]
     # near-exact rows are basis exposure, never the headline edge
@@ -305,9 +359,13 @@ def build_live(*, now: datetime, exact_rows: list[Pair], ladder_rows: list[Pair]
         episodes_7d=len(episodes),
         best_edge=None if top is None else {"key": top.key, "net_edge_cents": top.net_edge_cents,
                                             "capacity_usd": top.capacity_usd},
-        pairs_live={kind: sum(p.kind == kind for p in live) for kind in ("exact", "near_exact", "ladder")},
+        pairs_live={kind: len({(p.legs[0].market_id, p.legs[1].market_id) for p in live if p.kind == kind})
+                    for kind in ("exact", "near_exact", "ladder")},
         **{f: kpi_inputs.get(f) for f in ("checks_window", "admissible_checks", "violations",
                                           "screened_share_ge_1c", "screened_hours")})
     return LiveBundle(computed_at=now, collector_last_snapshot_at=collector_last,
                       show_books=config.DASHBOARD_SHOW_BOOKS, basis=basis, kpis=kpis, pairs=pairs,
-                      episodes=episodes, annotations=annotations, attribution=attribution, caveats=caveats)
+                      episodes=episodes, annotations=annotations, attribution=attribution, caveats=caveats,
+                      categories=taxonomy.DISPLAY | {p.category: p.category for p in pairs
+                                                     if p.category not in taxonomy.DISPLAY},
+                      research=research)

@@ -31,6 +31,9 @@ POLYMARKET_TAGS = {
     "ethereum": "crypto_price",
 }
 
+# dashboard display names; every config.CATEGORIES entry needs one (tests/test_taxonomy.py)
+DISPLAY = {"fed_macro": "Fed & macro", "crypto_price": "Crypto"}
+
 
 def assign_category(
     listing: Listing, series_ticker: str | None, tag_slugs: list[str]

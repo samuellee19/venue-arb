@@ -1,8 +1,9 @@
 from dataclasses import replace
 from datetime import UTC, datetime
 
+from venue_arb.config import CATEGORIES
 from venue_arb.models import Listing
-from venue_arb.taxonomy import assign_category, version
+from venue_arb.taxonomy import DISPLAY, assign_category, version
 
 L = Listing(
     venue="kalshi", market_id="m", event_id="e", category=None, title="t", rules="r",
@@ -25,3 +26,7 @@ def test_assign_category_pm_tag_priority():
 def test_version_changes_on_rules_edit():
     assert version(L) == version(replace(L))
     assert version(L) != version(replace(L, rules="r2"))
+
+
+def test_display_covers_every_category():
+    assert set(CATEGORIES) <= set(DISPLAY) and all(DISPLAY[c] for c in CATEGORIES)

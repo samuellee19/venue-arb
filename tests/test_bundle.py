@@ -10,10 +10,15 @@ from venue_arb.bundle import (
     LIVE_MAX_AGE_S,
     Basis,
     LiveBundle,
+    ResearchHist,
+    ResearchLadderSeries,
+    ResearchSeries,
+    ResearchSummary,
     build_live,
     exact_pair_rows,
     ladder_pair_rows,
     market_url,
+    roi,
     verdict,
 )
 from venue_arb.edges import Edge
@@ -141,8 +146,8 @@ def test_executable_edge_label_carries_transfer_cost():
 
 def test_build_live_kpis_and_schema_roundtrip():
     b = _live(_ex(), _lad())
-    # the brief expected ladder 2; the brief's own strikes give 3 admissible (strike, direction) rows, all live
-    assert b.kpis.pairs_live == {"exact": 2, "near_exact": 2, "ladder": 3}
+    # distinct market pairs: the exact pair's two directions count once, as do the near-exact pair's
+    assert b.kpis.pairs_live == {"exact": 1, "near_exact": 1, "ladder": 3}
     # controller ruling: near-exact rows (basis exposure) never head the best-edge tile
     assert b.kpis.best_edge["key"] == max((p for p in b.pairs if p.kind != "near_exact"),
                                           key=lambda p: p.net_edge_cents or -9).key
@@ -185,3 +190,41 @@ def test_verdict_label_rounds_half_up_like_the_client():
 def test_market_urls():
     assert market_url("kalshi", {"market_id": "KXBTCD-26OCT2011-T85999.99", "raw": {"event": {"series_ticker": "KXBTCD", "event_ticker": "KXBTCD-26OCT2011"}}}) == "https://kalshi.com/markets/kxbtcd/market/kxbtcd-26oct2011"
     assert market_url("polymarket", {"raw": {"event": {"slug": "bitcoin-above-86000-on-october-20-12pm-et"}}}) == "https://polymarket.com/event/bitcoin-above-86000-on-october-20-12pm-et"
+
+
+def test_net_edge_roi():
+    r = next(r for r in _lad() if r.kind == "ladder" and r.net_edge_cents is not None)
+    assert r.net_edge_roi == pytest.approx(r.net_edge_cents / (100 - r.net_edge_cents))
+    stale = exact_pair_rows(PAIR, TITLES, K_BOOK, (NOW - timedelta(seconds=LIVE_MAX_AGE_S + 1), PM_BOOK[1]),
+                            SERIES_FEE, {}, NOW)[0]
+    assert stale.net_edge_cents is None and stale.net_edge_roi is None
+    assert roi(0.5) == pytest.approx(0.005 / 0.995) and roi(None) is None  # 0.5¢ net on a 99.5¢ outlay
+
+
+def test_pairs_live_counts_pairs_not_directions():
+    assert _live(_ex(), []).kpis.pairs_live == {"exact": 1, "near_exact": 0, "ladder": 0}
+
+
+def test_categories_from_taxonomy_display():
+    b = _live(_ex(), _lad())
+    assert b.categories == {"fed_macro": "Fed & macro", "crypto_price": "Crypto"}
+    odd = [r.model_copy(update={"category": "weather"}) for r in _ex()]
+    assert _live(odd, []).categories["weather"] == "weather"  # an unknown slug still renders
+
+
+def test_research_optional():
+    b = _live(_ex(), _lad())
+    assert b.research is None and LiveBundle.model_validate_json(b.model_dump_json()) == b
+    rs = ResearchSummary(
+        computed_at=NOW, window_start=None, headline=["a.", "b."], pairs_eligible=3, pairs_reviewed=1, snapshots=10,
+        max_net_edge_cents=None, episodes_pair=0, episodes_ladder=1, episodes_us=0, episode_median_minutes=None,
+        episode_median_capacity_usd=None, screened_rows=0, screened_share_ge_1c=None, screened_share_early=None,
+        ladder_checks=None, ladder_violations=0, ladder_scored=0, basis=BASIS, review=None,
+        exec_hourly=ResearchSeries(ts=[NOW], values=[None]),
+        screened_hist=ResearchHist(edges=[float(x) for x in range(-10, 12)], counts=[0] * 21),
+        ladder_hourly=ResearchLadderSeries(ts=[], checks=[], violations=[]),
+        method={"matching": "m", "edge": "e", "crypto": "c", "not_shown": "n"},
+        note_path="reports/research-note-v1.md")
+    b2 = build_live(now=NOW, exact_rows=_ex(), ladder_rows=[], basis=BASIS, episodes=[], annotations=[],
+                    kpi_inputs=KPI, attribution=[], caveats=[], collector_last=NOW, research=rs)
+    assert LiveBundle.model_validate_json(b2.model_dump_json()) == b2 and b2.research == rs

@@ -48,6 +48,11 @@
       "window_days": 30
     }
   },
+  "categories": {
+    "crypto_price": "Crypto",
+    "fed_macro": "Fed & macro",
+    "weather": "weather"
+  },
   "caveats": [
     "Synthetic sample: every price, size and time is invented."
   ],
@@ -76,9 +81,9 @@
     ],
     "episodes_7d": 1,
     "pairs_live": {
-      "exact": 4,
+      "exact": 2,
       "ladder": 3,
-      "near_exact": 2
+      "near_exact": 1
     },
     "screened_hours": 3100,
     "screened_share_ge_1c": 0.004,
@@ -133,6 +138,7 @@
       "live": true,
       "net_edge_bps": -69.5134,
       "net_edge_cents": -0.7,
+      "net_edge_roi": -0.006951340615690168,
       "settles_at": "2026-12-09T19:00:00Z",
       "spark": [
         -0.62,
@@ -236,6 +242,7 @@
       "live": true,
       "net_edge_bps": null,
       "net_edge_cents": null,
+      "net_edge_roi": null,
       "settles_at": "2026-12-09T19:00:00Z",
       "spark": [
         null,
@@ -339,6 +346,7 @@
       "live": true,
       "net_edge_bps": 565.2404,
       "net_edge_cents": 5.35,
+      "net_edge_roi": 0.05652403592181721,
       "settles_at": "2026-11-13T13:30:00Z",
       "spark": [
         0.31,
@@ -442,6 +450,7 @@
       "live": true,
       "net_edge_bps": -959.4986,
       "net_edge_cents": -10.6133,
+      "net_edge_roi": -0.09594958291634009,
       "settles_at": "2026-11-13T13:30:00Z",
       "spark": [
         -10.11,
@@ -545,6 +554,7 @@
       "live": false,
       "net_edge_bps": null,
       "net_edge_cents": null,
+      "net_edge_roi": null,
       "settles_at": "2026-10-21T23:00:00Z",
       "spark": [
         null,
@@ -648,6 +658,7 @@
       "live": false,
       "net_edge_bps": null,
       "net_edge_cents": null,
+      "net_edge_roi": null,
       "settles_at": "2026-10-21T23:00:00Z",
       "spark": [
         null,
@@ -751,6 +762,7 @@
       "live": true,
       "net_edge_bps": -294.1308,
       "net_edge_cents": -3.0304,
+      "net_edge_roi": -0.029412678199832284,
       "settles_at": "2026-10-20T16:00:00Z",
       "spark": [
         -2.74,
@@ -854,6 +866,7 @@
       "live": true,
       "net_edge_bps": -102.1328,
       "net_edge_cents": -1.0319,
+      "net_edge_roi": -0.01021360580173193,
       "settles_at": "2026-10-20T16:00:00Z",
       "spark": [
         -0.93,
@@ -957,6 +970,7 @@
       "live": true,
       "net_edge_bps": 232.8171,
       "net_edge_cents": 2.2752,
+      "net_edge_roi": 0.023281705360358885,
       "settles_at": "2026-10-20T16:00:00Z",
       "spark": [
         2.78,
@@ -1060,6 +1074,7 @@
       "live": true,
       "net_edge_bps": -53.5913,
       "net_edge_cents": -0.5388,
+      "net_edge_roi": -0.00535912503431511,
       "settles_at": "2026-10-20T16:00:00Z",
       "spark": [
         -0.51,
@@ -1163,6 +1178,7 @@
       "live": true,
       "net_edge_bps": 2.8808,
       "net_edge_cents": 0.0288,
+      "net_edge_roi": 0.0002880829678947537,
       "settles_at": "2026-10-20T16:00:00Z",
       "spark": [
         null,
@@ -1219,5 +1235,6 @@
       }
     }
   ],
+  "research": null,
   "show_books": false
 }

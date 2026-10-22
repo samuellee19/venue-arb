@@ -162,7 +162,7 @@ def test_tick_composes_bundle_with_injected_readers():
     out = publish.tick({}, readers(), NOW)
     assert isinstance(out, LiveBundle)
     assert len(out.pairs) == 2 + 5  # exact: both directions; ladder: 2 near-exact + 3 ladder rows (test_bundle)
-    assert out.kpis.pairs_live == {"exact": 2, "near_exact": 2, "ladder": 3}
+    assert out.kpis.pairs_live == {"exact": 1, "near_exact": 1, "ladder": 3}
     assert out.kpis.admissible_checks == 1200 and out.basis["BTC"].up == 182.0
     assert out.collector_last_snapshot_at == NOW - timedelta(seconds=30)  # newest book read
     # one settlement line per instant, key None; fixture listings carry no first_seen, so no listing lines
@@ -259,3 +259,17 @@ def test_write_history_hour_writes_zstd_parquet(tmp_path):
     assert pq.read_table(path).to_pylist()[0]["fees_cents"] == pytest.approx(100 * (1 - 0.4 - 0.5 - 0.02))
     assert sorted(os.listdir(path.parent)) == ["pairs-2026102015.parquet"]
     assert isinstance(path, Path)
+
+
+def test_episodes_sql_window_and_budget():
+    assert "coalesce(end_ts, now())" in publish.EPISODES_SQL and "source" in publish.EPISODES_SQL
+    assert publish.LIVE_BYTES_BUDGET == 800_000
+
+
+def test_episodes_7d_counts_open_episode():
+    row = {"source": "pair", "kalshi_id": "K1", "pm_id": "P1", "direction": "k_yes_pm_no", "start_ts": NOW,
+           "end_ts": None, "max_edge": 0.02, "median_capacity_usd": 300.0, "transfer_cost_usd": 5.0}
+    rows = [row, {**row, "pm_id": "P2"}, {**row, "pm_id": "P3"}, {**row, "source": "ladder", "kalshi_id": "KX9"}]
+    scope = {("K1", "P1"): {"exact": True, "bad_review": False}, ("K1", "P2"): {"exact": True, "bad_review": True}}
+    kept = publish.scope_episodes(rows, scope)
+    assert [(r["source"], r["kalshi_id"], r["pm_id"]) for r in kept] == [("pair", "K1", "P1"), ("ladder", "KX9", "P1")]

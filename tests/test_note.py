@@ -197,3 +197,8 @@ def test_ladder_empty_renders_plainly(tmp_path):
 
 def test_pair_tier_query_excludes_ladders():
     assert "source = 'pair'" in note.OPPS_SQL and "source = 'ladder'" in note.LADDER_OPPS_SQL
+
+
+def test_ladder_positive_is_capacity_contracts():
+    for sql in (note.LADDER_SQL, note.LADDER_HOURS_SQL):
+        assert "capacity_contracts > 0" in sql and "capacity_usd > 0" not in sql

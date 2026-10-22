@@ -50,7 +50,7 @@ HISTORY_SIZE_BUDGET_MB = 50
 # local hour files older than this are deleted; the server's prune cron cutoff (8 d, Task 9) must be no shorter, or
 # rsync (no --delete) copies back every file the cron removed
 HISTORY_KEEP = timedelta(days=HISTORY_DAYS + 1)
-LIVE_BYTES_BUDGET = 600_000  # real bundles are ~460 KB with ~215 pair rows
+LIVE_BYTES_BUDGET = 800_000  # real bundles are ~460 KB with ~215 pair rows; headroom for the research block
 HISTORY_LAG = timedelta(minutes=55)  # an hour is written once score (:40) and ladder_score (:50) have scored it
 GAP = timedelta(minutes=3)
 PUSH_TIMEOUT_S = 120  # rsync's --timeout covers stalled I/O, not a black-holed ssh connect
@@ -80,10 +80,11 @@ SELECT k, p, d, toStartOfHour(ts) AS h, avg(e) FROM (
   WHERE ts >= {start:DateTime64(3, 'UTC')} AND k_id NOT LIKE 'ZZTEST-%'
 ) GROUP BY k, p, d, h
 """
+# both sources; pair-source rows are scoped in Python (scope_episodes) with note.SCOPE_SQL's rows, as the note does
 EPISODES_SQL = """
-SELECT kalshi_id, pm_id, direction, start_ts, end_ts, max_edge, median_capacity_usd, transfer_cost_usd
+SELECT source, kalshi_id, pm_id, direction, start_ts, end_ts, max_edge, median_capacity_usd, transfer_cost_usd
 FROM venue_arb.opportunities
-WHERE kalshi_id NOT LIKE 'ZZTEST-%' AND coalesce(end_ts, start_ts) > now() - interval '7 days'
+WHERE kalshi_id NOT LIKE 'ZZTEST-%' AND coalesce(end_ts, now()) > now() - interval '7 days'
 ORDER BY start_ts
 """
 # the latest ladder_score run's denominator, from runs without a failed error-severity check (as note.ADMISSIBLE_SQL)
@@ -299,13 +300,28 @@ def gap_annotations(minutes) -> list[Annotation]:
             for a, b in pairwise(_utc(m) for m in minutes) if b - a > GAP]
 
 
+def scope_episodes(rows: list[dict], scope: dict) -> list[dict]:
+    """EPISODES_SQL rows -> the note's scope: pair-source rows only for (kalshi_id, pm_id) pairs whose latest
+    adjudication is exact with no bad review (scope: {(a_id, b_id): {"exact", "bad_review"}}); ladder-source rows
+    always (the note scopes only the pair tier)."""
+    def ok(r):
+        s = scope.get((r["kalshi_id"], r["pm_id"]))
+        return s is not None and s["exact"] and not s["bad_review"]
+    return [r for r in rows if r["source"] != "pair" or ok(r)]
+
+
 def load_context(conn, ch, now: datetime) -> dict:
     """The slow-moving bundle parts, read every REFRESH_EVERY ticks: sparks, episodes, annotations, KPI inputs."""
+    from venue_arb.report.note import SCOPE_SQL  # lazily: keeps the report module (numpy) off the import path
+
     start = _hour(now) - timedelta(hours=bundle.SPARK_HOURS - 1)
     sparks = spark_series(ch.query(SPARKS_SQL, parameters={"start": start}).result_rows, start)
-    episodes = [Episode(key=pair_key(k, p, d), start=s, end=e, max_edge_cents=round(100 * mx, 4),
-                        median_capacity_usd=cap, transfer_cost_usd=tc)
-                for k, p, d, s, e, mx, cap, tc in conn.execute(EPISODES_SQL).fetchall()]
+    scope = {(k, p): {"exact": rel == "exact", "bad_review": bad}
+             for k, p, rel, bad, _closed in conn.execute(SCOPE_SQL, {"pv": PROMPT_VERSION}).fetchall()}
+    episodes = [Episode(key=pair_key(r["kalshi_id"], r["pm_id"], r["direction"]), start=r["start_ts"],
+                        end=r["end_ts"], max_edge_cents=round(100 * r["max_edge"], 4),
+                        median_capacity_usd=r["median_capacity_usd"], transfer_cost_usd=r["transfer_cost_usd"])
+                for r in scope_episodes(_dicts(conn.execute(EPISODES_SQL)), scope)]
     notes = gap_annotations(m for (m,) in ch.query(GAPS_SQL).result_rows)
     notes += [Annotation(kind="basis_change", at=_utc(t), until=None, key=None,
                          label=f"{asset} basis bound: up ${up:,.0f} / down ${down:,.0f}")
