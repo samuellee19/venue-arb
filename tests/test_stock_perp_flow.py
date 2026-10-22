@@ -75,12 +75,12 @@ def test_daily_refs_and_unlabelled_symbols_are_ignored_or_oracle():
 
 def test_opportunity_row_is_not_us_executable():
     _, [ep], _ = window()
-    row = stock_perp_opportunity_row(ep, LABELS["xyz:NVDA"])
+    row = stock_perp_opportunity_row(ep)
     assert (row["kalshi_id"], row["pm_id"], row["source"]) == ("xyz:NVDA", "NVDA", "stock_perp")
     assert row["us_executable"] is False and row["transfer_cost_usd"] == 0.0
     assert row["start_ts"] == ep.start and row["snapshots"] == 4
-    nolabel = Label("xyz:X", "none", None, "", "USD", "x")
-    assert stock_perp_opportunity_row(ep, nolabel)["pm_id"] == "xyz:NVDA"
+    assert set(row) == {"kalshi_id", "pm_id", "direction", "start_ts", "end_ts", "snapshots", "max_edge",
+                        "median_capacity_usd", "annualized", "us_executable", "transfer_cost_usd", "source"}
 
 
 def test_serve_lists_stock_perp_deployment():
@@ -113,10 +113,22 @@ def test_funding_pages_until_empty():
     assert calls == [h0, h0 + timedelta(hours=3), h0 + timedelta(hours=4)]
 
 
-def test_schwab_daily_rows_skip_existing_and_use_open_at_1330_utc():
-    days = [{"day": date(2026, 10, 20), "open": 10.0, "close": 11.0}, {"day": date(2026, 10, 21), "open": 12.0, "close": 13.0}]
-    t20 = datetime(2026, 10, 20, 13, 30, tzinfo=UTC)
-    [row] = bf.schwab_rows("xyz:NVDA", "NVDA", days, existing={t20})
-    ts = datetime(2026, 10, 21, 13, 30, tzinfo=UTC)
-    assert row == [ts, "xyz:NVDA", "schwab_daily", "NVDA", 12.0, 12.0, 0.0, 0.0, 13.0, ts]
+def test_schwab_daily_rows_skip_existing_and_stamp_the_new_york_open():
+    days = [{"day": date(2026, 10, 20), "open": 10.0, "close": 11.0},  # EDT: 13:30 UTC
+            {"day": date(2026, 12, 21), "open": 12.0, "close": 13.0}]  # EST: 14:30 UTC
+    edt, est = datetime(2026, 10, 20, 13, 30, tzinfo=UTC), datetime(2026, 12, 21, 14, 30, tzinfo=UTC)
+    assert [r[0] for r in bf.schwab_rows("xyz:NVDA", "NVDA", days, existing=set())] == [edt, est]
+    [row] = bf.schwab_rows("xyz:NVDA", "NVDA", days, existing={edt})
+    assert row == [est, "xyz:NVDA", "schwab_daily", "NVDA", 12.0, 12.0, 0.0, 0.0, 13.0, est]
 
+
+def test_a_tick_in_the_other_direction_ends_the_run():
+    ticks = [T0, T0 + timedelta(seconds=60), T0 + timedelta(seconds=120)]  # A short, B long, C short
+    marks = [(100.2, 100.2, 100.21), (99.8, 99.79, 99.8), (100.2, 100.2, 100.21)]  # mark, bid, ask
+    ctxs = [ctx("xyz:NVDA", t, m, 100.0) for t, (m, _, _) in zip(ticks, marks, strict=True)]
+    books = [r for t, (_, b, a) in zip(ticks, marks, strict=True) for r in book("xyz:NVDA", t, b, a)]
+    refs = [ref("xyz:NVDA", t, 99.99, 100.01) for t in ticks]
+    rows, eps, _ = score_window(ctxs, books, refs, LABELS, start=START, end=END)
+    assert [r["direction"] for r in rows] == ["short_perp_long_stock", "long_perp_short_stock", "short_perp_long_stock"]
+    assert all(r["net_bps"] > 10 and r["capacity_usd"] >= 100 for r in rows)  # each tick qualifies alone
+    assert eps == []  # A and C are not bridged across B

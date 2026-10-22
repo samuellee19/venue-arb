@@ -4,13 +4,14 @@
 
 Hourly candles and funding of every labelled perp from the last 60 days into stock_perp_candles (a re-run rewrites
 the same hours: ReplacingMergeTree), and the daily stock opens of every Schwab-labelled perp into stock_perp_refs as
-`schwab_daily` rows (the weekend tier's regular-session open); a re-run skips the (symbol, ts) rows already there,
-as that table is a plain MergeTree. Needs the four SCHWAB_* variables for the stock opens; without them only the
+`schwab_daily` rows stamped at 09:30 New York of the session day (the weekend tier's regular-session open); a re-run
+skips the (symbol, ts) rows already there, as that table is a plain MergeTree. Needs the four SCHWAB_* variables for the stock opens; without them only the
 candles are loaded.
 """
 import os
 import sys
 from datetime import UTC, datetime, time, timedelta
+from zoneinfo import ZoneInfo
 
 from venue_arb.sources import hyperliquid, schwab
 
@@ -19,7 +20,7 @@ CANDLES = "venue_arb.stock_perp_candles"
 REFS = "venue_arb.stock_perp_refs"
 CANDLE_COLS = ["symbol", "hour", "open", "high", "low", "close", "volume", "funding_h"]
 REF_COLS = ["ts", "symbol", "ref_kind", "ref_symbol", "bid", "ask", "bid_size", "ask_size", "last", "quote_time"]
-OPEN_UTC = time(13, 30)  # the regular session's open (EDT); the daily bar's own timestamp is not the open
+OPEN_ET = time(9, 30, tzinfo=ZoneInfo("America/New_York"))  # the regular session's open; 13:30 UTC in EDT, 14:30 in EST
 
 
 def funding_by_hour(symbol: str, start: datetime, end: datetime, fetch=hyperliquid.fetch_funding) -> dict[datetime, float]:
@@ -42,7 +43,7 @@ def candle_rows(symbol: str, candles: list[dict], funding: dict[datetime, float]
 def schwab_rows(symbol: str, ref_symbol: str, days: list[dict], existing: set[datetime]) -> list[list]:
     rows = []
     for d in days:
-        ts = datetime.combine(d["day"], OPEN_UTC, UTC)
+        ts = datetime.combine(d["day"], OPEN_ET).astimezone(UTC)
         if ts not in existing:
             rows.append([ts, symbol, "schwab_daily", ref_symbol, d["open"], d["open"], 0.0, 0.0, d["close"], ts])
     return rows

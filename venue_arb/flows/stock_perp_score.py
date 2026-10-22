@@ -70,7 +70,7 @@ def stock_perp_score_flow(window_hours: int = WINDOW_HOURS, end: datetime | None
             by_symbol.setdefault(c["symbol"], []).append(c)
         del ctx_rows
         stats = {"symbols": 0, "snapshots": 0, "edge_rows": 0, "rows_with_capacity": 0, "episodes": 0,
-                 "oracle_only_rows": 0}
+                 "oracle_only_rows": 0, "symbols_no_books": 0}
         stored_total = 0
         opps = []
         for symbol, ctxs in sorted(by_symbol.items()):
@@ -79,9 +79,11 @@ def stock_perp_score_flow(window_hours: int = WINDOW_HOURS, end: datetime | None
                                          _dicts(ch.query(REFS_SQL, parameters=p)), labels, start=start, end=end)
             for key, v in st.items():
                 stats[key] += v
+            if not rows:  # contexts without any book rows: the collector's books-fresh check owns that; go on
+                stats["symbols_no_books"] += 1
+                log.warning("%s: %d contexts, no book rows in the window", symbol, st["snapshots"])
+                continue
             pre = [checks.expect_schema(rows, CONTRACT, EDGES, nullable=frozenset({"stock_spread_bps"}))]
-            if st["snapshots"]:  # contexts without any book rows are the collector's books-fresh check to catch
-                pre.append(checks.expect_rows(len(rows), EDGES))
             checks.enforce(pre)  # a failure raises before this symbol is written
             if rows:
                 ch.insert(EDGES, [[r[c] for c in COLUMNS] for r in rows], column_names=COLUMNS)
@@ -89,7 +91,9 @@ def stock_perp_score_flow(window_hours: int = WINDOW_HOURS, end: datetime | None
                                                              "hi": max(r["ts"] for r in rows)}).result_rows[0]
                 stored_total += stored
             del rows
-            opps += [stock_perp_opportunity_row(e, hyperliquid.label_or_none(e.kalshi_id, labels)) for e in eps]
+            opps += [stock_perp_opportunity_row(e) for e in eps]
+        if stats["snapshots"]:  # contexts exist but not one symbol had books: a collector fault, fail the run
+            results.append(checks.expect_rows(stats["edge_rows"], EDGES))
         results.append(checks.Result("expect_schema", True, 0, 0, f"{stats['edge_rows']} rows checked per symbol "
                                      "before insert", target=EDGES))
         # ponytail: 1% slack, as in the ladder flow, for rows an earlier overlapping window aligned differently

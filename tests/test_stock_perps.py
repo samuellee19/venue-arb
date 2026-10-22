@@ -74,7 +74,8 @@ def test_score_walks_perp_bids_and_caps_on_stock_size():
 def test_score_stock_cap_binds_and_long_perp_side():
     e = sp.score(replace(CTX, mark=215.0), BOOK, replace(REF_SCHWAB, ask_size=100.0))
     assert e.stock_cap_usd == pytest.approx(21_285.0) and e.capacity_usd == pytest.approx(21_285.0)
-    e = sp.score(replace(CTX, mark=210.0), BOOK, REF_SCHWAB)  # mark below stock: long perp (walk asks), short stock
+    book = [PerpLevel("bid", 0, 209.8, 100.0), PerpLevel("ask", 0, 210.0, 100.0), PerpLevel("ask", 1, 210.1, 150.0)]
+    e = sp.score(replace(CTX, mark=210.0), book, REF_SCHWAB)  # mark below stock: long perp (walk asks), short stock
     assert e.direction == "long_perp_short_stock" and e.stock_cap_usd == pytest.approx(200 * 212.83)
     assert e.capacity_usd == pytest.approx(200 * 212.83)
     fill_bps = -(e.capacity_usd / e.capacity_contracts / e.reference - 1) * 1e4  # walked asks, long perp
@@ -150,3 +151,34 @@ def test_edge_row_columns():
     assert set(r) == {"ts", "symbol", "direction", "ref_kind", "reference", "mark", "basis_bps", "perp_fee_bps", "perp_spread_bps",
                       "stock_spread_bps", "funding_bps", "borrow_bps", "net_bps", "capacity_contracts",
                       "capacity_usd", "fee_version"}
+
+
+def _net_book(bids, ask0=100.19):
+    return [PerpLevel("bid", i, p, 100.0) for i, p in enumerate(bids)] + [PerpLevel("ask", 0, ask0, 100.0)]
+
+
+REF100 = sp.Reference("schwab", "NVDA", 100.0, 99.99, 100.01, 1000.0, 1000.0, NOW)  # stock spread 2 bps
+CTX100 = replace(CTX, mark=100.1, funding_h=0.0)  # growth taker fee 1.8 bps, no funding
+
+
+def test_capacity_is_zero_when_the_best_level_nets_under_the_floor():
+    # bid 100.09: +9 bps price edge; fee 1.8 + exit half-spread 0.999 + stock spread 2.0 -> net about 4.2 bps
+    e = sp.score(CTX100, _net_book([100.09], ask0=100.11), REF100)
+    assert e.capacity_contracts == 0.0 and e.capacity_usd == 0.0
+    assert e.net_bps == pytest.approx(9.0 - 1.8 - 0.02 / 200.2 * 1e4 - 2.0, abs=1e-6) and 4 < e.net_bps < 4.5
+
+
+def test_capacity_stops_at_the_first_level_below_the_floor():
+    # bid 100.17 nets about 12.2 bps, bid 100.10 about 5.2 bps (fixed costs 4.798): only the first level is capacity
+    e = sp.score(CTX100, _net_book([100.17, 100.10]), REF100)
+    assert e.capacity_contracts == 100.0 and e.capacity_usd == pytest.approx(100.17 * 100.0)
+    assert e.net_bps == pytest.approx(17.0 - 1.8 - 0.02 / 200.36 * 1e4 - 2.0, abs=1e-6) and e.net_bps > 10
+    # a deeper good level after a bad one is not reached either
+    assert sp.score(CTX100, _net_book([100.17, 100.10, 100.17]), REF100).capacity_contracts == 100.0
+    # a lower floor accepts the second level too
+    assert sp.score(CTX100, _net_book([100.17, 100.10]), REF100, min_net_bps=5.0).capacity_contracts == 200.0
+
+
+def test_walk_perp_accept_predicate_stops_the_walk():
+    c, usd, _ = sp.walk_perp(BIDS, "bid", None, accept=lambda px: px > 214.85)
+    assert c == 100.0 and usd == pytest.approx(21_490.0)

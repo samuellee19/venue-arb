@@ -1,10 +1,16 @@
 """Stock-perp basis against the stock, round-trip costs over a stated hold, and the capacity the stock side allows (pure)."""
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from statistics import median
 from typing import Literal
 
-from venue_arb.config import REF_MAX_AGE_S, STOCK_PERP_BORROW_BPS_YR, STOCK_PERP_HOLD_H
+from venue_arb.config import (
+    REF_MAX_AGE_S,
+    STOCK_PERP_BORROW_BPS_YR,
+    STOCK_PERP_HOLD_H,
+    STOCK_PERP_MIN_NET_BPS,
+)
 from venue_arb.edges import Edge
 from venue_arb.fees import HYPERLIQUID_TAKER
 from venue_arb.sources.hyperliquid import Label, PerpCtx, PerpLevel
@@ -62,12 +68,16 @@ def direction(basis: float) -> Direction:
     return "short_perp_long_stock" if basis > 0 else "long_perp_short_stock"
 
 
-def walk_perp(levels: list[PerpLevel], side: Literal["bid", "ask"], cap_usd: float | None) -> tuple[float, float, float]:
-    """(contracts, usd, avg_price) down the ladder until cap_usd is spent; None = the whole displayed book."""
+def walk_perp(levels: list[PerpLevel], side: Literal["bid", "ask"], cap_usd: float | None,
+              accept: Callable[[float], bool] | None = None) -> tuple[float, float, float]:
+    """(contracts, usd, avg_price) down the ladder until cap_usd is spent; None = the whole displayed book.
+    `accept(price)` is asked of each level; the walk stops at the first level it refuses."""
     contracts = usd = 0.0
     for lv in sorted((lv for lv in levels if lv.side == side), key=lambda lv: lv.level):
         if cap_usd is not None and usd >= cap_usd:
             break  # checked before `take`, so float residue cannot buy a dust slice of the next level
+        if accept and not accept(lv.price):
+            break
         take = lv.size if cap_usd is None else min(lv.size, (cap_usd - usd) / lv.price)
         contracts += take
         usd += take * lv.price
@@ -87,9 +97,11 @@ def _net(side: Direction, basis: float, c: dict) -> float:
 
 
 def score(ctx: PerpCtx, book: list[PerpLevel], ref: Reference, *, hold_h: float = STOCK_PERP_HOLD_H,
-          borrow_bps_yr: float = STOCK_PERP_BORROW_BPS_YR) -> StockPerpEdge:
-    """Net is taken from the walked average fill, not the mark: entry spread and depth are in it, the exit half-spread
-    is a cost line. `basis_bps` stays mark vs reference as the displayed basis."""
+          borrow_bps_yr: float = STOCK_PERP_BORROW_BPS_YR, min_net_bps: float = STOCK_PERP_MIN_NET_BPS) -> StockPerpEdge:
+    """Capacity is the dollars fillable while each level's own net stays at or above `min_net_bps` (the rule the pair
+    tier's edges.walk applies at 1 cent), capped by the stock leg's size; with no such level it is 0 and net is at the
+    best price on the side. Net is taken from the walked average fill, not the mark: entry spread and depth are in it,
+    the exit half-spread is a cost line. `basis_bps` stays mark vs reference as the displayed basis."""
     if ref.price <= 0:  # a zero reference is absent: use the oracle
         ref = Reference("oracle", ctx.symbol, ctx.oracle, None, None, None, None, ref.asof)
     if ref.price <= 0:
@@ -102,20 +114,23 @@ def score(ctx: PerpCtx, book: list[PerpLevel], ref: Reference, *, hold_h: float 
     c = costs_bps(taker=HYPERLIQUID_TAKER["growth" if ctx.growth_mode else "standard"], spread_bps=spread,
                   funding_h=ctx.funding_h, borrow_bps_yr=borrow_bps_yr, hold_h=hold_h, side=side)
     walked = "bid" if short_perp else "ask"
+    bids = sorted((lv for lv in book if lv.side == "bid"), key=lambda lv: lv.level)
+    asks = sorted((lv for lv in book if lv.side == "ask"), key=lambda lv: lv.level)
+    perp_spread = (asks[0].price - bids[0].price) / (asks[0].price + bids[0].price) * 1e4 if bids and asks else 0.0
+    sign = 1 if short_perp else -1
+    fixed = sum(c.values()) + perp_spread  # per-contract costs in bps; a level's net is its price edge less this
     if ref.kind != "schwab":
         cap = None  # an oracle price has no size: no capacity claim
         contracts = usd = 0.0
         fill = None
     else:
         cap = ref.ask_size * ref.ask if short_perp else ref.bid_size * ref.bid
-        contracts, usd, fill = walk_perp(book, walked, cap)
+        contracts, usd, fill = walk_perp(book, walked, cap,
+                                         lambda px: sign * basis_bps(px, ref.price) - fixed >= min_net_bps)
     if not contracts:  # nothing walked: price the entry at the best level on that side, else the mark
-        top = sorted((lv for lv in book if lv.side == walked), key=lambda lv: lv.level)
+        top = bids if short_perp else asks
         fill = top[0].price if top else ctx.mark
-    bids = sorted((lv for lv in book if lv.side == "bid"), key=lambda lv: lv.level)
-    asks = sorted((lv for lv in book if lv.side == "ask"), key=lambda lv: lv.level)
-    perp_spread = (asks[0].price - bids[0].price) / (asks[0].price + bids[0].price) * 1e4 if bids and asks else 0.0
-    fill_bps = (1 if short_perp else -1) * basis_bps(fill, ref.price)
+    fill_bps = sign * basis_bps(fill, ref.price)
     net = fill_bps - c["perp_fee"] - perp_spread - c["stock_spread"] - c["funding"] - c["borrow"]
     return StockPerpEdge(ctx.symbol, side, ref.kind, ref.price, ctx.mark, basis, c["perp_fee"], perp_spread, spread,
                          c["funding"], c["borrow"], net, contracts, usd, cap, hold_h)
