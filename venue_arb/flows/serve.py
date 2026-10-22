@@ -8,6 +8,7 @@ from venue_arb.flows.ladder_score import ladder_score_flow
 from venue_arb.flows.match import match_flow
 from venue_arb.flows.score import score_flow
 from venue_arb.flows.stock_perp_score import stock_perp_score_flow
+from venue_arb.flows.stock_perp_weekend import stock_perp_weekend_flow
 
 if __name__ == "__main__":
     # concurrency_limit=1: runs of one deployment never overlap. serve() creates/updates each deployment and
@@ -19,4 +20,6 @@ if __name__ == "__main__":
         score_flow.to_deployment("score", cron="40 * * * *", concurrency_limit=1),
         ladder_score_flow.to_deployment("ladder_score", cron="50 * * * *", concurrency_limit=1),
         stock_perp_score_flow.to_deployment("stock_perp_score", cron="55 * * * *", concurrency_limit=1),
+        # Monday 15:00 UTC is 10:00 or 11:00 New York, after the regular open has printed
+        stock_perp_weekend_flow.to_deployment("stock_perp_weekend", cron="0 15 * * 1", concurrency_limit=1),
     )
