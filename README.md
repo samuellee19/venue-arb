@@ -95,6 +95,7 @@ secrets uv run python -m venue_arb.flows.ladder_score # same-instant crypto ladd
 secrets uv run python -m venue_arb.flows.screened     # screened tier: hourly history gaps -> venue_arb.screened_v2 (by hand)
 secrets uv run python -m venue_arb.report.note  # research note v1 -> reports/research-note-v1.md + PNGs (re-run after ~4 weeks of snapshots for v1-final)
 secrets uv run python -m venue_arb.collect            # order-book snapshot collector (runs forever)
+secrets uv run python -m venue_arb.collect_perps      # stock-perp collector: Hyperliquid books + contexts, Schwab quotes (runs forever)
 secrets uv run python -m db.migrate                   # apply migrations
 ```
 
@@ -124,7 +125,8 @@ secrets uv run pytest -m integration    # needs the stack up
 
 ### Services
 
-On the OptiPlex, three long-running systemd user units: `venue-arb-collector` (order-book snapshots),
+On the OptiPlex, four long-running systemd user units: `venue-arb-collector` (order-book snapshots),
+`venue-arb-perps` (stock-perp snapshots; the weekly Schwab login restarts it),
 `venue-arb-publish` (dashboard bundle, below) and `venue-arb-flows` (`prefect.serve` of five hourly deployments: `catalog` at :05, `match` at :20, `basis` at :35,
 `score` at :40, which scores the last 26 h of books, and `ladder_score` at :50, which scores the last 3 h of same-instant
 ladder books; overlapping windows re-score idempotently). Apply migrations (`db.migrate`) before restarting
@@ -140,9 +142,9 @@ mkdir -p ~/.config/systemd/user
 cp deploy/*.service ~/.config/systemd/user/ && systemctl --user daemon-reload
 # one-off when migrating from the old timers:
 systemctl --user disable --now venue-arb-{catalog,match,score}.timer; rm -f ~/.config/systemd/user/venue-arb-{catalog,match,score}.{service,timer}
-systemctl --user enable --now venue-arb-collector venue-arb-flows venue-arb-publish
+systemctl --user enable --now venue-arb-collector venue-arb-perps venue-arb-flows venue-arb-publish
 loginctl enable-linger "$USER"          # keep them running after logout
-journalctl --user -u venue-arb-collector -u venue-arb-flows -u venue-arb-publish -f
+journalctl --user -u venue-arb-collector -u venue-arb-perps -u venue-arb-flows -u venue-arb-publish -f
 ```
 
 systemd doesn't load `mise.toml`, so each unit repeats its non-secret `[env]` values as `Environment=` lines
@@ -150,7 +152,7 @@ systemd doesn't load `mise.toml`, so each unit repeats its non-secret `[env]` va
 database superusers. After installing, check they connect as the project role:
 
 ```bash
-systemctl --user show venue-arb-collector venue-arb-flows venue-arb-publish -p Environment | tr ' ' '\n' \
+systemctl --user show venue-arb-collector venue-arb-perps venue-arb-flows venue-arb-publish -p Environment | tr ' ' '\n' \
   | grep -E '^(PGUSER|CLICKHOUSE_USER|PREFECT_API_URL)='
 cd ~/platform && docker compose exec postgres psql -U postgres -d app -c \
   "SELECT usename, count(*) FROM pg_stat_activity WHERE datname = 'app' GROUP BY 1"   # expect venue_arb, not postgres

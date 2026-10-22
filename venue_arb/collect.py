@@ -139,7 +139,8 @@ def tick(watch, fetchers: dict, buf: dict[str, list[dict]], stats: dict[str, lis
 
 
 def flush(buf, venues, load, record, run_sql, checks, stats, max_buffer: int = MAX_BUFFER_ROWS,
-          cycles: list[float] = (), interval_s: float = SNAPSHOT_INTERVAL_S) -> list:
+          cycles: list[float] = (), interval_s: float = SNAPSHOT_INTERVAL_S, table: str = TABLE,
+          contract: dict = CONTRACT, nullable: frozenset[str] = frozenset()) -> list:
     """Guard and load each venue independently, then SQL checks, then record everything.
 
     Load and guard failures are recorded, not raised; an error from run_sql or record propagates to the caller.
@@ -150,9 +151,9 @@ def flush(buf, venues, load, record, run_sql, checks, stats, max_buffer: int = M
         worst = max(cycles)
         results.append(checks.Result("cycle_seconds", worst <= interval_s, round(worst, 1), interval_s,
                                      f"slowest of {len(cycles)} cycles took {worst:.1f}s", severity="warn",
-                                     target=TABLE))
+                                     target=table))
     for venue in sorted(venues):
-        rows, target = buf[venue], f"{TABLE}:{venue}"
+        rows, target = buf[venue], f"{table}:{venue}"
         attempts, errors, empty = stats[venue]
         ratio = errors / attempts if attempts else 0.0
         results.append(checks.Result("fetch_errors", ratio <= MAX_FETCH_ERROR_RATIO, round(ratio, 4),
@@ -162,7 +163,7 @@ def flush(buf, venues, load, record, run_sql, checks, stats, max_buffer: int = M
                                      f"{empty}/{attempts} books came back with no levels", severity="warn",
                                      target=target))
         stats[venue] = [0, 0, 0]
-        guards = [checks.expect_rows(len(rows), target), checks.expect_schema(rows, CONTRACT, target)]
+        guards = [checks.expect_rows(len(rows), target), checks.expect_schema(rows, contract, target, nullable=nullable)]
         results += guards
         if any(not g.passed and g.severity == "error" for g in guards):
             log.error("guard failed, dropping %s buffer", venue)

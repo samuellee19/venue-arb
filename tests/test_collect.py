@@ -24,7 +24,7 @@ class Result:  # minimal stand-in for qa.checks.Result (CI has no platform check
 FAKE_CHECKS = SimpleNamespace(
     Result=Result,
     expect_rows=lambda n, target: Result("expect_rows", n >= 1, n, 1, target=target),
-    expect_schema=lambda rows, contract, target: Result("expect_schema", True, target=target),
+    expect_schema=lambda rows, contract, target, nullable=frozenset(): Result("expect_schema", True, target=target),
 )
 
 
