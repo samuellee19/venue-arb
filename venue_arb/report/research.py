@@ -3,8 +3,16 @@ from datetime import datetime
 
 import numpy as np
 
+from venue_arb import weekends
 from venue_arb.basis import BASIS_Q
-from venue_arb.bundle import Basis, ResearchHist, ResearchLadderSeries, ResearchSeries, ResearchSummary
+from venue_arb.bundle import (
+    Basis,
+    ResearchHist,
+    ResearchLadderSeries,
+    ResearchSeries,
+    ResearchSummary,
+    StockPerpResearch,
+)
 from venue_arb.config import BASIS_WINDOW_DAYS
 from venue_arb.report import copy
 
@@ -88,3 +96,25 @@ def from_summary(s: dict, *, review: dict | None, computed_at: datetime) -> Rese
         method=copy.METHOD,
         note_path=NOTE_PATH,
     )
+
+
+def stock_perp_block(inputs: dict, computed_at: datetime) -> StockPerpResearch:
+    """The publisher's stock-perp aggregates (publish.stock_perp_inputs) -> the Research tab's stock-perp block."""
+    hourly = sorted(inputs["hourly"])
+    best = max((v for _, v in hourly), default=None)
+    by_name = sorted(inputs["by_name"], key=lambda r: (-r["max_net_bps"], r["symbol"]))[:10]
+    top5 = [r["symbol"] for r in by_name[:5]]
+    rows = []
+    for sym in top5:  # the last 8 weekends of each, oldest first
+        rows += sorted((r for r in inputs["weekend_rows"] if r["symbol"] == sym), key=lambda r: r["friday"])[-8:]
+    start = inputs["window_start"]
+    headline = copy.HEADLINE["stock_perps"].format(
+        names=_n(inputs["names"], "stock perp"), snapshots=_n(inputs["snapshots"], "snapshot"),
+        since=start.strftime("%d %b").lstrip("0") if start else "—",
+        max_net=f"{best:.1f} bps" if best is not None else "—", episodes=_n(inputs["episodes"], "episode"))
+    return StockPerpResearch(
+        names=inputs["names"], snapshots=inputs["snapshots"], window_start=start, episodes=inputs["episodes"],
+        max_net_bps=None if best is None else round(best, 2), share_hours_abs_ge_10bps=inputs["share_hours"],
+        hourly=ResearchSeries(ts=[t for t, _ in hourly], values=[round(v, 2) for _, v in hourly]),
+        by_name=by_name, sensitivity=inputs["sensitivity"],
+        weekends=weekends.summary(inputs["weekend_rows"]) | {"rows": rows}, headline=headline)

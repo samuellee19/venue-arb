@@ -463,3 +463,82 @@ def test_write_history_hour_reads_stock_perp_edges_only_while_flag_on(tmp_path, 
     monkeypatch.setattr(config, "DASHBOARD_SHOW_STOCK_PERPS", True)
     [row] = pq.read_table(publish.write_history_hour(ch, tmp_path, hour)).to_pylist()
     assert row["key"] == "xyz:NVDA~NVDA~short_perp_long_stock" and row["net_bps"] == 84.3  # labels/stock_perps.csv
+
+
+def _stock_inputs():
+    from tests.test_research import sp_inputs
+
+    return sp_inputs()
+
+
+def test_compute_research_attaches_stock_block_when_flag_on(monkeypatch):
+    calls = []
+    rd = research_readers(calls) | {"stock_perp_inputs": lambda: calls.append("stock") or _stock_inputs()}
+    monkeypatch.setattr(config, "DASHBOARD_SHOW_STOCK_PERPS", False)
+    assert publish.compute_research(rd, NOW).stock_perps is None and "stock" not in calls
+    monkeypatch.setattr(config, "DASHBOARD_SHOW_STOCK_PERPS", True)
+    r = publish.compute_research(rd, NOW)
+    assert r.stock_perps.max_net_bps == 12.4 and calls[-1] == "stock"
+
+
+def test_stock_perp_reader_failure_keeps_previous_summary(monkeypatch, tmp_path):
+    monkeypatch.setattr(config, "DASHBOARD_SHOW_STOCK_PERPS", True)
+    calls, state = [], {"history_hour": publish.history_hour(NOW)}
+    rd = research_readers(calls) | {"stock_perp_inputs": lambda: _stock_inputs()}
+    _cycle(state, rd, tmp_path, NOW, calls)
+    good = state["research"]
+    assert good.stock_perps is not None
+    later = NOW + timedelta(hours=1)
+    state["history_hour"] = publish.history_hour(later)
+    _cycle(state, research_readers(calls) | {"stock_perp_inputs": lambda: 1 / 0}, tmp_path, later, calls)
+    assert state["research"] is good and state["research_failed"] == 1
+
+
+def _sp_row(minute, net=20.0, funding=0.0, borrow=0.0, d="long_perp_short_stock", sym="xyz:NVDA", cap=500.0):
+    return {"ts": NOW + timedelta(minutes=minute), "symbol": sym, "direction": d, "net_bps": net,
+            "funding_bps": funding, "borrow_bps": borrow, "capacity_contracts": 5.0, "capacity_usd": cap}
+
+
+def test_sensitivity_episodes_rescore_hold_and_borrow():
+    ticks = lambda **kw: [_sp_row(m, **kw) for m in range(3)]
+    # funding received (-20 bps over 24 h) is worth less over 1 h and more over 7 d; borrow x10 costs 9 x 2 = 18 bps
+    got = publish.sensitivity_episodes(ticks(net=20.0, funding=-20.0, borrow=2.0))
+    assert got == {"episodes_1h": 0, "episodes_7d": 1, "episodes_borrow_x10": 0}
+    # a paid-funding run (+12) dies at 7 d; an interleaved other-direction tick splits a run (two runs of one < 2)
+    assert publish.sensitivity_episodes(ticks(net=30.0, funding=12.0)) == {
+        "episodes_1h": 1, "episodes_7d": 0, "episodes_borrow_x10": 1}
+    split = [_sp_row(0), _sp_row(1, d="short_perp_long_stock"), _sp_row(2)]
+    assert publish.sensitivity_episodes(split) == {"episodes_1h": 0, "episodes_7d": 0, "episodes_borrow_x10": 0}
+    # a thin stock leg never qualifies, whatever the carry
+    assert publish.sensitivity_episodes(ticks(cap=50.0))["episodes_1h"] == 0
+
+
+def test_stock_perp_inputs_assembles_the_block_inputs():
+    from datetime import date
+
+    from venue_arb.sources.hyperliquid import Label
+
+    rows = {publish.SP_COUNTS_SQL: [(1, 3, NOW)], publish.SP_SHARE_SQL: [(0.4, 2)],
+            publish.SP_HOURLY_SQL: [(NOW, 25.0)], publish.SP_BY_NAME_SQL: [("xyz:NVDA", 25.0, 2)],
+            publish.SP_EDGES_SQL: [tuple(_sp_row(m).values()) for m in range(3)]}
+    ch = SimpleNamespace(query=lambda sql: SimpleNamespace(result_rows=rows[sql]))
+    cols = ["symbol", "friday", "p_fri", "p_sat", "p_sun", "p_open_pre", "p_open_reg", "ref_kind"]
+    wk = ("xyz:NVDA", date(2026, 10, 16), 1.0, 1.0, 1.0, None, 1.0, "schwab")
+
+    class Cur(SimpleNamespace):
+        def fetchone(self):
+            return (7,)
+
+        def fetchall(self):
+            return [wk]
+
+    conn = SimpleNamespace(execute=lambda sql: Cur(description=[SimpleNamespace(name=c) for c in cols]))
+    out = publish.stock_perp_inputs(ch, conn, {"xyz:NVDA": Label("xyz:NVDA", "schwab", "NVDA", "NASDAQ", "USD", "NVIDIA")})
+    assert out["names"] == 1 and out["snapshots"] == 3 and out["window_start"] == NOW and out["episodes"] == 7
+    assert out["share_hours"] == 0.4 and out["hourly"] == [(NOW, 25.0)]
+    assert out["by_name"] == [{"symbol": "xyz:NVDA", "name": "NVIDIA", "max_net_bps": 25.0, "hours_ge_10": 2,
+                               "ref_kind": "schwab"}]
+    assert out["sensitivity"]["episodes_1h"] == 1 and out["weekend_rows"][0]["friday"] == date(2026, 10, 16)
+    from venue_arb.report import research
+
+    research.stock_perp_block(out, NOW)  # the reader's output is the reducer's input

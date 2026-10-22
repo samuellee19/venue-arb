@@ -147,6 +147,20 @@ class ResearchLadderSeries(_M):
     violations: list[int]
 
 
+class StockPerpResearch(_M):
+    names: int
+    snapshots: int  # distinct (symbol, ts) scored
+    window_start: datetime | None  # first scored tick
+    episodes: int
+    max_net_bps: float | None  # largest net basis after round-trip costs and the 24 h hold
+    share_hours_abs_ge_10bps: float | None  # of Schwab-referenced hours, the share with |basis| >= 10 bps
+    hourly: ResearchSeries  # max net_bps per hour, whole history
+    by_name: list[dict]  # {"symbol", "name", "max_net_bps", "hours_ge_10", "ref_kind"}, top 10 by max_net_bps
+    sensitivity: dict  # {"episodes_1h", "episodes_7d", "episodes_borrow_x10"}: the episode count re-scored
+    weekends: dict  # weekends.summary plus "rows": the last 8 weekends of the top 5 names
+    headline: str
+
+
 class ResearchSummary(_M):
     computed_at: datetime
     window_start: datetime | None  # executable tier: first order-book snapshot in scope
@@ -175,8 +189,9 @@ class ResearchSummary(_M):
     exec_hourly: ResearchSeries  # max net edge (¢) per hour over all scoped pairs, whole history
     screened_hist: ResearchHist  # net-gap histogram, 1¢ bins, 23 edges -11..11 (end bins open: < -10¢, >= +10¢)
     ladder_hourly: ResearchLadderSeries  # admissible checks and violations per counted hour
-    method: dict[str, str]  # keys matching, edge, crypto, not_shown
+    method: dict[str, str]  # keys matching, edge, crypto, not_shown, stock_perps
     note_path: str  # "reports/research-note-v1.md"
+    stock_perps: StockPerpResearch | None = None  # None while the stock-perp tier is off
 
 
 class LiveBundle(_M):

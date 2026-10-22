@@ -1,4 +1,4 @@
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 from tests.test_note import ADM, BASIS, HOURS, T0, edge, episode, lepisode, lgroup, pair, screened
 from venue_arb.basis import BASIS_Q
@@ -90,3 +90,56 @@ def test_tier_windows_and_ladder_episodes():
     empty = reduce(note.summarize([], [], [], []))
     assert empty.screened_start is empty.screened_end is empty.ladder_start is None
     assert empty.headline[2] == copy.HEADLINE["ladders_none"]  # no ladder episodes: no episode clause
+
+
+def sp_inputs(**kw):
+    h = datetime(2026, 10, 20, 14, tzinfo=UTC)
+    base = {"hourly": [(h, 3.14159), (h + timedelta(hours=1), 12.4)], "names": 3, "snapshots": 4200,
+            "window_start": h, "episodes": 1, "share_hours": 0.25,
+            "by_name": [{"symbol": "xyz:A", "name": "A", "max_net_bps": 2.0, "hours_ge_10": 1, "ref_kind": "schwab"},
+                        {"symbol": "xyz:B", "name": "B", "max_net_bps": 12.4, "hours_ge_10": 5, "ref_kind": "schwab"}],
+            "sensitivity": {"episodes_1h": 2, "episodes_7d": 0, "episodes_borrow_x10": 1},
+            "weekend_rows": [{"symbol": "xyz:B", "friday": date(2026, 10, 16), "p_fri": 10.0, "p_sat": 10.1,
+                              "p_sun": 10.2, "p_open_pre": 10.3, "p_open_reg": 10.4, "ref_kind": "schwab"}]}
+    return base | kw
+
+
+def test_stock_perp_block_headline_and_series():
+    b = research.stock_perp_block(sp_inputs(), NOW)
+    assert "3 stock perps" in b.headline and "12.4 bps" in b.headline and "1 episode " in b.headline
+    assert "4,200 snapshots since 20 Oct" in b.headline
+    assert b.hourly.values == [3.14, 12.4] and b.max_net_bps == 12.4 and b.share_hours_abs_ge_10bps == 0.25
+    assert [r["symbol"] for r in b.by_name] == ["xyz:B", "xyz:A"]  # sorted by max_net_bps, best first
+    assert b.sensitivity == {"episodes_1h": 2, "episodes_7d": 0, "episodes_borrow_x10": 1}
+    assert b.weekends["rows"][0]["friday"] == date(2026, 10, 16) and b.weekends["weekends"] == 1
+    empty = research.stock_perp_block(sp_inputs(hourly=[], names=0, snapshots=0, window_start=None, episodes=0,
+                                                share_hours=None, by_name=[], weekend_rows=[]), NOW)
+    assert "—" in empty.headline and "0 episodes" in empty.headline and empty.max_net_bps is None
+    j = b.model_dump_json()
+    assert type(b).model_validate_json(j).model_dump_json() == j
+
+
+def test_stock_perp_block_keeps_top_ten_names_and_last_eight_weekends_of_top_five():
+    names = [{"symbol": f"xyz:{i}", "name": str(i), "max_net_bps": float(i), "hours_ge_10": 0, "ref_kind": "schwab"}
+             for i in range(12)]
+    fridays = [date(2026, 8, 7) + timedelta(days=7 * k) for k in range(10)]
+    rows = [{"symbol": f"xyz:{i}", "friday": f, "p_fri": 1.0, "p_sat": 1.0, "p_sun": 1.0, "p_open_pre": None,
+             "p_open_reg": 1.0, "ref_kind": "schwab"} for i in range(12) for f in fridays]
+    b = research.stock_perp_block(sp_inputs(by_name=names, weekend_rows=rows), NOW)
+    assert [r["symbol"] for r in b.by_name] == [f"xyz:{i}" for i in range(11, 1, -1)]
+    assert {r["symbol"] for r in b.weekends["rows"]} == {f"xyz:{i}" for i in range(7, 12)}
+    assert len(b.weekends["rows"]) == 40 and min(r["friday"] for r in b.weekends["rows"]) == fridays[2]
+    assert b.weekends["weekends"] == 120  # the summary counts every row, the rows are only what the cards show
+
+
+def test_research_summary_without_stock_block_still_validates():
+    r = reduce(note.summarize([pair()], [], [edge()], [episode()]))
+    assert r.stock_perps is None
+    j = r.model_dump_json()
+    assert ResearchSummary.model_validate_json(j).model_dump_json() == j
+
+
+def test_method_has_five_paragraphs():
+    assert set(copy.METHOD) == {"matching", "edge", "crypto", "not_shown", "stock_perps"}
+    assert 4 <= copy.METHOD["stock_perps"].count(". ") + 1 <= 6
+    assert "trade.xyz" in copy.METHOD["stock_perps"] and "US traders" in copy.METHOD["stock_perps"]

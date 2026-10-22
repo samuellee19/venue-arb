@@ -36,6 +36,17 @@ METHOD: dict[str, str] = {
         "that is settled. Kalshi's taker fee coefficient is secondhand and unverified, because its fee schedule could "
         "not be fetched, and Polymarket's fee rounding rule is unverified, so an edge could be off by up to about a "
         "cent per contract."),
+    "stock_perps": (
+        "A stock perp is a perpetual future on one US-listed (or Korean) share, traded on Hyperliquid's trade.xyz "
+        "markets. The venue prices it against an oracle, an external feed that follows the stock 24 hours a day on "
+        "weekdays (Blue Ocean's overnight session fills the hours the exchanges are shut) and, on weekends, the "
+        "perp's own smoothed price. We measure each perp against Schwab's consolidated quote from 4 AM to 8 PM New "
+        "York time for US stocks, and against the oracle at other times and for Asia-listed stocks. The net basis is "
+        "what is left after a round trip held 24 hours: the perp's taker fee twice, the perp's half spread on "
+        "exit, the stock's full spread, and funding and borrow for the hold; the stock leg is capped at the size "
+        "Schwab displays. The weekend test compares the perp's price at Friday 8 PM, Saturday noon and Sunday 6 PM "
+        "New York time with Monday's stock open (the Korean open on Sunday evening for KRX names). Hyperliquid blocks "
+        "US traders, so none of this can be executed from the US."),
 }
 
 HEADLINE: dict[str, str] = {
@@ -48,4 +59,6 @@ HEADLINE: dict[str, str] = {
     "ladders_none": ("On same-instant crypto ladders there are no counted hours yet, so no admissible checks to "
                      "report."),
     "ladder_episodes": " On ladders, {episodes} met the same episode rule.",  # appended when there are any
+    "stock_perps": ("Across {names} and {snapshots} since {since}, the largest net basis after round-trip costs and a "
+                    "24 h hold was {max_net}; {episodes} met the rule of at least 10 bps and $100 over two snapshots."),
 }
