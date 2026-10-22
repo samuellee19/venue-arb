@@ -52,7 +52,8 @@ def test_candles_and_funding_hours_are_utc(fx):
     assert candles[0]["open"] == float(raw["o"]) and candles[0]["volume"] == float(raw["v"])
     funding = hl.fetch_funding("xyz:NVDA", start, post=lambda body: sent.append(body) or fx["funding"])
     assert sent[1] == {"type": "fundingHistory", "coin": "xyz:NVDA", "startTime": 1792677600000}
-    assert funding[0]["hour"] == datetime.fromtimestamp(fx["funding"][0]["time"] / 1000, UTC)
+    assert fx["funding"][0]["time"] % 3_600_000 != 0  # raw event time is off the hour boundary
+    assert [f["hour"] for f in funding] == [c["hour"] for c in candles]  # floors to the candle hour starts
     assert funding[0]["rate"] == pytest.approx(6.2e-6) and funding[0]["premium"] == pytest.approx(8e-5)
 
 

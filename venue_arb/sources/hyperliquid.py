@@ -79,7 +79,7 @@ def _utc(ms: int) -> datetime:
 
 
 def _ms(dt: datetime) -> int:
-    return int(dt.timestamp() * 1000)
+    return round(dt.timestamp() * 1000)
 
 
 def fetch_ctxs(post=post_json) -> list[PerpCtx]:
@@ -115,8 +115,9 @@ def fetch_candles(symbol: str, start: datetime, end: datetime, post=post_json) -
 
 
 def fetch_funding(symbol: str, start: datetime, post=post_json) -> list[dict]:
+    """`hour` is the event time floored to the hour, the same key and meaning as fetch_candles."""
     rows = post({"type": "fundingHistory", "coin": symbol, "startTime": _ms(start)})
-    return [{"hour": _utc(r["time"]), "rate": float(r["fundingRate"]), "premium": float(r["premium"])} for r in rows]
+    return [{"hour": _utc(r["time"]).replace(minute=0, second=0, microsecond=0), "rate": float(r["fundingRate"]), "premium": float(r["premium"])} for r in rows]
 
 
 def load_labels(path: Path = LABELS) -> dict[str, Label]:

@@ -30,5 +30,3 @@ xyz:ALUMINIUM  # commodity
 xyz:DIESEL  # commodity
 xyz:DRAM  # spot index
 xyz:H100  # spot index
-xyz:MUU  # unresolved: not in the Specification Index at build time
-xyz:VOL  # unresolved: not in the Specification Index at build time
