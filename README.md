@@ -185,8 +185,9 @@ Snapshots land in ClickHouse `venue_arb.book_levels_v2` (daily partitions, 90-da
 
 ### Schwab
 
-Schwab data is not used yet. The Trader API app has the Market Data product only, and its refresh token needs a
-manual browser re-login every 7 days.
+Stock reference quotes for the stock-perp tier come from Schwab Market Data (Market Data product only). The refresh
+token expires every 7 days; re-issue it with `python -m venue_arb.sources.schwab login`. The runbook, token lifetimes
+and terms are in the "Schwab Market Data" section of `docs/venues.md`.
 
 ## Data terms and caveats
 

@@ -1,0 +1,5 @@
+{
+  "NVDA": {"assetMainType": "EQUITY", "symbol": "NVDA", "quote": {"askPrice": 212.85, "askSize": 300, "bidPrice": 212.83, "bidSize": 200, "lastPrice": 212.84, "quoteTime": 1792690873000}},
+  "AAPL": {"assetMainType": "EQUITY", "symbol": "AAPL", "quote": {"askPrice": 268.12, "askSize": 100, "bidPrice": 268.1, "bidSize": 400, "lastPrice": 268.11, "quoteTime": 1792690871000}},
+  "errors": {"invalidSymbols": ["ZZZZ"]}
+}
