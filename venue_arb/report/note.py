@@ -31,6 +31,7 @@ from venue_arb.fees import FEE_VERSION, KALSHI_RATE, TRANSFER, US_EXECUTABLE
 from venue_arb.ladder_edges import COUNT_INTERVAL, K_NEAREST, NEAR_EXACT_TOL
 from venue_arb.matching.adjudicate import PROMPT_VERSION
 from venue_arb.matching.fed_rule import RULE_MODEL
+from venue_arb.report.copy import METHOD
 
 NOTE = "research-note-v1.md"
 SCREENED_PNG = "screened-net-gap.png"
@@ -226,6 +227,7 @@ def _ladder(groups: list[dict], episodes: list[dict], basis_rows: list, admissib
     for r in admissible:  # a manual re-run inside an hour records the same hour again: keep one
         counted[r["hour"]] = max(counted.get(r["hour"], 0), r["checks"])
     checks = sum(counted.values()) if counted else None
+    pos_by_hour = {h["hour"]: h["pos"] for h in hours}
     pos_c = sum(h["pos"] for h in hours if h["hour"] in counted)
     scored_c = sum(h["scored"] for h in hours if h["hour"] in counted)
     start = min((g["first_ts"] for g in groups), default=None)
@@ -243,6 +245,8 @@ def _ladder(groups: list[dict], episodes: list[dict], basis_rows: list, admissib
         "start": start, "end": end,
         "hours": (end - start).total_seconds() / 3600 if start else 0.0,
         "arb_checks_scored": scored, "arb_checks_pos": pos, "share_scored": _share(pos, scored) if scored else None,
+        # per counted hour, for the dashboard's ladder chart ("hours" above is the span, a float)
+        "hourly": [{"hour": h, "checks": counted[h], "violations": pos_by_hour.get(h, 0)} for h in sorted(counted)],
         "counted_hours": len(counted), "admissible_checks": checks, "scored_counted": scored_c,
         "pos_counted": pos_c, "share_admissible": _share(pos_c, checks) if checks else None,
         "best_edge_max": max(best, default=None),
@@ -685,6 +689,11 @@ def render(summary: dict, out_dir: Path) -> Path:
         "",
         "## Method",
         "",
+        ("In brief (the same four paragraphs the dashboard's Research tab shows; the detail and the numbers' "
+         "sources follow):"),
+        "",
+        *[line for k in ("matching", "edge", "crypto", "not_shown") for line in (f"> {METHOD[k]}", ">")][:-1],
+        "",
         "**What counts as exact.** The two Yes outcomes pay in the same states of the world: same event, same outcome "
         "definition, same decision date and same resolving authority. Trading close times and the wording of the "
         "source pages do not count as differences. Rare edge clauses (for example a cancelled meeting, or an odd-size "
@@ -850,9 +859,9 @@ def render(summary: dict, out_dir: Path) -> Path:
     return path
 
 
-def main(out_dir: Path = Path("reports")) -> Path:
-    from qa import db
-
+def load(conn, ch) -> dict:
+    """The DB half of the note: `conn` a Postgres connection, `ch` a ClickHouse client. Returns `summarize`'s
+    keyword inputs (everything but `generated_at`)."""
     from venue_arb.exact import eligible
     from venue_arb.flows.exact_sql import load_eligible
 
@@ -863,15 +872,13 @@ def main(out_dir: Path = Path("reports")) -> Path:
     def utc(r: dict) -> dict:
         return {k: v.replace(tzinfo=UTC) if isinstance(v, datetime) and not v.tzinfo else v for k, v in r.items()}
 
-    with db.pg() as conn:
-        pairs = eligible(load_eligible(conn))
-        episodes = rows(conn.execute(OPPS_SQL))
-        adj = {(k, p): {"tail_risks": t, "prompt_version": v, "model": m} for k, p, t, v, m in
-               conn.execute(ADJ_SQL, {"k": [p.kalshi_id for p in pairs]}).fetchall()}
-        scope = {(k, p): {"reason": None if rel == "exact" and not bad else
-                          ("wrong/unsure review" if bad else f"latest {PROMPT_VERSION} relation '{rel}'"), "closed": closed}
-                 for k, p, rel, bad, closed in conn.execute(SCOPE_SQL, {"pv": PROMPT_VERSION}).fetchall()}
-    ch = db.ch()
+    pairs = eligible(load_eligible(conn))
+    episodes = rows(conn.execute(OPPS_SQL))
+    adj = {(k, p): {"tail_risks": t, "prompt_version": v, "model": m} for k, p, t, v, m in
+           conn.execute(ADJ_SQL, {"k": [p.kalshi_id for p in pairs]}).fetchall()}
+    scope = {(k, p): {"reason": None if rel == "exact" and not bad else
+                      ("wrong/unsure review" if bad else f"latest {PROMPT_VERSION} relation '{rel}'"), "closed": closed}
+             for k, p, rel, bad, closed in conn.execute(SCOPE_SQL, {"pv": PROMPT_VERSION}).fetchall()}
     scr = [utc(dict(zip(("ts", "kalshi_id", "pm_id", "direction", "net_gap_top"), r, strict=True)))
            for r in ch.query(SCREENED_SQL).result_rows]
     edges = [utc(dict(zip(("ts", "kalshi_id", "pm_id", "direction", "best_edge", "capacity_usd"), r, strict=True)))
@@ -881,15 +888,21 @@ def main(out_dir: Path = Path("reports")) -> Path:
     ladder = [utc(dict(zip(lcols, r, strict=True))) for r in ch.query(LADDER_SQL).result_rows]
     basis_rows = ch.query(BASIS_SQL).result_rows
     hours = [utc(dict(zip(("hour", "scored", "pos"), r, strict=True))) for r in ch.query(LADDER_HOURS_SQL).result_rows]
+    lad_eps = rows(conn.execute(LADDER_OPPS_SQL))
+    # the counted hour's start is in `detail`; results without one predate the count window and are skipped
+    admissible = [{"hour": datetime.fromisoformat(m.group(1)), "checks": int(obs)}
+                  for obs, detail in conn.execute(ADMISSIBLE_SQL).fetchall()
+                  if (m := re.search(r"\[([^,]+),", detail or ""))]
+    return {"pairs": pairs, "screened_rows": scr, "edge_rows": edges, "episodes": episodes, "adjudications": adj,
+            "scope": scope, "ladder_rows": ladder, "ladder_episodes": lad_eps, "basis_rows": basis_rows,
+            "admissible": admissible, "ladder_hours": hours}
+
+
+def main(out_dir: Path = Path("reports")) -> Path:
+    from qa import db
+
     with db.pg() as conn:
-        lad_eps = rows(conn.execute(LADDER_OPPS_SQL))
-        # the counted hour's start is in `detail`; results without one predate the count window and are skipped
-        admissible = [{"hour": datetime.fromisoformat(m.group(1)), "checks": int(obs)}
-                      for obs, detail in conn.execute(ADMISSIBLE_SQL).fetchall()
-                      if (m := re.search(r"\[([^,]+),", detail or ""))]
-    s = summarize(pairs, scr, edges, episodes, adjudications=adj, scope=scope, generated_at=datetime.now(UTC),
-                  ladder_rows=ladder, ladder_episodes=lad_eps, basis_rows=basis_rows, admissible=admissible,
-                  ladder_hours=hours)
+        s = summarize(**load(conn, db.ch()), generated_at=datetime.now(UTC))
     path = render(s, out_dir)
     print(f"wrote {path}: pairs={s['pairs']} screened_rows={s['screened']['rows']} "
           f"snapshots={s['executable']['snapshots']} episodes={s['executable']['episodes']} "

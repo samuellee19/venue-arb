@@ -127,6 +127,7 @@ def test_render_rule_pairs_no_flag_intro_and_method(tmp_path):
     text = note.render(s, tmp_path).read_text()
     assert "builder's own reading" not in text
     assert "by a deterministic rule (rule:fed-v1 (prompt v3))" in text and "by an LLM" not in text
+    assert all(f"> {v}" in text for v in note.METHOD.values())  # the dashboard's method copy, verbatim
 
 
 INSTANT = T0 + timedelta(hours=10)
@@ -202,3 +203,25 @@ def test_pair_tier_query_excludes_ladders():
 def test_ladder_positive_is_capacity_contracts():
     for sql in (note.LADDER_SQL, note.LADDER_HOURS_SQL):
         assert "capacity_contracts > 0" in sql and "capacity_usd > 0" not in sql
+
+
+def test_load_returns_summarize_kwargs():
+    import inspect
+
+    class Cur:
+        description = ()
+
+        def fetchall(self):
+            return []
+
+    class Conn:
+        def execute(self, *a):
+            return Cur()
+
+    class Ch:
+        def query(self, sql):
+            return type("R", (), {"result_rows": []})()
+
+    got = note.load(Conn(), Ch())
+    assert set(got) == set(inspect.signature(note.summarize).parameters) - {"generated_at"}
+    assert note.summarize(**got)["pairs"]["eligible"] == 0

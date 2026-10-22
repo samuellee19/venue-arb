@@ -154,7 +154,7 @@ class ResearchSummary(_M):
     basis: dict[str, Basis]
     review: dict | None  # {"precision": float, "labels": int, "asof": datetime} or None
     exec_hourly: ResearchSeries  # max net edge (¢) per hour over all scoped pairs, whole history
-    screened_hist: ResearchHist  # net-gap histogram, bins -10¢..+10¢ by 1¢ (22 edges incl. open ends)
+    screened_hist: ResearchHist  # net-gap histogram, 1¢ bins, 23 edges -11..11 (end bins open: < -10¢, >= +10¢)
     ladder_hourly: ResearchLadderSeries  # admissible checks and violations per counted hour
     method: dict[str, str]  # keys matching, edge, crypto, not_shown
     note_path: str  # "reports/research-note-v1.md"
