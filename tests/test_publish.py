@@ -328,11 +328,17 @@ def test_research_failure_keeps_previous(tmp_path):
     later = NOW + timedelta(hours=1)
     state["history_hour"] = publish.history_hour(later)
     assert _cycle(state, research_readers(calls, fail=True), tmp_path, later, calls) == []
-    assert state["research"] is good and state["research_hour"] == publish.history_hour(NOW)
+    # previous summary kept; the hour advances anyway, so the failure is retried next hour, not next cycle
+    assert state["research"] is good and state["research_hour"] == publish.history_hour(later)
+    calls.clear()
+    _cycle(state, research_readers(calls, fail=True), tmp_path, later + timedelta(minutes=1), calls)
+    assert "research" not in calls
     del state["live"]  # bundle checks need qa.checks' expect_* helpers; only the research results matter here
-    [res] = [r for r in publish._results(CHECKS, state, 60) if r.check == "research_failed"]
+    results = {r.check: r for r in publish._results(CHECKS, state, 60)}
+    res = results["research_failed"]
     assert (res.passed, res.observed, res.severity) == (False, 1, "warn")
     assert res.detail == "1 research computations failed, previous summary kept"
+    assert "research_seconds" in results  # a failed run is a run: its seconds are recorded
     assert "research_seconds" not in {r.check for r in publish._results(CHECKS, state, 60)}  # none ran since
     [ok] = [r for r in publish._results(CHECKS, state, 60) if r.check == "research_failed"]
     assert ok.passed and ok.observed == 0  # counted since the last record only

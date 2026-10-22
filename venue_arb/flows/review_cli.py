@@ -22,7 +22,7 @@ WHERE a.relation <> 'different' AND l.category IS NOT NULL
 """
 # A review counts only for the verdict it judged: the adjudication's current prompt version (older ones re-judged).
 ALL_REVIEWS_SQL = """
-SELECT r.label
+SELECT r.label, r.reviewed_at
 FROM venue_arb.reviews r
 JOIN venue_arb.adjudications a USING (a_venue, a_id, a_version, b_venue, b_id, b_version, prompt_version)
 JOIN venue_arb.listings l ON l.venue = a.a_venue AND l.market_id = a.a_id AND l.version = a.a_version

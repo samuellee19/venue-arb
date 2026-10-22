@@ -488,16 +488,23 @@ def default_readers(db) -> dict:
             return note.load(conn, db.ch())
 
     def review_labels():
-        from venue_arb.flows.review_cli import all_review_labels  # imports qa at module level
+        from venue_arb.flows.review_cli import ALL_REVIEWS_SQL  # imports qa at module level
 
-        with db.pg() as conn:
-            return (all_review_labels(conn),
-                    conn.execute("SELECT max(reviewed_at) FROM venue_arb.reviews").fetchone()[0])
+        with db.pg() as conn:  # asof from the same rows the labels count (all_review_labels' query)
+            rows = conn.execute(ALL_REVIEWS_SQL).fetchall()
+        return [r[0] for r in rows], max((r[1] for r in rows), default=None)
 
     return {"pairs": pairs, "ladders": ladders, "listings": listings, "series_fee": kalshi.fetch_series,
             "books": books, "context": context, "research_inputs": research_inputs, "review_labels": review_labels}
 
 
+# state keys (one dict, owned by the loop; tick's refresh() merges its own keys in as well):
+#   live              last bundle tick() built          live_bytes        its JSON size
+#   pushes, cycles    push outcomes / cycle seconds since the last qa record (reset after a record)
+#   history_hour      newest history_hour written
+#   research          last good ResearchSummary (tick puts it in the bundle)
+#   research_hour     history_hour of the last research attempt, success or failure
+#   research_failed   failed attempts since the last record   research_seconds   last attempt's seconds, until recorded
 def cycle(state: dict, readers: dict, out_dir: Path, dest: str | None, now: datetime, *, checks, db=None,
           write=write_atomic, push=push, clock=time.monotonic) -> list:
     """One loop iteration, in order: tick -> live.json -> push -> due history hours -> research (once per
@@ -531,13 +538,14 @@ def cycle(state: dict, readers: dict, out_dir: Path, dest: str | None, now: date
         log.exception("history write failed")
         pending.append(checks.Result("history_exception", False, detail=type(e).__name__, target=HISTORY_TARGET))
     if history_hour(now) != state.get("research_hour"):
-        t0 = clock()
-        try:  # a failure keeps the previous summary and retries next cycle
+        # the hour advances on failure too: a deterministic failure retries hourly, not every cycle (whole-table reads)
+        state["research_hour"], t0 = history_hour(now), clock()
+        try:
             state["research"] = compute_research(readers, now)
-            state["research_hour"], state["research_seconds"] = history_hour(now), clock() - t0
         except Exception:
             log.exception("research summary failed, keeping the previous one")
             state["research_failed"] = state.get("research_failed", 0) + 1
+        state["research_seconds"] = clock() - t0  # failed runs too: a run is a run
     return pending
 
 
