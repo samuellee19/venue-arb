@@ -818,8 +818,9 @@ def render(summary: dict, out_dir: Path) -> Path:
         "slightly overstated."),
         (f"- Few exact pairs ({pc['eligible']}), from Kalshi series {series}; nothing here generalizes to "
         "other categories."),
-        (f"- Matches were adjudicated {adj_txt}; no human review sitting has happened yet: "
-        f"{pc['reviewed']} of {pc['eligible']} eligible pairs reviewed, {pc['unreviewed']} unreviewed."),
+        (f"- Matches were adjudicated {adj_txt}; human review: {pc['reviewed']} of {pc['eligible']} eligible "
+        f"pairs reviewed, {pc['unreviewed']} unreviewed"
+        + (" (no review sitting has happened yet)." if pc["reviewed"] == 0 else ".")),
         ("- No execution latency, fill risk, partial fills, or capital lock-up costs beyond the annualized figure "
         "are modeled. The transfer cost is an assumption, reported as a sensitivity only."),
         *lt["limits"],
