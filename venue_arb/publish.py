@@ -487,8 +487,8 @@ def tick(state: dict, readers: dict, now: datetime) -> LiveBundle:
     if config.DASHBOARD_SHOW_STOCK_PERPS:
         try:
             stock = bundle.stock_perp_rows(readers["perps"](), ctx["sparks"], now)
-        except Exception as e:  # noqa: BLE001 — a perp-side fault must not stop the pair tiers' live.json
-            log.warning("stock perps skipped error=%s", type(e).__name__)
+        except Exception as e:  # a perp-side fault must not stop the pair tiers' live.json
+            log.warning("stock perps skipped error=%s", type(e).__name__, exc_info=True)
             stock = []
     return bundle.build_live(now=now, exact_rows=exact, ladder_rows=ladder, basis=state["basis"],
                              episodes=ctx["episodes"], annotations=notes, kpi_inputs=ctx["kpi_inputs"],

@@ -8,7 +8,7 @@ from venue_arb.bundle import LiveBundle
 SAMPLE = Path(__file__).parent.parent / "dashboard" / "sample"
 HOURS = ("pairs-2026102014.parquet", "pairs-2026102015.parquet")
 COLS = ["ts", "key", "kind", "direction", "net_edge_cents", "capacity_usd", "k_ask", "k_size", "pm_ask", "pm_size",
-        "fees_cents"]
+        "fees_cents", "basis_bps", "net_bps"]
 LABELS = ("Exact match · no edge", "Executable edge · +", "Not an arbitrage · basis exposure",
           "Spread · within basis bound · no edge", "No asks on one side", "Stale · a leg has no snapshot in 5 min")
 

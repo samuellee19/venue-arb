@@ -322,7 +322,14 @@ def test_build_live_stock_perps_kpi_and_best_edge_ignores_them():
     assert off.kpis.stock_perps is None
 
 
-def test_old_live_json_without_new_fields_still_validates():
-    sample = Path(__file__).parent.parent / "dashboard" / "sample" / "live.json"
-    b = LiveBundle.model_validate_json(sample.read_text(encoding="utf-8"))
-    assert b.kpis.stock_perps is None and b.pairs[0].reference is None and b.pairs[0].basis_bps is None
+def test_old_live_json_without_new_fields_still_validates():  # live_v2.json: the sample as of 4d54aa3, before stock perps
+    b = LiveBundle.model_validate_json((FIX / "live_v2.json").read_text(encoding="utf-8"))
+    assert b.kpis.stock_perps is None and b.pairs[0].basis_bps is None and b.pairs[0].reference is None
+    assert b.pairs[0].sensitivity is None and isinstance(b.pairs[0].settles_at, datetime)
+
+
+def test_stock_perp_row_live_schwab_without_a_book():
+    [p] = stock_perp_rows([(CTX215, LABEL_NVDA, (SP_SNAP[0], []), QUOTE)], {}, SP_NOW)
+    assert p.live and p.verdict.label == "No asks on one side" and p.capacity_usd == 0
+    assert p.verdict.checks[2].name == "fees_depth" and p.verdict.checks[2].status == "fail"
+    assert p.verdict.checks[2].detail == "not walked: no perp book"

@@ -88,10 +88,12 @@
     },
     "screened_hours": 3100,
     "screened_share_ge_1c": 0.004,
+    "stock_perps": null,
     "violations": 0
   },
   "pairs": [
     {
+      "basis_bps": null,
       "books": null,
       "capacity_contracts": 0.0,
       "capacity_usd": 0.0,
@@ -113,6 +115,8 @@
         }
       },
       "fees_cents": 1.7,
+      "funding_bps_h": null,
+      "hold_hours": null,
       "key": "KXFED-26DEC-H0~0xd53cb49cc49e67c7e3f5193d8bce9410a6cd45c58130ca4ca1a0caad4156c69b~k_yes_pm_no",
       "kind": "exact",
       "ladder": null,
@@ -137,9 +141,13 @@
         }
       ],
       "live": true,
+      "net_bps": null,
       "net_edge_bps": -69.5134,
       "net_edge_cents": -0.7,
       "net_edge_roi": -0.006951340615690168,
+      "next_funding_at": null,
+      "reference": null,
+      "sensitivity": null,
       "settles_at": "2026-12-09T19:00:00Z",
       "spark": [
         -0.62,
@@ -168,6 +176,7 @@
         -0.73
       ],
       "title": "Fed hikes in December 2026?",
+      "trade": null,
       "us_executable": false,
       "verdict": {
         "checks": [
@@ -196,6 +205,7 @@
       }
     },
     {
+      "basis_bps": null,
       "books": null,
       "capacity_contracts": 0.0,
       "capacity_usd": 0.0,
@@ -217,6 +227,8 @@
         }
       },
       "fees_cents": null,
+      "funding_bps_h": null,
+      "hold_hours": null,
       "key": "KXFED-26DEC-H0~0xd53cb49cc49e67c7e3f5193d8bce9410a6cd45c58130ca4ca1a0caad4156c69b~k_no_pm_yes",
       "kind": "exact",
       "ladder": null,
@@ -241,9 +253,13 @@
         }
       ],
       "live": true,
+      "net_bps": null,
       "net_edge_bps": null,
       "net_edge_cents": null,
       "net_edge_roi": null,
+      "next_funding_at": null,
+      "reference": null,
+      "sensitivity": null,
       "settles_at": "2026-12-09T19:00:00Z",
       "spark": [
         null,
@@ -272,6 +288,7 @@
         null
       ],
       "title": "Fed hikes in December 2026?",
+      "trade": null,
       "us_executable": false,
       "verdict": {
         "checks": [
@@ -300,6 +317,7 @@
       }
     },
     {
+      "basis_bps": null,
       "books": null,
       "capacity_contracts": 1200.0,
       "capacity_usd": 1129.0,
@@ -321,6 +339,8 @@
         }
       },
       "fees_cents": 1.65,
+      "funding_bps_h": null,
+      "hold_hours": null,
       "key": "KXCPI-26NOV-T0.3~0x4e1d028cf5b590152b1271abea39731ff4448ee059e0501be6f208c6f7f868dc~k_yes_pm_no",
       "kind": "exact",
       "ladder": null,
@@ -345,9 +365,13 @@
         }
       ],
       "live": true,
+      "net_bps": null,
       "net_edge_bps": 565.2404,
       "net_edge_cents": 5.35,
       "net_edge_roi": 0.05652403592181721,
+      "next_funding_at": null,
+      "reference": null,
+      "sensitivity": null,
       "settles_at": "2026-11-13T13:30:00Z",
       "spark": [
         0.31,
@@ -376,6 +400,7 @@
         5.35
       ],
       "title": "CPI above 0.3% in October?",
+      "trade": null,
       "us_executable": false,
       "verdict": {
         "checks": [
@@ -404,6 +429,7 @@
       }
     },
     {
+      "basis_bps": null,
       "books": null,
       "capacity_contracts": 0.0,
       "capacity_usd": 0.0,
@@ -425,6 +451,8 @@
         }
       },
       "fees_cents": 1.6133,
+      "funding_bps_h": null,
+      "hold_hours": null,
       "key": "KXCPI-26NOV-T0.3~0x4e1d028cf5b590152b1271abea39731ff4448ee059e0501be6f208c6f7f868dc~k_no_pm_yes",
       "kind": "exact",
       "ladder": null,
@@ -449,9 +477,13 @@
         }
       ],
       "live": true,
+      "net_bps": null,
       "net_edge_bps": -959.4986,
       "net_edge_cents": -10.6133,
       "net_edge_roi": -0.09594958291634009,
+      "next_funding_at": null,
+      "reference": null,
+      "sensitivity": null,
       "settles_at": "2026-11-13T13:30:00Z",
       "spark": [
         -10.11,
@@ -480,6 +512,7 @@
         -10.42
       ],
       "title": "CPI above 0.3% in October?",
+      "trade": null,
       "us_executable": false,
       "verdict": {
         "checks": [
@@ -508,6 +541,7 @@
       }
     },
     {
+      "basis_bps": null,
       "books": null,
       "capacity_contracts": 0.0,
       "capacity_usd": 0.0,
@@ -529,6 +563,8 @@
         }
       },
       "fees_cents": null,
+      "funding_bps_h": null,
+      "hold_hours": null,
       "key": "KXHIGHNY-26OCT21-T70~0x0362d8e51ec808c2c03ae329dbc14bb66a2a21673c64c0254440946a35b06263~k_yes_pm_no",
       "kind": "exact",
       "ladder": null,
@@ -553,9 +589,13 @@
         }
       ],
       "live": false,
+      "net_bps": null,
       "net_edge_bps": null,
       "net_edge_cents": null,
       "net_edge_roi": null,
+      "next_funding_at": null,
+      "reference": null,
+      "sensitivity": null,
       "settles_at": "2026-10-21T23:00:00Z",
       "spark": [
         null,
@@ -584,6 +624,7 @@
         null
       ],
       "title": "NYC high above 70F on Oct 21?",
+      "trade": null,
       "us_executable": false,
       "verdict": {
         "checks": [
@@ -612,6 +653,7 @@
       }
     },
     {
+      "basis_bps": null,
       "books": null,
       "capacity_contracts": 0.0,
       "capacity_usd": 0.0,
@@ -633,6 +675,8 @@
         }
       },
       "fees_cents": null,
+      "funding_bps_h": null,
+      "hold_hours": null,
       "key": "KXHIGHNY-26OCT21-T70~0x0362d8e51ec808c2c03ae329dbc14bb66a2a21673c64c0254440946a35b06263~k_no_pm_yes",
       "kind": "exact",
       "ladder": null,
@@ -657,9 +701,13 @@
         }
       ],
       "live": false,
+      "net_bps": null,
       "net_edge_bps": null,
       "net_edge_cents": null,
       "net_edge_roi": null,
+      "next_funding_at": null,
+      "reference": null,
+      "sensitivity": null,
       "settles_at": "2026-10-21T23:00:00Z",
       "spark": [
         null,
@@ -688,6 +736,7 @@
         null
       ],
       "title": "NYC high above 70F on Oct 21?",
+      "trade": null,
       "us_executable": false,
       "verdict": {
         "checks": [
@@ -716,6 +765,7 @@
       }
     },
     {
+      "basis_bps": null,
       "books": null,
       "capacity_contracts": 0.0,
       "capacity_usd": 0.0,
@@ -737,6 +787,8 @@
         }
       },
       "fees_cents": 1.0304,
+      "funding_bps_h": null,
+      "hold_hours": null,
       "key": "KXBTCD-26OCT2011-T85999.99~0x188be2dc41a51a99434bd3c92c448aa20849d30f27de27b33747423afd6d10d1~k_yes_pm_no",
       "kind": "near_exact",
       "ladder": "BTC~2026-10-20T16:00:00+00:00",
@@ -761,9 +813,13 @@
         }
       ],
       "live": true,
+      "net_bps": null,
       "net_edge_bps": -294.1308,
       "net_edge_cents": -3.0304,
       "net_edge_roi": -0.029412678199832284,
+      "next_funding_at": null,
+      "reference": null,
+      "sensitivity": null,
       "settles_at": "2026-10-20T16:00:00Z",
       "spark": [
         -2.74,
@@ -792,6 +848,7 @@
         -3.29
       ],
       "title": "BTC above $85,999.99 (Kalshi) / $86,000.00 (Polymarket)",
+      "trade": null,
       "us_executable": false,
       "verdict": {
         "checks": [
@@ -820,6 +877,7 @@
       }
     },
     {
+      "basis_bps": null,
       "books": null,
       "capacity_contracts": 0.0,
       "capacity_usd": 0.0,
@@ -841,6 +899,8 @@
         }
       },
       "fees_cents": 1.0319,
+      "funding_bps_h": null,
+      "hold_hours": null,
       "key": "KXBTCD-26OCT2011-T85999.99~0x188be2dc41a51a99434bd3c92c448aa20849d30f27de27b33747423afd6d10d1~pm_yes_k_no",
       "kind": "near_exact",
       "ladder": "BTC~2026-10-20T16:00:00+00:00",
@@ -865,9 +925,13 @@
         }
       ],
       "live": true,
+      "net_bps": null,
       "net_edge_bps": -102.1328,
       "net_edge_cents": -1.0319,
       "net_edge_roi": -0.01021360580173193,
+      "next_funding_at": null,
+      "reference": null,
+      "sensitivity": null,
       "settles_at": "2026-10-20T16:00:00Z",
       "spark": [
         -0.93,
@@ -896,6 +960,7 @@
         -1.11
       ],
       "title": "BTC above $85,999.99 (Kalshi) / $86,000.00 (Polymarket)",
+      "trade": null,
       "us_executable": false,
       "verdict": {
         "checks": [
@@ -924,6 +989,7 @@
       }
     },
     {
+      "basis_bps": null,
       "books": null,
       "capacity_contracts": 600.0,
       "capacity_usd": 583.0,
@@ -945,6 +1011,8 @@
         }
       },
       "fees_cents": 0.7248,
+      "funding_bps_h": null,
+      "hold_hours": null,
       "key": "KXBTCD-26OCT2011-T85999.99~0xb373ca3b0beacb4e7ae0718fa90ed3e4f2022a7a2ece5d70652d14ebf5622def~k_yes_pm_no",
       "kind": "ladder",
       "ladder": "BTC~2026-10-20T16:00:00+00:00",
@@ -969,9 +1037,13 @@
         }
       ],
       "live": true,
+      "net_bps": null,
       "net_edge_bps": 232.8171,
       "net_edge_cents": 2.2752,
       "net_edge_roi": 0.023281705360358885,
+      "next_funding_at": null,
+      "reference": null,
+      "sensitivity": null,
       "settles_at": "2026-10-20T16:00:00Z",
       "spark": [
         2.78,
@@ -1000,6 +1072,7 @@
         2.27
       ],
       "title": "BTC above $85,999.99 (Kalshi) / $88,200.00 (Polymarket)",
+      "trade": null,
       "us_executable": false,
       "verdict": {
         "checks": [
@@ -1028,6 +1101,7 @@
       }
     },
     {
+      "basis_bps": null,
       "books": null,
       "capacity_contracts": 0.0,
       "capacity_usd": 0.0,
@@ -1049,6 +1123,8 @@
         }
       },
       "fees_cents": 0.5388,
+      "funding_bps_h": null,
+      "hold_hours": null,
       "key": "KXBTCD-26OCT2011-T87999.99~0xb373ca3b0beacb4e7ae0718fa90ed3e4f2022a7a2ece5d70652d14ebf5622def~k_yes_pm_no",
       "kind": "ladder",
       "ladder": "BTC~2026-10-20T16:00:00+00:00",
@@ -1073,9 +1149,13 @@
         }
       ],
       "live": true,
+      "net_bps": null,
       "net_edge_bps": -53.5913,
       "net_edge_cents": -0.5388,
       "net_edge_roi": -0.00535912503431511,
+      "next_funding_at": null,
+      "reference": null,
+      "sensitivity": null,
       "settles_at": "2026-10-20T16:00:00Z",
       "spark": [
         -0.51,
@@ -1104,6 +1184,7 @@
         -0.25
       ],
       "title": "BTC above $87,999.99 (Kalshi) / $88,200.00 (Polymarket)",
+      "trade": null,
       "us_executable": false,
       "verdict": {
         "checks": [
@@ -1132,6 +1213,7 @@
       }
     },
     {
+      "basis_bps": null,
       "books": null,
       "capacity_contracts": 0.0,
       "capacity_usd": 0.0,
@@ -1153,6 +1235,8 @@
         }
       },
       "fees_cents": 0.9712,
+      "funding_bps_h": null,
+      "hold_hours": null,
       "key": "KXBTCD-26OCT2011-T87999.99~0x188be2dc41a51a99434bd3c92c448aa20849d30f27de27b33747423afd6d10d1~pm_yes_k_no",
       "kind": "ladder",
       "ladder": "BTC~2026-10-20T16:00:00+00:00",
@@ -1177,9 +1261,13 @@
         }
       ],
       "live": true,
+      "net_bps": null,
       "net_edge_bps": 2.8808,
       "net_edge_cents": 0.0288,
       "net_edge_roi": 0.0002880829678947537,
+      "next_funding_at": null,
+      "reference": null,
+      "sensitivity": null,
       "settles_at": "2026-10-20T16:00:00Z",
       "spark": [
         null,
@@ -1208,6 +1296,7 @@
         -0.03
       ],
       "title": "BTC above $87,999.99 (Kalshi) / $86,000.00 (Polymarket)",
+      "trade": null,
       "us_executable": false,
       "verdict": {
         "checks": [

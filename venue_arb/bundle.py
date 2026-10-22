@@ -362,9 +362,12 @@ def _rank(edge: Edge | None) -> float:
     return edge.best_edge if edge and edge.best_edge is not None else float("-inf")
 
 
-def stock_perp_verdict(edge: StockPerpEdge, ref: Reference, live: bool, now: datetime) -> Verdict:
+def stock_perp_verdict(edge: StockPerpEdge, ref: Reference, live: bool, now: datetime, *,
+                       has_book: bool = True) -> Verdict:
     """The stock-perp analogue of verdict(): checks reference, fees_carry, fees_depth, jurisdiction. An oracle-only row
-    is never executable (no size behind the price)."""
+    is never executable (no size behind the price). `has_book` False (the perp book fetch failed) on a live Schwab row:
+    "No asks on one side", as the pair tiers word a missing side."""
+    nobook = live and ref.kind == "schwab" and not has_book
     schwab = ref.kind == "schwab"
     ok = live and schwab and edge.net_bps >= config.STOCK_PERP_MIN_NET_BPS and edge.capacity_usd >= MIN_CAPACITY_USD
     checks = [Check(name="reference", status="ok" if schwab else "partial",
@@ -376,7 +379,8 @@ def stock_perp_verdict(edge: StockPerpEdge, ref: Reference, live: bool, now: dat
                             detail=f"net {net:+.1f} bps after 2× taker, spread, {edge.hold_h:g} h funding and borrow"))
         cap = edge.capacity_usd
         checks.append(Check(name="fees_depth", status="ok" if cap >= MIN_CAPACITY_USD else "fail",
-                            detail=f"${cap:,.0f} fillable vs ${MIN_CAPACITY_USD:,.0f} minimum"))
+                            detail="not walked: no perp book" if nobook
+                            else f"${cap:,.0f} fillable vs ${MIN_CAPACITY_USD:,.0f} minimum"))
     else:
         checks += [Check(name="fees_carry", status="fail", detail="not scored: a leg is stale"),
                    Check(name="fees_depth", status="fail", detail="not walked: a leg is stale")]
@@ -386,6 +390,8 @@ def stock_perp_verdict(edge: StockPerpEdge, ref: Reference, live: bool, now: dat
         label = "Stale · a leg has no snapshot in 5 min"
     elif not schwab:
         label = "Reference closed · oracle only"
+    elif nobook:
+        label = "No asks on one side"
     elif ok:
         label = f"Executable edge · {edge.net_bps:+.0f} bps · ${edge.capacity_usd:,.0f} at top of book"
     else:
@@ -423,7 +429,7 @@ def stock_perp_rows(perps: list[tuple[PerpCtx, Label, SnapPerp, Quote | None]], 
             fees_cents=None if net is None else round((edge.perp_fee_bps + (edge.stock_spread_bps or 0)) / 100, 4),
             capacity_contracts=edge.capacity_contracts if live else 0.0,
             capacity_usd=edge.capacity_usd if live else 0.0, books=None,
-            verdict=stock_perp_verdict(edge, ref, live, now), us_executable=False,
+            verdict=stock_perp_verdict(edge, ref, live, now, has_book=bool(levels)), us_executable=False,
             fee_params={"perp": {"taker": taker, "growth_mode": ctx.growth_mode},
                         "stock": {"borrow_bps_yr": config.STOCK_PERP_BORROW_BPS_YR}},
             spark=sparks.get(key, [None] * SPARK_HOURS),
