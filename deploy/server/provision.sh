@@ -64,8 +64,10 @@ fi
 # units, cron, Caddy
 install -m 644 "$BASE/app/deploy/server/venue-arb-web.service" /etc/systemd/system/venue-arb-web.service
 install -m 644 "$BASE/app/deploy/server/prune.cron" /etc/cron.d/venue-arb-prune
-# a bare IP cannot get a Let's Encrypt cert, so it gets Caddy's internal CA (browser warning; curl -k)
+# a bare IP cannot get a Let's Encrypt cert, so it gets Caddy's internal CA (browser warning; curl -k); clients
+# connecting by IP send no SNI, so default_sni names the site or every TLS handshake fails (verified 2026-10-21)
 {
+  [[ $SITE =~ ^[0-9.]+$ ]] && printf '{\n\tdefault_sni %s\n}\n\n' "$SITE"
   echo "$SITE {"
   [[ $SITE =~ ^[0-9.]+$ ]] && printf '\ttls internal\n'
   printf '\treverse_proxy 127.0.0.1:8000\n}\n'
