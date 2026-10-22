@@ -69,6 +69,15 @@ def test_labels_cover_every_equity_and_catalog_flags_unlabelled(fx):
     assert [c.symbol for c in kept] == ["xyz:NVDA"] and unlabelled == ["xyz:NEWCO"]  # GOLD: labelled out, not unlabelled
 
 
+def test_catalog_drops_delisted_perps(fx):
+    ctxs = hl.fetch_ctxs(post=lambda body: fx["meta_ctxs"])
+    assert next(c for c in ctxs if c.symbol == "xyz:OLDCO").delisted and not next(c for c in ctxs if c.symbol == "xyz:NVDA").delisted
+    labels = {s: hl.label_or_none(s, {}) for s in ("xyz:NVDA", "xyz:OLDCO")}
+    kept, unlabelled = hl.catalog(ctxs, labels)
+    assert [c.symbol for c in kept] == ["xyz:NVDA"]  # labelled but delisted: dropped
+    assert "xyz:OLDCO" not in unlabelled and unlabelled == ["xyz:GOLD", "xyz:NEWCO"]  # unlabelled and delisted: not reported
+
+
 def test_unlabelled_perp_is_oracle_only():
     assert hl.label_or_none("xyz:NEWCO", {}) == hl.Label("xyz:NEWCO", "none", None, "", "USD", "xyz:NEWCO")
 

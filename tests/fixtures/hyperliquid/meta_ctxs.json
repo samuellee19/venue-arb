@@ -17,6 +17,12 @@
     "szDecimals": 2,
     "maxLeverage": 10,
     "growthMode": "enabled"
+   },
+   {
+    "name": "xyz:OLDCO",
+    "szDecimals": 2,
+    "maxLeverage": 10,
+    "isDelisted": true
    }
   ]
  },
@@ -59,6 +65,17 @@
     "47.9",
     "48.0"
    ]
+  },
+  {
+   "funding": "0.0",
+   "openInterest": "0.0",
+   "prevDayPx": "25.89",
+   "dayNtlVlm": "0.0",
+   "premium": null,
+   "oraclePx": "25.89",
+   "markPx": "25.89",
+   "midPx": null,
+   "impactPxs": null
   }
  ]
 ]

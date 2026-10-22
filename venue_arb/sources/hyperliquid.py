@@ -29,6 +29,7 @@ class PerpCtx:
     day_volume_usd: float
     growth_mode: bool
     max_leverage: int
+    delisted: bool = False  # venue `isDelisted`; catalog drops these
 
 
 @dataclass(frozen=True)
@@ -89,7 +90,7 @@ def fetch_ctxs(post=post_json) -> list[PerpCtx]:
             symbol=u["name"], mark=float(c["markPx"]), oracle=float(c["oraclePx"]), mid=_f(c.get("midPx")),
             funding_h=float(c["funding"]), premium=_f(c.get("premium")), open_interest=float(c["openInterest"]),
             day_volume_usd=float(c["dayNtlVlm"]), growth_mode=u.get("growthMode") == "enabled",
-            max_leverage=int(u["maxLeverage"]),
+            max_leverage=int(u["maxLeverage"]), delisted=bool(u.get("isDelisted", False)),
         )
         for u, c in zip(meta["universe"], ctxs, strict=True)
     ]
@@ -137,10 +138,10 @@ def load_excluded(path: Path = EXCLUDED) -> set[str]:
 def catalog(
     ctxs: list[PerpCtx], labels: dict[str, Label], excluded: set[str] = frozenset()
 ) -> tuple[list[PerpCtx], list[str]]:
-    """(labelled perps in label order, symbols the venue lists that are in neither file)."""
-    by_symbol = {c.symbol: c for c in ctxs}
+    """(labelled perps in label order, symbols the venue lists that are in neither file); delisted perps are dropped."""
+    by_symbol = {c.symbol: c for c in ctxs if not c.delisted}
     kept = [by_symbol[s] for s in labels if s in by_symbol]
-    unlabelled = [c.symbol for c in ctxs if c.symbol not in labels and c.symbol not in excluded]
+    unlabelled = [s for s in by_symbol if s not in labels and s not in excluded]
     return kept, unlabelled
 
 
