@@ -150,10 +150,10 @@ did not settle when fetched is marked "unverified". Re-check before relying on a
 - Endpoints (`https://api.schwabapi.com`): `GET /marketdata/v1/quotes?symbols=A,B&fields=quote` (batched 100 symbols per
   call; invalid symbols come back under an `errors` key without failing the call, and are skipped) and
   `GET /marketdata/v1/pricehistory?symbol=&periodType=month&frequencyType=daily&frequency=1&startDate=ms&endDate=ms`
-  (daily candles are stamped at local midnight, so the UTC date of `datetime` is the session). Quote fields used:
+  (unverified, as recalled and not checked against Schwab's docs or a live call: daily candles are stamped at local midnight, so the UTC date of `datetime` is the session). Quote fields used:
   `bidPrice`, `askPrice`, `bidSize`, `askSize`, `lastPrice`, `quoteTime` (ms since epoch, UTC).
 - Rate limit: 120 calls per minute (`CALLS_PER_MIN`); one batched quote per snapshot is far under it.
-- After the 8 PM ET close the API keeps returning the last quote with an old `quoteTime`; consumers must check its age.
+- Unverified (as recalled, not observed): after the 8 PM ET close the API keeps returning the last quote with an old `quoteTime`. Consumers must check the quote's age regardless.
 - **Bid/ask size unit is uncertain.** Schwab reports `bidSize`/`askSize` as shares for most symbols but may report round
   lots (x100) for some. The raw value is recorded; the executable tier treats it as shares, which can only understate
   capacity if the unit is lots.
@@ -171,6 +171,6 @@ did not settle when fetched is marked "unverified". Re-check before relying on a
      the URL and the CLI decodes it before the exchange).
   3. The CLI writes `SCHWAB_REFRESH_TOKEN` and `SCHWAB_REFRESH_ISSUED_AT` with `bws secret create|edit` and restarts
      `venue-arb-perps` (`--no-restart` skips that). It prints secret names and the restart result, never values.
-- Personal-use terms: Schwab Market Data is licensed for personal use, so quotes are never shown raw on the demo (same
+- Personal-use terms (unverified: recalled from the design spec, Schwab's terms not read): Schwab Market Data is understood to be licensed for personal use, so quotes are never shown raw on the demo (same
   rule as `DASHBOARD_SHOW_BOOKS`). Whether displaying derived values (basis, verdicts) is allowed: **Sam to read** the
   Schwab developer portal terms before turning on `DASHBOARD_SHOW_STOCK_PERPS`.

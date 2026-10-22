@@ -3,6 +3,7 @@ import json
 from datetime import UTC, date, datetime
 from pathlib import Path
 from types import SimpleNamespace
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 
@@ -37,7 +38,10 @@ def test_quotes_batched_and_parsed(fx):
     c = schwab.Client("id", "sec", "r", post=lambda *a, **k: _resp(fx["token"]),
                       get=lambda url, **k: urls.append(url) or heads.append(k["headers"]) or _resp(fx["quotes"]))
     q = c.quotes([f"S{i}" for i in range(150)])
-    assert len(urls) == 2 and "symbols=S0%2CS1" in urls[0] or "symbols=S0,S1" in urls[0]
+    assert len(urls) == 2
+    assert "symbols=S0%2CS1" in urls[0] or "symbols=S0,S1" in urls[0]
+    syms = [parse_qs(urlparse(u).query)["symbols"][0].split(",") for u in urls]
+    assert [len(x) for x in syms] == [100, 50] and syms[1][0] == "S100"
     assert "fields=quote" in urls[0] and heads[0] == {"Authorization": "Bearer a"}
     assert q["NVDA"] == schwab.Quote("NVDA", 212.83, 212.85, 200.0, 300.0, 212.84, datetime(2026, 10, 22, 17, 41, 13, tzinfo=UTC))
     assert set(q) == {"NVDA", "AAPL"}  # the `errors` entry for an invalid symbol is skipped
