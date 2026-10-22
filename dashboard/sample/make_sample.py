@@ -169,9 +169,10 @@ def history_rows(rng, hour, rows):
     return edge_rows, ladder_rows, books
 
 
-def research_section(rng):
+def research_section():
     """Invented ResearchSummary through note.summarize + research.from_summary: 3 pairs x 48 hourly edge rows (the CPI
     pair carries a positive run, hence one episode), 300 screened values, 6 counted ladder hours (1 violation)."""
+    rng = random.Random(SEED + 1)  # its own stream: the history Parquet bytes do not depend on the research
     end = NOW.replace(minute=0)
     hrs = [end - timedelta(hours=h) for h in range(47, -1, -1)]
     run = hrs[-6:]  # CPI's positive run: the last six hours
@@ -201,8 +202,11 @@ def research_section(rng):
                     "snapshots": sum(x["scored"] for x in ladder_hours), "n_capacity_gt0": int(d == "k_yes_pm_no"),
                     "best_edge_max": .014 if d == "k_yes_pm_no" else -.02, "first_ts": lh[0], "last_ts": lh[-1]}
                    for d in ("k_yes_pm_no", "pm_yes_k_no")]
-    basis_rows = [(a, round(rng.gauss(m, sd), 2), px)
-                  for a, m, sd, px in (("BTC", 12, 70, 87000.0), ("ETH", 0.4, 2.5, 2500.0)) for _ in range(48)]
+    # one basis per sample: bounds are the nearest-rank 99.9th pct rounded up to $1, i.e. ceil(max) and ceil(-min) at
+    # 48 rows, so pin the extremes to land on BASIS (BTC up 182 / down 152)
+    diffs = [round(max(-100, min(100, rng.gauss(12, 40))), 2) for _ in range(46)] + [BASIS["BTC"].up - .5,
+                                                                                     -BASIS["BTC"].down + .5]
+    basis_rows = [("BTC", d, 87000.0) for d in diffs]
     s = note.summarize(PAIRS, screened, edge_rows, episodes, generated_at=NOW, ladder_rows=ladder_rows,
                        basis_rows=basis_rows, admissible=admissible, ladder_hours=ladder_hours)
     return research.from_summary(s, review={"precision": 1.0, "labels": 31, "asof": NOW - timedelta(days=1)},
@@ -233,7 +237,7 @@ def build(out: Path) -> None:
         attribution=["Order books: Kalshi public market-data API (kalshi.com)",
                      "Order books: Polymarket public CLOB API (polymarket.com)"],
         caveats=["Synthetic sample: every price, size and time is invented."], collector_last=NOW - timedelta(seconds=40),
-        research=research_section(rng))
+        research=research_section())
     sides = {(p.kalshi_id, p.pm_id): p.yes_maps_to for p in PAIRS}
     (out / "history").mkdir(parents=True, exist_ok=True)
     (out / "live.json").write_text(
