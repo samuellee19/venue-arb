@@ -46,3 +46,12 @@ def test_sample_is_reproducible(tmp_path):
     mod.build(tmp_path)
     for rel in ("live.json", *(f"history/{n}" for n in HOURS)):
         assert (tmp_path / rel).read_bytes() == (SAMPLE / rel).read_bytes(), rel
+
+
+def test_sample_has_research():
+    b = _bundle()
+    r = b.research
+    assert r is not None and 2 <= len(r.headline) <= 3
+    assert r.exec_hourly.ts and r.screened_hist.counts and r.ladder_hourly.ts
+    assert r.review == {"precision": 1.0, "labels": 31, "asof": "2026-10-19T15:30:00Z"}
+    assert {p.category for p in b.pairs} <= set(b.categories)

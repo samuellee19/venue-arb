@@ -25,6 +25,7 @@ from venue_arb.fees import transfer_cost
 from venue_arb.matching.crypto_rule import Strike
 from venue_arb.models import Level
 from venue_arb.publish import history_table
+from venue_arb.report import note, research
 
 NOW = datetime(2026, 10, 20, 15, 30, tzinfo=UTC)
 SEED = 20261020
@@ -168,6 +169,46 @@ def history_rows(rng, hour, rows):
     return edge_rows, ladder_rows, books
 
 
+def research_section(rng):
+    """Invented ResearchSummary through note.summarize + research.from_summary: 3 pairs x 48 hourly edge rows (the CPI
+    pair carries a positive run, hence one episode), 300 screened values, 6 counted ladder hours (1 violation)."""
+    end = NOW.replace(minute=0)
+    hrs = [end - timedelta(hours=h) for h in range(47, -1, -1)]
+    run = hrs[-6:]  # CPI's positive run: the last six hours
+    edge_rows = []
+    for p in PAIRS:
+        for h in hrs:
+            up = p.kalshi_id == K_CPI and h in run
+            e = round(0.02 + rng.random() * 0.01, 4) if up else round(-0.04 + rng.gauss(0, .01), 4)
+            edge_rows.append({"ts": h, "kalshi_id": p.kalshi_id, "pm_id": p.pm_id, "direction": "k_yes_pm_no",
+                              "best_edge": e, "capacity_usd": round(300 + rng.random() * 200, 2) if up else 0.0})
+    cpi = [r for r in edge_rows if r["kalshi_id"] == K_CPI and r["best_edge"] >= .01]
+    episodes = [{"kalshi_id": K_CPI, "pm_id": P_CPI, "direction": "k_yes_pm_no", "start_ts": run[0],
+                 "end_ts": run[-1], "snapshots": len(cpi), "max_edge": max(r["best_edge"] for r in cpi),
+                 "median_capacity_usd": 410.0, "annualized": 0.35, "us_executable": False,
+                 "transfer_cost_usd": round(transfer_cost(410.0), 2)}]
+    screened = []
+    for i in range(300):  # centred below 0, a few at or above the 1¢ threshold
+        p = PAIRS[i % 3]
+        net = round(0.012 + i / 1e4, 4) if i in (3, 40, 91, 140) else min(round(rng.gauss(-0.035, 0.03), 4), 0.009)
+        screened.append({"ts": end - timedelta(hours=i // 3), "kalshi_id": p.kalshi_id, "pm_id": p.pm_id,
+                         "direction": "k_yes_pm_no", "net_gap_top": net})
+    lh = [end - timedelta(hours=h) for h in range(6, 0, -1)]
+    admissible = [{"hour": h, "checks": 280 + rng.randrange(60)} for h in lh]
+    ladder_hours = [{"hour": h, "scored": a["checks"], "pos": int(h == lh[2])} for h, a in zip(lh, admissible)]
+    ladder_rows = [{"asset": "BTC", "instant": INSTANT, "k_id": K_B86, "pm_id": P_B86, "direction": d, "kind": "arb",
+                    "a": 85999.99, "b": 86000.0, "basis_up": 182.0, "basis_down": 152.0,
+                    "snapshots": sum(x["scored"] for x in ladder_hours), "n_capacity_gt0": int(d == "k_yes_pm_no"),
+                    "best_edge_max": .014 if d == "k_yes_pm_no" else -.02, "first_ts": lh[0], "last_ts": lh[-1]}
+                   for d in ("k_yes_pm_no", "pm_yes_k_no")]
+    basis_rows = [(a, round(rng.gauss(m, sd), 2), px)
+                  for a, m, sd, px in (("BTC", 12, 70, 87000.0), ("ETH", 0.4, 2.5, 2500.0)) for _ in range(48)]
+    s = note.summarize(PAIRS, screened, edge_rows, episodes, generated_at=NOW, ladder_rows=ladder_rows,
+                       basis_rows=basis_rows, admissible=admissible, ladder_hours=ladder_hours)
+    return research.from_summary(s, review={"precision": 1.0, "labels": 31, "asof": NOW - timedelta(days=1)},
+                                 computed_at=NOW)
+
+
 def build(out: Path) -> None:
     rng = random.Random(SEED)
     sparks = make_sparks(rng, [r for rows in live_rows({}) for r in rows])
@@ -191,7 +232,8 @@ def build(out: Path) -> None:
                     "screened_share_ge_1c": 0.004, "screened_hours": 3100},
         attribution=["Order books: Kalshi public market-data API (kalshi.com)",
                      "Order books: Polymarket public CLOB API (polymarket.com)"],
-        caveats=["Synthetic sample: every price, size and time is invented."], collector_last=NOW - timedelta(seconds=40))
+        caveats=["Synthetic sample: every price, size and time is invented."], collector_last=NOW - timedelta(seconds=40),
+        research=research_section(rng))
     sides = {(p.kalshi_id, p.pm_id): p.yes_maps_to for p in PAIRS}
     (out / "history").mkdir(parents=True, exist_ok=True)
     (out / "live.json").write_text(
