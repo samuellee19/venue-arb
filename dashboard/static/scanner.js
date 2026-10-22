@@ -1,18 +1,19 @@
 // Scanner tab: one row per market pair (its better direction), sortable, filtered by category chip.
-import {$, esc, num, usd, signed, bpsOf, tone, day, now, seg, legsTxt, usBlocked, S, NOT_US, US_BANNER, EXEC, VERDICT_TONES,
+import {$, esc, num, usd, signed, bpsOf, tone, day, now, seg, legsTxt, label, usBlocked, S, US_BANNER, EXEC, VERDICT_TONES,
   EXAMPLE, FOOT, FOOT_CHECKS, FOOT_NO_HOUR} from "./common.js";
 
 // numeric sort keys; nulls (stale, no asks) always sort last
 const KEYS = {edge: p => p.net_edge_cents, roi: p => p.net_edge_roi, cap: p => p.capacity_usd, settles: p => Date.parse(p.settles_at)};
-const by = (f, dir) => (a, b) => {
+const stale = p => p.net_edge_cents == null;
+const by = (f, dir) => (a, b) => {  // stale / no-asks rows last under every sort, then nulls of the key last
   const x = f(a), y = f(b);
-  return x == null ? (y == null ? 0 : 1) : y == null ? -1 : dir * (y - x);
+  return stale(a) - stale(b) || (x == null ? (y == null ? 0 : 1) : y == null ? -1 : dir * (y - x));
 };
-const labelOf = (p, us) => us && !p.us_executable ? NOT_US : p.verdict.label;
+const FIRST = {settles: -1};  // first click: soonest settlement first; numbers start descending
 
 // rows: best direction per (Kalshi id, Polymarket id), filtered to cat, sorted (net edge desc by default);
-// counts: rows per category plus "all"; example: true when no row (any category) carries the executable label
-export function scannerRows(pairs, {cat = "all", us = false, sort = null} = {}) {
+// counts: rows per category plus "all"; example: true when no row (any category) carries the bundle's executable label
+export function scannerRows(pairs, {cat = "all", sort = null} = {}) {
   const best = new Map();
   for (const p of pairs) {
     const id = `${p.legs[0].market_id}~${p.legs[1].market_id}`, q = best.get(id);
@@ -22,7 +23,7 @@ export function scannerRows(pairs, {cat = "all", us = false, sort = null} = {}) 
   for (const p of all) counts[p.category] = (counts[p.category] ?? 0) + 1;
   const rows = all.filter(p => cat === "all" || p.category === cat)
     .sort(by(KEYS[sort?.col ?? "edge"], sort?.dir ?? 1));
-  return {rows, counts, example: !all.some(p => labelOf(p, us).startsWith(EXEC))};
+  return {rows, counts, example: !all.some(p => p.verdict.label.startsWith(EXEC))};
 }
 
 const edge = (c, bps) => c == null ? "—" : S.unit === "c" ? signed(c, 1, "¢") : signed(bps ?? bpsOf(c), 0, " bps");
@@ -44,7 +45,7 @@ function row(p) {
     + `<td class="num ${t}">${edge(p.net_edge_cents, p.net_edge_bps)}</td>`
     + `<td class="num ${t}">${p.net_edge_roi == null ? "—" : signed(100 * p.net_edge_roi, 1, "%")}</td>`
     + `<td class="num c-cap">${p.capacity_usd ? usd(p.capacity_usd) : "—"}</td>`
-    + `<td class="when">${when(p.settles_at)}</td><td>${badge(labelOf(p, S.us))}</td></tr>`;
+    + `<td class="when">${when(p.settles_at)}</td><td>${badge(label(p))}</td></tr>`;
 }
 
 // invented round numbers, never a live pair: not clickable, not counted, not sorted
@@ -82,7 +83,7 @@ document.querySelector("#scan thead").onclick = e => {
   const col = e.target.closest("[data-s]")?.dataset.s;
   if (!col || !S.bundle) return;
   const cur = S.sort ?? {col: "edge", dir: 1};
-  S.sort = {col, dir: cur.col === col ? -cur.dir : 1};
+  S.sort = {col, dir: cur.col === col ? -cur.dir : FIRST[col] ?? 1};
   renderScanner();
 };
 const open = tr => { if (tr?.dataset.k) { S.sel = tr.dataset.k; location.hash = "#explorer"; } };

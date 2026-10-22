@@ -42,7 +42,7 @@ export const byKey = k => pairs().find(p => p.key === k);
 export const usBlocked = () => S.us && !pairs().some(p => p.us_executable);
 export const greyed = p => S.us && !p.us_executable;
 export const label = p => greyed(p) ? NOT_US : p.verdict.label;
-export const legsTxt = p => p.legs.map(l => `${l.venue === "kalshi" ? "K" : "PM"} ${l.side}`).join(" / ");
+export const legsTxt = p => p.legs.map(l => `${l.venue === "kalshi" ? "K" : "PM"} ${esc(l.side)}`).join(" / ");
 
 export function settles(iso) {  // v1's long form, for the Explorer
   const d = new Date(iso), ms = d - now();

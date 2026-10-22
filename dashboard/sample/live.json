@@ -51,7 +51,7 @@
   "categories": {
     "crypto_price": "Crypto",
     "fed_macro": "Fed & macro",
-    "weather": "weather"
+    "weather": "Weather"
   },
   "caveats": [
     "Synthetic sample: every price, size and time is invented."

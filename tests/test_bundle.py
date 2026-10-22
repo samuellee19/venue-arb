@@ -207,9 +207,9 @@ def test_pairs_live_counts_pairs_not_directions():
 
 def test_categories_from_taxonomy_display():
     b = _live(_ex(), _lad())
-    assert b.categories == {"fed_macro": "Fed & macro", "crypto_price": "Crypto"}
-    odd = [r.model_copy(update={"category": "weather"}) for r in _ex()]
-    assert _live(odd, []).categories["weather"] == "weather"  # an unknown slug still renders
+    assert b.categories == {"fed_macro": "Fed & macro", "crypto_price": "Crypto", "weather": "Weather"}
+    odd = [r.model_copy(update={"category": "sports"}) for r in _ex()]
+    assert _live(odd, []).categories["sports"] == "sports"  # an unknown slug still renders
 
 
 def test_research_optional():

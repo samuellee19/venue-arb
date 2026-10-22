@@ -32,7 +32,7 @@ POLYMARKET_TAGS = {
 }
 
 # dashboard display names; every config.CATEGORIES entry needs one (tests/test_taxonomy.py)
-DISPLAY = {"fed_macro": "Fed & macro", "crypto_price": "Crypto"}
+DISPLAY = {"fed_macro": "Fed & macro", "crypto_price": "Crypto", "weather": "Weather"}
 
 
 def assign_category(

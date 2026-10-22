@@ -1,6 +1,6 @@
 // venue-arb dashboard: boot, load/poll of /api/live, tabs, header, theme, banners (dashboard/api/app.py serves it).
 // No edge, fee or basis logic here: every number comes from the bundle. Plotly is the vendored global (Explorer).
-import {$, esc, num, seg, usBlocked, byKey, S, REPO, POLL_MS, STALE_S, DEAD_S, BOOKS_S, STALE_BANNER, NO_BOOKS,
+import {$, esc, num, seg, byKey, S, REPO, POLL_MS, STALE_S, DEAD_S, BOOKS_S, STALE_BANNER, NO_BOOKS,
   NOT_COMPUTED} from "./common.js";
 import {renderScanner} from "./scanner.js";
 
@@ -21,7 +21,7 @@ async function load() {
 
 function renderHeader() {
   const k = S.bundle.kpis;
-  $("f-episodes").textContent = usBlocked() ? 0 : num(k.episodes_7d);  // executable episodes: none from the US
+  $("f-episodes").textContent = num(k.episodes_7d);  // the note's scoped count; the US toggle is a Scanner lens only
   $("f-pairs").textContent = num(Object.values(k.pairs_live).reduce((a, b) => a + b, 0));  // market pairs
 }
 
@@ -62,7 +62,7 @@ function renderFoot() {
 $("wordmark").href = REPO;
 $("where").onclick = e => {
   if (!e.target.dataset.w || !S.bundle) return;
-  S.us = e.target.dataset.w === "us"; seg($("where"), e.target); renderHeader(); renderScanner();
+  S.us = e.target.dataset.w === "us"; seg($("where"), e.target); renderScanner();
 };
 $("theme").onclick = () => {
   const root = document.documentElement;
