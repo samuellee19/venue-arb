@@ -20,7 +20,8 @@ import uuid
 from bisect import bisect_left
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
-from itertools import pairwise
+from itertools import groupby, pairwise
+from operator import itemgetter
 from pathlib import Path
 
 import pyarrow as pa
@@ -129,8 +130,8 @@ STOCK_PERP_HOUR_SQL = """
 SELECT ts, symbol, direction, basis_bps, net_bps, capacity_usd FROM venue_arb.stock_perp_edges FINAL
 WHERE ts >= {lo:DateTime64(3, 'UTC')} AND ts < {hi:DateTime64(3, 'UTC')}
 """
-# the Research tab's stock-perp block (stock_perp_inputs): aggregates in ClickHouse; EDGES is the whole history in one
-# query (8 columns per scored tick), re-run through episodes.find for the sensitivities
+# the Research tab's stock-perp block (stock_perp_inputs): aggregates in ClickHouse; EDGES is the trailing
+# STOCK_PERP_SENSITIVITY_DAYS in one query (8 columns per scored tick, kept as tuples), re-run through episodes.find
 SP_HOURLY_SQL = ("SELECT toStartOfHour(ts) AS h, max(net_bps) FROM venue_arb.stock_perp_edges FINAL "
                  "GROUP BY h ORDER BY h")
 SP_COUNTS_SQL = "SELECT uniqExact(symbol), uniqExact((symbol, ts)), min(ts) FROM venue_arb.stock_perp_edges FINAL"
@@ -140,7 +141,8 @@ SP_SHARE_SQL = ("SELECT avg(s), count() FROM (SELECT toStartOfHour(ts) AS h, avg
 SP_BY_NAME_SQL = ("SELECT symbol, max(net_bps), uniqExactIf(toStartOfHour(ts), abs(basis_bps) >= 10) "
                   "FROM venue_arb.stock_perp_edges FINAL GROUP BY symbol")
 SP_EDGES_SQL = ("SELECT ts, symbol, direction, net_bps, funding_bps, borrow_bps, capacity_contracts, capacity_usd "
-                "FROM venue_arb.stock_perp_edges FINAL")
+                f"FROM venue_arb.stock_perp_edges FINAL WHERE ts >= now() - INTERVAL {config.STOCK_PERP_SENSITIVITY_DAYS} DAY "
+                "ORDER BY symbol, ts")
 SP_EPISODES_ALL_SQL = "SELECT count(*) FROM venue_arb.opportunities WHERE source = 'stock_perp'"
 SP_WEEKENDS_SQL = ("SELECT symbol, friday, p_fri, p_sat, p_sun, p_open_pre, p_open_reg, ref_kind "
                    "FROM venue_arb.stock_perp_weekends ORDER BY friday")
@@ -514,37 +516,35 @@ def tick(state: dict, readers: dict, now: datetime) -> LiveBundle:
 
 
 def sensitivity_episodes(rows) -> dict[str, int]:
-    """Episodes re-found from edge rows (ts, symbol, direction, net_bps, funding_bps, borrow_bps, capacity_contracts,
-    capacity_usd) at a 1 h and a 168 h hold and at borrow x10. Funding and borrow scale linearly with the hold, so a
-    row's net at hold h is net + (funding + borrow) * (1 - h / hold); borrow x10 is net - 9 * borrow. Per (symbol,
-    direction) as stock_perp_window.score_window: the other direction's ticks are non-qualifying points."""
+    """Episodes re-found from edge tuples (ts, symbol, direction, net_bps, funding_bps, borrow_bps,
+    capacity_contracts, capacity_usd), ordered by symbol, at the base 24 h hold, a 1 h and a 168 h hold and borrow x10.
+    Funding and borrow scale linearly with the hold, so a row's net at hold h is net + (funding + borrow) * (1 - h /
+    hold); borrow x10 is net - 9 * borrow. Per (symbol, direction) as stock_perp_window.score_window: the other
+    direction's ticks are non-qualifying points. Counts only what `rows` holds (the trailing window)."""
     hold = config.STOCK_PERP_HOLD_H
     h_short, h_long = config.STOCK_PERP_HOLD_SENSITIVITY_H
-    cases = {"episodes_1h": lambda r: r["net_bps"] + (r["funding_bps"] + r["borrow_bps"]) * (1 - h_short / hold),
-             "episodes_7d": lambda r: r["net_bps"] + (r["funding_bps"] + r["borrow_bps"]) * (1 - h_long / hold),
-             "episodes_borrow_x10": lambda r: r["net_bps"] - 9 * r["borrow_bps"]}
-    by_symbol: dict[str, list[dict]] = {}
-    for r in rows:
-        by_symbol.setdefault(r["symbol"], []).append(r)
+    cases = {"episodes_base": lambda r: r[3],
+             "episodes_1h": lambda r: r[3] + (r[4] + r[5]) * (1 - h_short / hold),
+             "episodes_7d": lambda r: r[3] + (r[4] + r[5]) * (1 - h_long / hold),
+             "episodes_borrow_x10": lambda r: r[3] - 9 * r[5]}
     out = dict.fromkeys(cases, 0)
-    for g in by_symbol.values():
-        close = max(r["ts"] for r in g) + timedelta(hours=hold)
+    for symbol, g in groupby(rows, key=itemgetter(1)):
+        g = list(g)  # one symbol at a time
+        close = max(r[0] for r in g) + timedelta(hours=hold)
         for key, net in cases.items():
-            scored = [{**r, "net_bps": net(r)} for r in g]
-            for d in {r["direction"] for r in g}:
-                pts = stock_perps.episode_points([r for r in scored if r["direction"] == d]) + [
-                    (r["ts"], Edge(d, None, 0.0, 0.0, None)) for r in scored if r["direction"] != d]
-                out[key] += len(find(pts, close, kalshi_id=g[0]["symbol"], pm_id=g[0]["symbol"], direction=d,
+            nets = [net(r) for r in g]
+            for d in {r[2] for r in g}:
+                pts = [(r[0], Edge(d, n / 1e4, r[6], r[7], n / 1e4) if r[2] == d else Edge(d, None, 0.0, 0.0, None))
+                       for r, n in zip(g, nets, strict=True)]
+                out[key] += len(find(pts, close, kalshi_id=symbol, pm_id=symbol, direction=d,
                                      min_edge=config.STOCK_PERP_MIN_NET_BPS / 1e4, annualize=stock_perps.annualize))
-    return out
+    return out | {"window_days": config.STOCK_PERP_SENSITIVITY_DAYS}
 
 
 def stock_perp_inputs(ch, conn, labels: dict) -> dict:
     """research.stock_perp_block's inputs from ClickHouse (`ch`) and Postgres (`conn`), `labels` = load_labels()."""
     names, snapshots, first = ch.query(SP_COUNTS_SQL).result_rows[0]
     share, share_hours = ch.query(SP_SHARE_SQL).result_rows[0]
-    cols = ["ts", "symbol", "direction", "net_bps", "funding_bps", "borrow_bps", "capacity_contracts", "capacity_usd"]
-    edge_rows = [dict(zip(cols, r, strict=True)) | {"ts": _utc(r[0])} for r in ch.query(SP_EDGES_SQL).result_rows]
     by_name = [{"symbol": sym, "name": (lb := hyperliquid.label_or_none(sym, labels)).name, "max_net_bps": mx,
                 "hours_ge_10": int(hours), "ref_kind": lb.ref_kind}
                for sym, mx, hours in ch.query(SP_BY_NAME_SQL).result_rows]
@@ -552,7 +552,7 @@ def stock_perp_inputs(ch, conn, labels: dict) -> dict:
             "snapshots": int(snapshots), "window_start": _utc(first) if snapshots else None,
             "episodes": conn.execute(SP_EPISODES_ALL_SQL).fetchone()[0],
             "share_hours": share if share_hours else None, "by_name": by_name,
-            "sensitivity": sensitivity_episodes(edge_rows),
+            "sensitivity": sensitivity_episodes(ch.query(SP_EDGES_SQL).result_rows),
             "weekend_rows": _dicts(conn.execute(SP_WEEKENDS_SQL))}
 
 
@@ -568,7 +568,8 @@ def compute_research(readers: dict, now: datetime) -> ResearchSummary:
     summary = research.from_summary(s, review={"precision": p, "labels": n, "asof": asof} if n else None,
                                     computed_at=now)
     if config.DASHBOARD_SHOW_STOCK_PERPS:  # stock_perp_inputs() -> research.stock_perp_block's dict
-        summary = summary.model_copy(update={"stock_perps": research.stock_perp_block(readers["stock_perp_inputs"](), now)})
+        block = research.stock_perp_block(readers["stock_perp_inputs"](), now)
+        summary = summary.model_copy(update={"stock_perps": block})
     return summary
 
 

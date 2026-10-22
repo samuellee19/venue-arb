@@ -22,5 +22,6 @@ DASHBOARD_SHOW_STOCK_PERPS = False  # stock-perp tier on the public dashboard; o
 STOCK_PERP_MIN_NET_BPS = 10.0  # net edge floor after round-trip costs, funding and borrow
 STOCK_PERP_HOLD_H = 24  # assumed holding period for the funding and borrow charge
 STOCK_PERP_HOLD_SENSITIVITY_H = (1, 168)  # holding periods the edge is re-scored at
+STOCK_PERP_SENSITIVITY_DAYS = 14  # trailing window the research block re-finds episodes over (memory-bounded)
 STOCK_PERP_BORROW_BPS_YR = 50.0  # stock borrow cost, bps per year
 REF_MAX_AGE_S = 120  # a stock reference quote older than this is not comparable to the perp book

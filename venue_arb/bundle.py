@@ -156,7 +156,10 @@ class StockPerpResearch(_M):
     share_hours_abs_ge_10bps: float | None  # of Schwab-referenced hours, the share with |basis| >= 10 bps
     hourly: ResearchSeries  # max net_bps per hour, whole history
     by_name: list[dict]  # {"symbol", "name", "max_net_bps", "hours_ge_10", "ref_kind"}, top 10 by max_net_bps
-    sensitivity: dict  # {"episodes_1h", "episodes_7d", "episodes_borrow_x10"}: the episode count re-scored
+    # episodes re-found over the trailing window_days at the 24 h hold (episodes_base), at 1 h, at 168 h and with borrow
+    # x10, so the four are comparable; `episodes` above is the stored all-history count
+    # {"episodes_base", "episodes_1h", "episodes_7d", "episodes_borrow_x10", "window_days"}
+    sensitivity: dict
     weekends: dict  # weekends.summary plus "rows": the last 8 weekends of the top 5 names
     headline: str
 

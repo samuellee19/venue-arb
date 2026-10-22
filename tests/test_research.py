@@ -98,7 +98,7 @@ def sp_inputs(**kw):
             "window_start": h, "episodes": 1, "share_hours": 0.25,
             "by_name": [{"symbol": "xyz:A", "name": "A", "max_net_bps": 2.0, "hours_ge_10": 1, "ref_kind": "schwab"},
                         {"symbol": "xyz:B", "name": "B", "max_net_bps": 12.4, "hours_ge_10": 5, "ref_kind": "schwab"}],
-            "sensitivity": {"episodes_1h": 2, "episodes_7d": 0, "episodes_borrow_x10": 1},
+            "sensitivity": {"episodes_base": 1, "episodes_1h": 2, "episodes_7d": 0, "episodes_borrow_x10": 1, "window_days": 14},
             "weekend_rows": [{"symbol": "xyz:B", "friday": date(2026, 10, 16), "p_fri": 10.0, "p_sat": 10.1,
                               "p_sun": 10.2, "p_open_pre": 10.3, "p_open_reg": 10.4, "ref_kind": "schwab"}]}
     return base | kw
@@ -110,7 +110,7 @@ def test_stock_perp_block_headline_and_series():
     assert "4,200 snapshots since 20 Oct" in b.headline
     assert b.hourly.values == [3.14, 12.4] and b.max_net_bps == 12.4 and b.share_hours_abs_ge_10bps == 0.25
     assert [r["symbol"] for r in b.by_name] == ["xyz:B", "xyz:A"]  # sorted by max_net_bps, best first
-    assert b.sensitivity == {"episodes_1h": 2, "episodes_7d": 0, "episodes_borrow_x10": 1}
+    assert b.sensitivity == {"episodes_base": 1, "episodes_1h": 2, "episodes_7d": 0, "episodes_borrow_x10": 1, "window_days": 14}
     assert b.weekends["rows"][0]["friday"] == date(2026, 10, 16) and b.weekends["weekends"] == 1
     empty = research.stock_perp_block(sp_inputs(hourly=[], names=0, snapshots=0, window_start=None, episodes=0,
                                                 share_hours=None, by_name=[], weekend_rows=[]), NOW)

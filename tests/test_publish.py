@@ -500,17 +500,22 @@ def _sp_row(minute, net=20.0, funding=0.0, borrow=0.0, d="long_perp_short_stock"
 
 
 def test_sensitivity_episodes_rescore_hold_and_borrow():
-    ticks = lambda **kw: [_sp_row(m, **kw) for m in range(3)]
+    ticks = lambda **kw: [tuple(_sp_row(m, **kw).values()) for m in range(3)]
+    w = {"window_days": config.STOCK_PERP_SENSITIVITY_DAYS}
     # funding received (-20 bps over 24 h) is worth less over 1 h and more over 7 d; borrow x10 costs 9 x 2 = 18 bps
     got = publish.sensitivity_episodes(ticks(net=20.0, funding=-20.0, borrow=2.0))
-    assert got == {"episodes_1h": 0, "episodes_7d": 1, "episodes_borrow_x10": 0}
+    assert got == {"episodes_base": 1, "episodes_1h": 0, "episodes_7d": 1, "episodes_borrow_x10": 0} | w
     # a paid-funding run (+12) dies at 7 d; an interleaved other-direction tick splits a run (two runs of one < 2)
     assert publish.sensitivity_episodes(ticks(net=30.0, funding=12.0)) == {
-        "episodes_1h": 1, "episodes_7d": 0, "episodes_borrow_x10": 1}
-    split = [_sp_row(0), _sp_row(1, d="short_perp_long_stock"), _sp_row(2)]
-    assert publish.sensitivity_episodes(split) == {"episodes_1h": 0, "episodes_7d": 0, "episodes_borrow_x10": 0}
-    # a thin stock leg never qualifies, whatever the carry
+        "episodes_base": 1, "episodes_1h": 1, "episodes_7d": 0, "episodes_borrow_x10": 1} | w
+    split = [tuple(r.values()) for r in (_sp_row(0), _sp_row(1, d="short_perp_long_stock"), _sp_row(2))]
+    assert publish.sensitivity_episodes(split) == dict.fromkeys(
+        ("episodes_base", "episodes_1h", "episodes_7d", "episodes_borrow_x10"), 0) | w
+    # a thin stock leg never qualifies, whatever the carry; symbols are scored apart
     assert publish.sensitivity_episodes(ticks(cap=50.0))["episodes_1h"] == 0
+    two = ticks(net=20.0) + [tuple(_sp_row(m, sym="xyz:TSLA").values()) for m in range(3)]
+    assert publish.sensitivity_episodes(two)["episodes_base"] == 2
+    assert "INTERVAL 14 DAY" in publish.SP_EDGES_SQL and "ORDER BY symbol, ts" in publish.SP_EDGES_SQL
 
 
 def test_stock_perp_inputs_assembles_the_block_inputs():
@@ -538,7 +543,7 @@ def test_stock_perp_inputs_assembles_the_block_inputs():
     assert out["share_hours"] == 0.4 and out["hourly"] == [(NOW, 25.0)]
     assert out["by_name"] == [{"symbol": "xyz:NVDA", "name": "NVIDIA", "max_net_bps": 25.0, "hours_ge_10": 2,
                                "ref_kind": "schwab"}]
-    assert out["sensitivity"]["episodes_1h"] == 1 and out["weekend_rows"][0]["friday"] == date(2026, 10, 16)
+    assert out["sensitivity"]["episodes_base"] == out["sensitivity"]["episodes_1h"] == 1 and out["weekend_rows"][0]["friday"] == date(2026, 10, 16)
     from venue_arb.report import research
 
     research.stock_perp_block(out, NOW)  # the reader's output is the reducer's input
