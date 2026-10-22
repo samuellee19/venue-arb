@@ -71,6 +71,13 @@ the catalog flow records a warn naming it.
 | Second opinion | the US names | US session | Pyth `Equity.US.*` |
 | Venue oracle | every name, always | always; alone overnight (Blue Ocean through the oracle) and on weekends | Hyperliquid `metaAndAssetCtxs` |
 
+**Amendment 2026-10-22 (plan time).** Pyth's Hermes price endpoint has required a paid API key since the Pyth Core
+upgrade of 2026-08-26 (free trial only; `v2/updates/price/latest` answers 401 without it; the feed list is still
+open). The v1 design bars paid data without Sam's approval, so the Pyth rows above are **not built**: the Asia-listed
+names are oracle-only (their rows never carry the executable verdict, as §5 already says), and the US names have no
+second opinion. The reference adapter is written so a Pyth client can be added behind `PYTH_API_KEY` later without
+touching the scoring. JIO and RELIANCE have no Pyth equity feed in any case.
+
 The venue's oracle is externally derived Sunday 8:05 PM to Friday 8:00 PM ET for US names (pre-market, market,
 post-market, overnight via Blue Ocean ATS) and for Asian names during their home sessions. Outside those windows the
 external price freezes and the oracle advances as an exponentially weighted moving average of the perp's own impact
