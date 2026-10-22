@@ -22,6 +22,9 @@ def test_from_summary_headline_numbers():
     assert r.note_path == "reports/research-note-v1.md"
     empty = reduce(note.summarize([], [], [], []))
     assert "—" in empty.headline[1] and "0 episodes" in empty.headline[1] and empty.max_net_edge_cents is None
+    assert empty.headline[2] == copy.HEADLINE["ladders_none"]
+    one = reduce(note.summarize([pair()], [], [edge()], [episode()])).headline[1]
+    assert "1 exact pair and 1 order-book snapshot " in one and "1 episode met" in one
 
 
 def test_exec_hourly_is_hourly_max():
@@ -64,6 +67,7 @@ def test_from_summary_validates():
                        ladder_hours=[{"hour": T0 + timedelta(hours=h), "scored": 10, "pos": h % 2} for h in hours])
     r = reduce(s, review={"precision": 1.0, "labels": 31, "asof": NOW})
     assert isinstance(r, ResearchSummary) and len(r.exec_hourly.ts) == 1440 and len(r.ladder_hourly.ts) == 1440
+    assert "1,440 order-book snapshots" in r.headline[1] and "of 57,600 admissible" in r.headline[2]
     assert set(r.basis) == {"BTC"} and r.basis["BTC"].down == 40.0  # ETH has too few hours for a bound
     j = r.model_dump_json()
     # compare as JSON: `review` is a plain dict, so its datetime comes back as a string

@@ -127,7 +127,9 @@ def test_render_rule_pairs_no_flag_intro_and_method(tmp_path):
     text = note.render(s, tmp_path).read_text()
     assert "builder's own reading" not in text
     assert "by a deterministic rule (rule:fed-v1 (prompt v3))" in text and "by an LLM" not in text
-    assert all(f"> {v}" in text for v in note.METHOD.values())  # the dashboard's method copy, verbatim
+    # the dashboard's copy replaces the note's equivalent method sentences only; page-only copy stays out
+    assert note.METHOD["edge"] in text and note.METHOD["crypto"] in text and "150 s" in text
+    assert note.METHOD["matching"] not in text and note.METHOD["not_shown"] not in text and "In brief" not in text
 
 
 INSTANT = T0 + timedelta(hours=10)

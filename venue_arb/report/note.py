@@ -528,9 +528,8 @@ def _ladder_text(lad: dict) -> dict[str, list[str]]:
         *(brows or ["| (no basis rows) | 0 | n/a | n/a | n/a | n/a | n/a |"]),
         "",
         *([lean, ""] if lean else []),
-        ("- *Admissible checks.* A cross-strike check counts only if the strikes are far enough apart that the $0 "
-         "state needs a basis move beyond the bound: `k_yes_pm_no` needs b - a >= down, `pm_yes_k_no` needs a - b "
-         ">= up. These are stored as `kind = 'arb'`."),
+        (f"- *Admissible checks.* {METHOD['crypto']} In the stored terms, `k_yes_pm_no` needs b - a >= down and "
+         "`pm_yes_k_no` needs a - b >= up; these checks are stored as `kind = 'arb'`."),
         (f"- *Near-exact same-strike pairs* (|a - b| <= ${NEAR_EXACT_TOL:.0f} after normalization, e.g. Kalshi "
          "`T81499.99` vs Polymarket \"above 81,500\") are classified first, scored in both directions and stored as "
          "`kind = 'near_exact'`. Both legs lose if the settle falls between the two indices, a band up to `down` "
@@ -689,11 +688,6 @@ def render(summary: dict, out_dir: Path) -> Path:
         "",
         "## Method",
         "",
-        ("In brief (the same four paragraphs the dashboard's Research tab shows; the detail and the numbers' "
-         "sources follow):"),
-        "",
-        *[line for k in ("matching", "edge", "crypto", "not_shown") for line in (f"> {METHOD[k]}", ">")][:-1],
-        "",
         "**What counts as exact.** The two Yes outcomes pay in the same states of the world: same event, same outcome "
         "definition, same decision date and same resolving authority. Trading close times and the wording of the "
         "source pages do not count as differences. Rare edge clauses (for example a cancelled meeting, or an odd-size "
@@ -721,10 +715,10 @@ def render(summary: dict, out_dir: Path) -> Path:
         ("- *Executable* (`venue_arb.edges`, `venue_arb.opportunities`): our own order-book snapshots. A Kalshi "
         f"snapshot is aligned with the nearest Polymarket snapshot within {ALIGN_S} s. Both ask ladders are walked "
         "together; `best_edge` is the top-of-book edge after fees and `capacity_usd` the dollars spent on both "
-        f"legs while the marginal edge stays >= {MIN_EDGE}."),
+        f"legs while the marginal edge stays >= {MIN_EDGE}. Snapshots are taken every 60 s; a gap over {MAX_GAP_S} s "
+        "between consecutive snapshots breaks an episode's run."),
         "",
-        (f"**Threshold (an episode).** Net edge >= ${MIN_EDGE} per $1 contract, >= $100 executable, in >= 2 "
-        f"consecutive snapshots (a gap over {MAX_GAP_S} s breaks the run)."),
+        f"**Edge and the episode threshold.** {METHOD['edge']}",
         "",
         (f"**Fees** (entries dated {s['fees']['version']}, sources in `docs/venues.md`). Kalshi taker: "
         f"`{s['fees']['kalshi_rate']} x C x P x (1-P)` times the series' `fee_multiplier` (read from the API), "

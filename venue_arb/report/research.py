@@ -32,8 +32,9 @@ def _screened_hist(values: list[float]) -> ResearchHist:
     return ResearchHist(edges=HIST_EDGES, counts=counts.tolist())
 
 
-def _n(x) -> str:
-    return f"{x or 0:,}"
+def _n(x, noun: str) -> str:
+    n = x or 0
+    return f"{n:,} {noun}" + ("" if n == 1 else "s")
 
 
 def from_summary(s: dict, *, review: dict | None, computed_at: datetime) -> ResearchSummary:
@@ -43,10 +44,12 @@ def from_summary(s: dict, *, review: dict | None, computed_at: datetime) -> Rese
     max_edge = f"{100 * ex['best_edge_max']:.1f}¢" if ex["best_edge_max"] is not None else "—"
     headline = [
         copy.HEADLINE["question"],
-        copy.HEADLINE["answer"].format(pairs=_n(s["pairs"]["eligible"]), snapshots=_n(ex["snapshots"]), since=since,
-                                       max_edge=max_edge, episodes=_n(ex["episodes"]),
-                                       us_episodes=_n(s["jurisdiction"]["us_episodes"])),
-        copy.HEADLINE["ladders"].format(violations=_n(lad["pos_counted"]), checks=_n(lad["admissible_checks"])),
+        copy.HEADLINE["answer"].format(pairs=_n(s["pairs"]["eligible"], "exact pair"),
+                                       snapshots=_n(ex["snapshots"], "order-book snapshot"), since=since,
+                                       max_edge=max_edge, episodes=_n(ex["episodes"], "episode"),
+                                       us_episodes=f"{s['jurisdiction']['us_episodes']:,}"),
+        copy.HEADLINE["ladders"].format(violations=f"{lad['pos_counted']:,}", checks=f"{lad['admissible_checks']:,}")
+        if lad["admissible_checks"] is not None else copy.HEADLINE["ladders_none"],
     ]
     return ResearchSummary(
         computed_at=computed_at,
