@@ -3,31 +3,49 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>venue-arb · pair explorer</title>
+<title>venue-arb · Prediction Market Arbitrage</title>
 <link rel="stylesheet" href="/static/styles.css">
 <script>try { const t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch {}</script>
 </head>
 <body>
 <div class="banner" id="stale" hidden></div>
-<div class="banner" id="usban" hidden></div>
 <header>
-  <h1>venue-arb <span>· cross-venue arbitrage monitor</span></h1>
-  <div class="live"><span class="dot" id="dot"></span> <span id="clock">loading…</span></div>
-  <div class="filters">
-    <span id="cats"></span>
-    <span class="seg" id="unit" title="Edge unit"><button data-u="c" class="on">¢ per contract</button><button data-u="bps">bps of cost</button></span>
-    <label class="size" id="sizebox">size <input id="size" type="number" min="1" step="1" value="1000" inputmode="numeric"> contracts</label>
-    <span class="size">Executable from: <span class="seg" id="where"><button data-w="any" class="on">anywhere</button><button data-w="us">US</button></span></span>
-    <button class="chip" id="theme" title="Switch light / dark">theme</button>
+  <div class="brand">
+    <a class="wordmark" id="wordmark">venue-arb</a>
+    <h1>Prediction Market Arbitrage</h1>
+    <p>Kalshi vs Polymarket: matched markets, executable edge after fees and depth, and why most gaps aren't arbitrage.</p>
+  </div>
+  <div class="figs" id="figs">
+    <div class="fig"><b id="f-episodes">—</b><span>episodes · 7 d</span></div>
+    <div class="fig"><b id="f-pairs">—</b><span>pairs live</span></div>
+    <div class="live"><span class="dot" id="dot"></span><span id="clock">loading</span></div>
+    <button class="toggle" id="theme" title="Switch light / dark">theme</button>
   </div>
 </header>
-<section class="kpis" id="kpis"></section>
+<nav class="tabs">
+  <a href="#scanner">Scanner</a><a href="#explorer">Explorer</a><a href="#research">Research</a>
+</nav>
 <main>
-  <aside class="pane list">
-    <div class="hd"><input class="search" id="q" type="search" placeholder="⌕ search pairs" aria-label="search pairs"></div>
-    <div id="rows"></div>
-  </aside>
-  <section class="pane detail" id="detail"><div class="empty">Loading the live bundle…</div></section>
+  <section id="tab-scanner">
+    <div class="bar">
+      <span class="chips" id="chips"></span>
+      <span class="seg" id="unit" title="Net edge unit"><button data-u="c" class="on">¢</button><button data-u="bps">bps</button></span>
+      <span class="mut">Executable from</span>
+      <span class="seg" id="where"><button data-w="any" class="on">anywhere</button><button data-w="us">US</button></span>
+    </div>
+    <div class="banner" id="usban" hidden></div>
+    <table id="scan">
+      <thead><tr>
+        <th>Pair</th><th class="c-legs">Legs</th>
+        <th class="num" data-s="edge"><button>Net edge</button></th><th class="num" data-s="roi"><button>ROI</button></th>
+        <th class="num c-cap" data-s="cap"><button>Capacity</button></th><th data-s="settles"><button>Settles</button></th><th>Verdict</th>
+      </tr></thead>
+      <tbody id="srows"><tr><td colspan="7" class="mut">Loading the live bundle</td></tr></tbody>
+    </table>
+    <p class="foot" id="sfoot"></p>
+  </section>
+  <section id="tab-explorer" hidden></section>
+  <section id="tab-research" hidden></section>
 </main>
 <footer id="foot"></footer>
 <script src="/static/plotly-basic.min.js"></script>
