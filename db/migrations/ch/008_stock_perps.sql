@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS venue_arb.stock_perp_books (
 ) ENGINE = MergeTree
 PARTITION BY toYYYYMM(ts)
 ORDER BY (symbol, ts, side, level)
-TTL ts + INTERVAL 90 DAY;
+TTL toDateTime(ts) + INTERVAL 90 DAY;
 
 CREATE TABLE IF NOT EXISTS venue_arb.stock_perp_ctx (
     ts DateTime64(3, 'UTC'),
@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS venue_arb.stock_perp_ctx (
 ) ENGINE = MergeTree
 PARTITION BY toYYYYMM(ts)
 ORDER BY (symbol, ts)
-TTL ts + INTERVAL 90 DAY;
+TTL toDateTime(ts) + INTERVAL 90 DAY;
 
 CREATE TABLE IF NOT EXISTS venue_arb.stock_perp_refs (
     ts DateTime64(3, 'UTC'),
@@ -46,7 +46,7 @@ CREATE TABLE IF NOT EXISTS venue_arb.stock_perp_refs (
 ) ENGINE = MergeTree
 PARTITION BY toYYYYMM(ts)
 ORDER BY (symbol, ts)
-TTL ts + INTERVAL 90 DAY;
+TTL toDateTime(ts) + INTERVAL 90 DAY;
 
 CREATE TABLE IF NOT EXISTS venue_arb.stock_perp_candles (
     hour DateTime('UTC'),
