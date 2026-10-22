@@ -1,6 +1,6 @@
 # venue-arb: stock-perp basis (Hyperliquid trade.xyz vs the underlying)
 
-Design, 2026-10-22. Status: draft for Sam's review. This is phase 4 ("Widen") of
+Design, 2026-10-22. Status: reviewed by a builder check 2026-10-22; Sam approved the cost definition (§5). Awaiting Sam's approval of the whole. This is phase 4 ("Widen") of
 `2026-10-19-venue-arb-design.md`, narrowed to one slice: stock perpetuals on Hyperliquid's trade.xyz builder
 exchange against the stocks they track. Everything the v1 design and the dashboard designs say still holds unless
 this document changes it. Calls marked **(Claude's call)** were made while writing this up and were not discussed
@@ -116,12 +116,21 @@ the stock.
   **(Claude's call)**, reported as a sensitivity (how many episodes survive at 10x), like the transfer cost today.
   Asia-listed names have a Pyth price and confidence interval but no displayed size, so their stock leg has no
   capacity figure and their rows are basis-only (no executable verdict) **(Claude's call)**.
-- Funding: the venue pays hourly; the position pays or receives `funding_rate × notional` at each tick inside the
-  window, signed by side. Netted into the episode's edge.
-- Episode rule: net basis ≥ 10 bps after all of the above, ≥ $100 fillable on the smaller leg, in ≥ 2 consecutive
-  snapshots, 150 s gap breaks the run. Same code path as `episodes.find`.
-- Episodes are stored with `source = 'stock_perp'`; every existing pair-tier query reads `source = 'pair'` and the
-  ladder tier `'ladder'`, so nothing changes for them.
+- **Costs are the round trip, carry is a stated 24-hour hold (Sam, 2026-10-22).** A basis trade pays only when
+  the gap closes, which means exiting both legs, and it carries funding and borrow while held. So, per snapshot:
+  `net_bps = gross_bps − 2 × perp taker fee − full stock spread − 24 h of funding (signed by side) − 24 h of borrow
+  (short-stock side only)`, all in bps of notional. The 24 h hold is an assumption printed on the page; a sensitivity
+  line reports how many episodes survive at a 1 h and a 7 d hold. Funding is the venue's hourly rate × 24; the
+  position pays or receives it by side. For growth-mode names the round trip is under 2 bps; for standard-fee names
+  it is 18 bps before carry, so most of them never clear 10 bps, which is the honest result.
+- Episode rule: `net_bps ≥ 10`, ≥ $100 fillable on the smaller leg, in ≥ 2 consecutive snapshots, 150 s gap breaks
+  the run. `episodes.find` is reused with its threshold and payout arithmetic parameterised (it hard-codes a 1¢
+  edge and a `close_time` for annualisation; stock perps have no close, so annualised edge is `net_bps` over the
+  stated hold) **(Claude's call)**.
+- Episodes are stored with `source = 'stock_perp'`. The pair-tier queries read `source = 'pair'` and the ladder
+  tier `'ladder'`, but `publish.EPISODES_SQL` and `publish.scope_episodes` currently keep every non-pair row, so
+  both must exclude `'stock_perp'` from the header's "episodes · 7 d" and the bundle's `episodes[]` (the anti-goal
+  in §2 decides it; the stock-perp figures get their own fields).
 
 **The weekend tier.** For each name and weekend: `p_fri` = last perp mark before Friday 8:00 PM ET, `p_sat` = mark at
 Saturday 12:00 PM ET, `p_sun` = mark at Sunday 6:00 PM ET, `p_open` = first reference print after the weekend (Sunday
@@ -146,14 +155,24 @@ collector has run. Screened and executable tiers are labelled apart, as elsewher
   renewal of the refresh token), `quotes` batched (one call for all US names each tick; 120 calls/min cap),
   `pricehistory` for the backfill. `venue_arb/sources/pyth.py`: Hermes `latest` for the Asian equity feeds, their
   FX feeds and the US second opinions.
-- **Schwab token upkeep.** A CLI (`python -m venue_arb.sources.schwab login`) prints the login URL, Sam signs in and
-  pastes the redirect; the refresh token goes to Bitwarden through the `secrets` wrapper (never a file in the repo).
-  The collector records a qa warn `schwab_token_expires` 24 h before expiry and `schwab_auth` the moment a call fails
-  on auth; the page marks the Schwab reference stale and rows fall back to Pyth, then the oracle, with the Reference
-  cell saying so. Sam accepted the weekly login.
+- **Schwab is approved** (Market Data Production, "Ready For Use" 2026-10-20) and `SCHWAB_CLIENT_ID` /
+  `SCHWAB_CLIENT_SECRET` are already in the project's Bitwarden secrets. No refresh token exists yet. Build order:
+  Hyperliquid collector, backfill and the weekend tier first (they need nothing from Schwab), then the Schwab leg
+  and the executable verdicts **(Claude's call)**.
+- **Schwab token upkeep (Claude's call).** The `secrets` wrapper is read-only `bws run` and injects secrets at
+  process start, so a new refresh token cannot reach a running collector. A CLI
+  (`python -m venue_arb.sources.schwab login`) prints the login URL, Sam signs in and pastes the redirect URL; the
+  CLI exchanges it, writes `SCHWAB_REFRESH_TOKEN` into the Bitwarden project with a write-capable BWS access token
+  that lives only in Sam's interactive shell (never in a unit or the repo), then restarts `venue-arb-collector`.
+  One command plus a browser login, weekly. The collector records a qa warn `schwab_token_expires` 24 h before
+  expiry (the token's issue time is stored beside it) and `schwab_auth` the moment a call fails on auth; the page
+  marks the Schwab reference stale and rows fall back to Pyth, then the oracle, with the Reference cell saying so.
+  Sam accepted the weekly login.
 - **Collector.** The existing 60 s collector gains a stock-perp watchlist: per name, mark, oracle, funding rate, next
   funding time, top N book levels; per tick, one Schwab batch and one Pyth batch. New ClickHouse tables, additive
   (`stock_perp_books`, `stock_perp_refs`, `stock_perp_candles`), daily partitions, same TTL policy as `book_levels_v2`.
+- **Visibility flag.** `DASHBOARD_SHOW_STOCK_PERPS = False` until Sam's terms read (§8); the collector, scoring and
+  bundle fields run regardless, the Scanner chip and Research cards render only when it is on **(Claude's call)**.
 - **Scoring.** Prefect flow `stock_perp_score` on the hour (slot `:55` **(Claude's call)**), rescoring the last 3 h
   like `ladder_score`; writes `stock_perp_edges` and episodes with `source = 'stock_perp'`. A `weekend` flow Monday
   after the US open writes one row per name per weekend.
