@@ -62,3 +62,10 @@ def test_annualized():
     days = (CLOSE - s(60)) / timedelta(days=1)
     assert abs(ep.annualized - 0.02 / 0.98 * 365 / days) < 1e-9
     assert abs(ep.annualized - 0.745) < 0.001
+
+
+def test_find_min_edge_and_annualize_override():
+    pts = [pt(0, avg=0.0012, usd=1000.0, contracts=5.0), pt(60, avg=0.0012, usd=1000.0, contracts=5.0)]
+    assert run(pts) == []  # default 1% floor unchanged
+    eps = run(pts, min_edge=0.001, annualize=lambda edges, end: 42.0)
+    assert len(eps) == 1 and eps[0].annualized == 42.0

@@ -1,13 +1,16 @@
 """Fee model for netting cross-venue edges. Pure: no qa import. Sources and dates: docs/venues.md."""
 from math import ceil
 
-FEE_VERSION = "2026-10-19"  # date of the fee entries in docs/venues.md; stamped on every edge row
+FEE_VERSION = "2026-10-22"  # date of the fee entries in docs/venues.md; stamped on every edge row
 KALSHI_RATE = 0.07  # secondhand, unverified: no Kalshi-owned page fetched states the coefficient (docs/venues.md)
 _KALSHI_QUADRATIC = {"quadratic", "quadratic_with_maker_fees"}
 
 # Assumption (2026-10-19), not a venue number: round-trip cost of moving capital between venues.
 TRANSFER = {"fixed_usd": 10.0, "conversion_bps": 10.0}
-US_EXECUTABLE = {"kalshi": True, "polymarket": False}  # docs/venues.md geoblock entry
+US_EXECUTABLE = {"kalshi": True, "polymarket": False, "hyperliquid": False}  # docs/venues.md geoblock entry
+
+# Hyperliquid taker fee per side as a fraction of notional: HIP-3 builder-dex (trade.xyz) tiers, by growth mode.
+HYPERLIQUID_TAKER = {"standard": 0.0009, "growth": 0.00009}
 
 
 def kalshi_taker_fee(price: float, contracts: float, fee_type: str, multiplier: float) -> float:
