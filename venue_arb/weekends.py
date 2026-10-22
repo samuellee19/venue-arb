@@ -67,8 +67,16 @@ def _sign(x: float) -> int:
     return (x > 0) - (x < 0)
 
 
+def _open(r: dict) -> float | None:
+    """The row's open: the regular open, else a KRX row's Sunday-evening Korean open. Never a Schwab pre-market quote."""
+    if r["p_open_reg"] is not None:
+        return r["p_open_reg"]
+    return r.get("p_open_pre") if r.get("ref_kind") == "oracle_krx" else None
+
+
 def summary(rows: list[dict]) -> dict:
     """Did the weekend perp lean the way Monday opened, and how much of the move had it already made?"""
+    rows = [{**r, "p_open_reg": _open(r)} for r in rows]
     def hit_rate(key: str) -> float | None:
         pairs = [(r[key], r["p_open_reg"], r["p_fri"]) for r in rows
                  if None not in (r[key], r["p_open_reg"], r["p_fri"]) and r["p_open_reg"] != r["p_fri"]]

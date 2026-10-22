@@ -75,8 +75,9 @@ def test_krx_label_uses_sunday_evening_oracle():
     assert o.astimezone(ET).hour == 19
 
 
-def row(fri, sat, sun, reg, sym="a"):
-    return {"symbol": sym, "p_fri": fri, "p_sat": sat, "p_sun": sun, "p_open_reg": reg}
+def row(fri, sat, sun, reg, sym="a", pre=None, kind="schwab"):
+    return {"symbol": sym, "p_fri": fri, "p_sat": sat, "p_sun": sun, "p_open_pre": pre, "p_open_reg": reg,
+            "ref_kind": kind}
 
 
 def test_summary_hit_rate_and_floor():
@@ -87,6 +88,17 @@ def test_summary_hit_rate_and_floor():
     assert s["hit_rate_sun"] == pytest.approx(20 / 25) and s["hit_rate_sat"] == pytest.approx(20 / 25)
     assert s["n_sun"] == 22 and s["enough"] and s["weekends"] == 25 and s["names"] == 25
     assert s["contained_sun_median"] == pytest.approx(0.5)  # 17 rows at 1/2, 5 rows at -1/2
+
+
+def test_summary_krx_rows_use_the_korean_open_and_schwab_pre_market_is_ignored():
+    krx = [row(100, 101, 101, None, f"k{i}", pre=102, kind="oracle_krx") for i in range(3)]
+    krx += [row(100, 99, 99, None, "kd", pre=102, kind="oracle_krx"), row(100, 101, 101, None, "kf", pre=100.05,
+                                                                          kind="oracle_krx")]  # last: under 10 bps
+    schwab_pre_only = [row(100, 101, 101, None, "s", pre=102, kind="schwab")]
+    s = wk.summary(krx + schwab_pre_only)
+    assert s["hit_rate_sun"] == pytest.approx(4 / 5) and s["hit_rate_sat"] == pytest.approx(4 / 5)
+    assert s["n_sun"] == 4 and s["contained_sun_median"] == pytest.approx(0.5) and not s["enough"]
+    assert s["weekends"] == 6 and s["names"] == 6
 
 
 def test_summary_empty_and_nulls():
@@ -107,3 +119,22 @@ def test_weekend_flow_is_served_monday_15_utc():
     from pathlib import Path
     text = Path("venue_arb/flows/serve.py").read_text()
     assert 'stock_perp_weekend_flow.to_deployment("stock_perp_weekend", cron="0 15 * * 1"' in text
+
+
+def test_fall_back_weekend_resolves_to_the_right_utc_instants():
+    # Friday 30 Oct 2026 20:00 EDT; the clocks fall back early Sunday 1 Nov, so Sunday 18:00 and Monday are EST.
+    fri = date(2026, 10, 30)
+
+    def u(day, h, m=0):  # day 31 is Oct 31, 32 is Nov 1, 33 is Nov 2
+        return datetime(2026, 10 + (day > 31), day - 31 * (day > 31), h, m, tzinfo=UTC)
+
+    marks = [(u(31, 0), 1.0), (u(31, 16), 2.0), (u(32, 23), 3.0),  # Fri 20:00 EDT, Sat 12:00 EDT, Sun 18:00 EST
+             (u(32, 22), 99.0)]  # an hour early: what an EDT-assuming Sunday 18:00 would be if it were 17:00 EST
+    refs = [(u(33, 8), 97.0), (u(33, 9), 4.0), (u(33, 13, 59), 96.0), (u(33, 14, 30), 5.0)]
+    # 08:00 UTC is 03:00 EST, before the pre-market; 09:00 UTC is 04:00 EST; 14:30 UTC is 09:30 EST
+    r = wk.weekend_row("xyz:NVDA", fri, marks, refs, LABEL_SCHWAB)
+    assert (r["p_fri"], r["p_sat"], r["p_sun"], r["p_open_pre"], r["p_open_reg"]) == (1.0, 2.0, 3.0, 4.0, 5.0)
+    assert wk.at(fri, wk.SAMPLES["fri"][1]).astimezone(UTC) == u(31, 0)
+    assert wk.at(date(2026, 11, 1), wk.SAMPLES["sun"][1]).astimezone(UTC) == u(32, 23)
+    assert wk.at(date(2026, 11, 2), wk.OPEN_PRE).astimezone(UTC) == u(33, 9)
+    assert wk.at(date(2026, 11, 2), wk.OPEN_REG).astimezone(UTC) == u(33, 14, 30)

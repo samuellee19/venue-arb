@@ -90,7 +90,8 @@ def stock_perp_weekend_flow(end: datetime | None = None, pipeline: str = PIPELIN
                 marks, tol = ((ctx[sym], timedelta(minutes=5)) if from_ctx else
                               (candles.get(sym, []), timedelta(minutes=61)))
                 krx = label.exchange == "KRX"
-                refs = (oracle.get(sym) if from_ctx else candles.get(sym)) if krx else live.get(sym)
+                # the candle table holds no oracle: a KRX weekend without contexts has no Korean open yet and is retried
+                refs = (oracle.get(sym) if from_ctx else None) if krx else live.get(sym)
                 row = weekends.weekend_row(sym, friday, marks, refs or [], label, tol, daily.get(sym, []))
                 if any(row[k] is not None for k in ("p_fri", "p_sat", "p_sun")):  # a symbol not yet listed has no weekend
                     out.append(row)
