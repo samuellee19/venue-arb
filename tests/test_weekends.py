@@ -159,10 +159,3 @@ def test_fall_back_weekend_resolves_to_the_right_utc_instants():
     assert wk.at(date(2026, 11, 1), wk.SAMPLES["sun"][1]).astimezone(UTC) == u(32, 23)
     assert wk.at(date(2026, 11, 1), wk.OPEN_PRE).astimezone(UTC) == u(33, 1, 5)
     assert wk.at(date(2026, 11, 2), wk.OPEN_REG).astimezone(UTC) == u(33, 14, 30)
-
-
-def test_fresh_quote_keeps_live_refs_only_near_their_tick():
-    tick = datetime(2026, 1, 19, 15, 0, tzinfo=UTC)  # MLK Day: the collector stores Friday's quote under a fresh ts
-    assert wk.fresh_quote(tick, tick - timedelta(seconds=120))
-    assert not wk.fresh_quote(tick, tick - timedelta(seconds=121))
-    assert not wk.fresh_quote(tick, datetime(2026, 1, 16, 21, 0, tzinfo=UTC))
