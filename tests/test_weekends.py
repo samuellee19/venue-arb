@@ -20,9 +20,8 @@ def et(day, h, m=0):
 SAT, SUN, MON = FRI + timedelta(1), FRI + timedelta(2), FRI + timedelta(3)
 MARKS = [(et(FRI, 19, 58), 212.0), (et(FRI, 20, 0), 213.0), (et(SAT, 11, 59), 214.0), (et(SUN, 17, 59), 215.0)]
 MARKS_WITHOUT_SUNDAY = MARKS[:3]
-REFS = [(et(MON, 3, 59), 999.0), (et(MON, 4, 0), 214.5), (et(MON, 9, 29), 214.9), (et(MON, 9, 30), 215.2),
+REFS = [(et(SUN, 20, 4), 999.0), (et(SUN, 20, 5), 214.5), (et(MON, 9, 29), 214.9), (et(MON, 9, 30), 215.2),
         (et(MON, 9, 31), 216.0)]
-DAILY = [(et(MON, 9, 30), 215.5)]
 
 
 def test_sample_last_point_within_tolerance():
@@ -38,17 +37,28 @@ def test_sample_last_point_within_tolerance():
 def test_missing_sample_is_null_not_skipped():
     row = wk.weekend_row("xyz:NVDA", FRI, MARKS_WITHOUT_SUNDAY, REFS, LABEL_SCHWAB)
     assert row["p_sun"] is None and row["p_fri"] == 213.0 and row["p_sat"] == 214.0 and row["p_open_reg"] == 215.2
-    assert row["friday"] == FRI and row["ref_kind"] == "schwab"
+    assert row["friday"] == FRI and row["ref_kind"] == "oracle_us"
 
 
-def test_open_prints_pre_and_regular():
-    row = wk.weekend_row("xyz:NVDA", FRI, MARKS, REFS, LABEL_SCHWAB, daily=DAILY)
-    assert row["p_open_pre"] == 214.5 and row["p_open_reg"] == 215.2  # the live 09:30 quote beats the daily open
+def test_public_weekend_rows_use_oracle_only():
+    row = wk.weekend_row("xyz:NVDA", FRI, MARKS, REFS, LABEL_SCHWAB)
+    assert row["ref_kind"] == "oracle_us"
+    assert row["p_open_pre"] == 214.5 and row["p_open_reg"] == 215.2  # Sun 20:05 ET print; Mon 09:30 ET print
+    assert "daily" not in wk.weekend_row.__code__.co_varnames
+    for ex in ("NYSE", "nyse arca", "Cboe BZX"):
+        assert wk.weekend_row("s", FRI, MARKS, REFS, Label("s", "none", "X", ex, "USD", "x"))["ref_kind"] == "oracle_us"
 
 
-def test_regular_open_falls_back_to_daily_and_pre_is_none():
-    row = wk.weekend_row("xyz:NVDA", FRI, MARKS, [], LABEL_SCHWAB, daily=DAILY + [(et(MON + timedelta(1), 9, 30), 1.0)])
-    assert row["p_open_pre"] is None and row["p_open_reg"] == 215.5
+def test_oracle_us_without_prints_has_no_opens():
+    row = wk.weekend_row("xyz:NVDA", FRI, MARKS, [], LABEL_SCHWAB)
+    assert row["p_open_pre"] is None and row["p_open_reg"] is None and row["ref_kind"] == "oracle_us"
+
+
+def test_flow_no_longer_reads_refs():
+    from pathlib import Path
+    text = Path("venue_arb/flows/stock_perp_weekend.py").read_text()
+    assert "stock_perp_refs" not in text and "schwab" not in text
+    assert "ref_kind = 'oracle_us' AND p_open_reg IS NOT NULL" in text and "ref_kind = 'oracle_krx' AND p_open_pre" in text
 
 
 def test_marks_may_be_hourly_with_wide_tolerance():
@@ -58,7 +68,7 @@ def test_marks_may_be_hourly_with_wide_tolerance():
 
 
 def test_none_label_has_no_opens():
-    row = wk.weekend_row("xyz:XYZ100", FRI, MARKS, REFS, LABEL_NONE, daily=DAILY)
+    row = wk.weekend_row("xyz:XYZ100", FRI, MARKS, REFS, LABEL_NONE)
     assert (row["p_open_pre"], row["p_open_reg"], row["ref_kind"]) == (None, None, "none") and row["p_sun"] == 215.0
 
 
@@ -141,13 +151,13 @@ def test_fall_back_weekend_resolves_to_the_right_utc_instants():
 
     marks = [(u(31, 0), 1.0), (u(31, 16), 2.0), (u(32, 23), 3.0),  # Fri 20:00 EDT, Sat 12:00 EDT, Sun 18:00 EST
              (u(32, 22), 99.0)]  # an hour early: what an EDT-assuming Sunday 18:00 would be if it were 17:00 EST
-    refs = [(u(33, 8), 97.0), (u(33, 9), 4.0), (u(33, 13, 59), 96.0), (u(33, 14, 30), 5.0)]
-    # 08:00 UTC is 03:00 EST, before the pre-market; 09:00 UTC is 04:00 EST; 14:30 UTC is 09:30 EST
+    refs = [(u(33, 1, 4), 98.0), (u(33, 1, 5), 4.0), (u(33, 14, 29), 97.0), (u(33, 14, 30), 5.0)]
+    # Sunday 20:05 EST is 01:05 UTC Monday (an EDT-assuming 20:05 would be 00:05); Monday 09:30 EST is 14:30 UTC
     r = wk.weekend_row("xyz:NVDA", fri, marks, refs, LABEL_SCHWAB)
     assert (r["p_fri"], r["p_sat"], r["p_sun"], r["p_open_pre"], r["p_open_reg"]) == (1.0, 2.0, 3.0, 4.0, 5.0)
     assert wk.at(fri, wk.SAMPLES["fri"][1]).astimezone(UTC) == u(31, 0)
     assert wk.at(date(2026, 11, 1), wk.SAMPLES["sun"][1]).astimezone(UTC) == u(32, 23)
-    assert wk.at(date(2026, 11, 2), wk.OPEN_PRE).astimezone(UTC) == u(33, 9)
+    assert wk.at(date(2026, 11, 1), wk.OPEN_PRE).astimezone(UTC) == u(33, 1, 5)
     assert wk.at(date(2026, 11, 2), wk.OPEN_REG).astimezone(UTC) == u(33, 14, 30)
 
 

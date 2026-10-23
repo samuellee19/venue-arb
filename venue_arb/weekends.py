@@ -7,13 +7,14 @@ from statistics import median
 from zoneinfo import ZoneInfo
 
 from venue_arb.config import REF_MAX_AGE_S
+from venue_arb.sessions import _US  # the US-listed exchange set, not duplicated
 from venue_arb.sources.hyperliquid import Label
 
 ET = ZoneInfo("America/New_York")
 KST = ZoneInfo("Asia/Seoul")
 SAMPLES = {"fri": ("Fri", time(20, 0)), "sat": ("Sat", time(12, 0)), "sun": ("Sun", time(18, 0))}
 OFFSET = {"fri": 0, "sat": 1, "sun": 2}  # days after Friday
-OPEN_PRE = time(4, 0)  # Monday, ET
+OPEN_PRE = time(20, 5)  # Sunday, ET: the overnight external restart
 OPEN_REG = time(9, 30)
 CLOSE_REG = time(16, 0)
 OPEN_KRX = time(9, 0)  # Monday, Seoul
@@ -49,11 +50,9 @@ def first_between(points: list[tuple[datetime, float]], lo: datetime, hi: dateti
 
 
 def weekend_row(symbol: str, friday: date, marks: list[tuple[datetime, float]], refs: list[tuple[datetime, float]],
-                label: Label, tol: timedelta = timedelta(minutes=5),
-                daily: list[tuple[datetime, float]] = ()) -> dict:
-    """One (symbol, friday) row. `marks`: (ts, perp mark) or (candle close time, close). `refs`: live Schwab mids;
-    for a KRX label, the oracle prints. `daily`: the backfilled `schwab_daily` opens, the fallback for the regular
-    open. A sample with no mark inside the tolerance is None, never skipped."""
+                label: Label, tol: timedelta = timedelta(minutes=5)) -> dict:
+    """One (symbol, friday) row. `marks`: (ts, perp mark) or (candle close time, close). `refs`: the venue's oracle
+    prints, never a Schwab quote. A sample with no mark inside the tolerance is None, never skipped."""
     row = {"symbol": symbol, "friday": friday, "p_open_pre": None, "p_open_reg": None, "ref_kind": label.ref_kind}
     for key, (_, t) in SAMPLES.items():
         row["p_" + key] = sample(marks, at(friday + timedelta(days=OFFSET[key]), t), tol)
@@ -61,12 +60,13 @@ def weekend_row(symbol: str, friday: date, marks: list[tuple[datetime, float]], 
     if label.exchange == "KRX":  # no US stock to compare: the first oracle print once Seoul opens
         row["p_open_pre"] = first_between(refs, at(monday, OPEN_KRX, KST), at(monday, CLOSE_KRX, KST))
         row["ref_kind"] = "oracle_krx"
-    elif label.ref_kind == "schwab":
-        reg = at(monday, OPEN_REG)
-        row["p_open_pre"] = first_between(refs, at(monday, OPEN_PRE), reg)
-        row["p_open_reg"] = first_between(refs, reg, at(monday, CLOSE_REG))
-        if row["p_open_reg"] is None:
-            row["p_open_reg"] = first_between(daily, at(monday, time(0, 0)), at(monday + timedelta(days=1), time(0, 0)))
+    elif label.exchange.strip().upper() in _US:
+        monday_open = at(monday, OPEN_REG)
+        row["p_open_pre"] = first_between(refs, at(monday - timedelta(days=1), OPEN_PRE), monday_open)
+        row["p_open_reg"] = first_between(refs, monday_open, at(monday, CLOSE_REG))
+        row["ref_kind"] = "oracle_us"
+    else:
+        row["ref_kind"] = "none"
     return row
 
 

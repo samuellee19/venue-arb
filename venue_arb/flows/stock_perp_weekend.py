@@ -22,12 +22,9 @@ CH_FROM, CH_TO = "{lo:DateTime64(3, 'UTC')}", "{hi:DateTime64(3, 'UTC')}"
 CTX_SQL = f"SELECT symbol, ts, mark, oracle FROM venue_arb.stock_perp_ctx WHERE ts >= {CH_FROM} AND ts < {CH_TO}"
 CANDLES_SQL = ("SELECT symbol, hour, close FROM venue_arb.stock_perp_candles FINAL "
                "WHERE hour >= {lo:DateTime('UTC')} AND hour < {hi:DateTime('UTC')}")
-REFS_SQL = ("SELECT symbol, ref_kind, ts, bid, ask, quote_time FROM venue_arb.stock_perp_refs "
-            f"WHERE ref_kind IN ('schwab', 'schwab_daily') AND ts >= {CH_FROM} AND ts < {CH_TO}")
-# finished: the open this label's reference kind can give is there; anything else is re-tried on the next run
+# finished: an oracle-based row with its open; anything else (old Schwab rows, 'none') is rewritten on the next run
 DONE_SQL = ("SELECT symbol, friday FROM venue_arb.stock_perp_weekends WHERE friday >= %(lo)s AND "
-            "((ref_kind = 'schwab' AND p_open_reg IS NOT NULL) OR (ref_kind = 'oracle_krx' AND p_open_pre IS NOT NULL) "
-            "OR ref_kind = 'none')")
+            "((ref_kind = 'oracle_us' AND p_open_reg IS NOT NULL) OR (ref_kind = 'oracle_krx' AND p_open_pre IS NOT NULL))")
 UPSERT = (f"INSERT INTO {TABLE} ({', '.join(COLUMNS)}) VALUES ({', '.join('%(' + c + ')s' for c in COLUMNS)}) "
           "ON CONFLICT (symbol, friday) DO UPDATE SET p_fri = EXCLUDED.p_fri, p_sat = EXCLUDED.p_sat, "
           "p_sun = EXCLUDED.p_sun, p_open_pre = EXCLUDED.p_open_pre, p_open_reg = EXCLUDED.p_open_reg, "
@@ -38,10 +35,6 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 
 def _utc(ts: datetime) -> datetime:
     return ts if ts.tzinfo else ts.replace(tzinfo=UTC)
-
-
-def _mid(bid: float, ask: float) -> float | None:
-    return (bid + ask) / 2 if 0 < bid <= ask else None  # two-sided and uncrossed, as the executable tier requires
 
 
 @flow(name=PIPELINE)
@@ -79,22 +72,14 @@ def stock_perp_weekend_flow(end: datetime | None = None, pipeline: str = PIPELIN
             candles: dict[str, list] = {}
             for sym, hour, close in ch.query(CANDLES_SQL, parameters=p).result_rows:  # stamped at the hour's close
                 candles.setdefault(sym, []).append((_utc(hour) + timedelta(hours=1), close))
-            live: dict[str, list] = {}
-            daily: dict[str, list] = {}
-            for sym, kind, ts, bid, ask, qt in ch.query(REFS_SQL, parameters=p).result_rows:
-                if kind == "schwab" and not weekends.fresh_quote(_utc(ts), _utc(qt)):
-                    continue  # a holiday's stale quote is not an open: the row stays unfinished and is retried
-                if (m := _mid(bid, ask)) is not None:
-                    (live if kind == "schwab" else daily).setdefault(sym, []).append((_utc(ts), m))
             for sym in todo:
                 label = labels[sym]
                 from_ctx = bool(ctx.get(sym)) and min(ctx[sym])[0] <= fri
                 marks, tol = ((ctx[sym], timedelta(minutes=5)) if from_ctx else
                               (candles.get(sym, []), timedelta(minutes=61)))
-                krx = label.exchange == "KRX"
-                # the candle table holds no oracle: a KRX weekend without contexts has no Korean open yet and is retried
-                refs = (oracle.get(sym) if from_ctx else None) if krx else live.get(sym)
-                row = weekends.weekend_row(sym, friday, marks, refs or [], label, tol, daily.get(sym, []))
+                # the candle table holds no oracle: a weekend without contexts has no oracle prints, opens stay None
+                refs = oracle.get(sym) if from_ctx else None
+                row = weekends.weekend_row(sym, friday, marks, refs or [], label, tol)
                 if any(row[k] is not None for k in ("p_fri", "p_sat", "p_sun")):  # a symbol not yet listed has no weekend
                     out.append(row)
         with db.pg() as conn, conn.transaction():  # one transaction keeps now() fixed for the count
