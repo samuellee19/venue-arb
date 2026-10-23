@@ -1,6 +1,6 @@
 # venue-arb: stock perps, public oracle view with private Schwab validation
 
-Design, 2026-10-23. Status: draft for Sam's review (Sam skipped the brainstorm questions; every decision below not
+Design, 2026-10-23. Status: approved by Sam 2026-10-23 with manual-only exclusion (Sam skipped the brainstorm questions; every decision below not
 stated by Sam is marked **(Claude's call)**). Amends `2026-10-22-venue-arb-stock-perp-basis-design.md` (Plan 6,
 merged to main at 9b99493, not deployed). Everything that design says still holds unless this document changes it.
 
@@ -103,9 +103,9 @@ named.
   over 10 bps, and count of ticks compared. Output goes to a ClickHouse table `stock_perp_oracle_check` (additive) and
   a Markdown report under `data/private/` (git-ignored) **(Claude's call)**. A qa warn `oracle_drift` fires per name
   when its trailing 5-day p95 exceeds 10 bps.
-- **Hiding drifting names.** A name whose `oracle_drift` warn is active is left out of the public list with no
-  reason shown **(Claude's call; Sam to confirm, because even a binary hide is computed from Schwab data. The
-  conservative alternative is to show every name and use the report only to decide by hand.)**
+- **No automatic hiding (Sam, 2026-10-23).** Every name is shown on the public page. The validation report is for
+  Sam to decide by hand; removing a name is a manual edit of `labels/stock_perps_excluded.txt` with a neutral
+  comment that does not cite Schwab.
 
 ## 6. Constraints
 
@@ -128,7 +128,7 @@ named.
 
 ## 8. Sam's actions
 
-- Confirm or reject the auto-hide of drifting names (§5, last bullet).
+- Read the validation report after the first week of data and decide by hand whether any name should be excluded.
 - Review the rewritten `copy.METHOD["stock_perps"]` once rendered.
 - Unchanged: the Schwab login at deploy and weekly; the Polymarket decision for the live pair tier.
 
