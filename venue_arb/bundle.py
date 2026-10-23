@@ -93,6 +93,9 @@ class Pair(_M):
     trade: str | None = None  # "short xyz:NVDA / long NVDA"
     hold_hours: int | None = None
     sensitivity: dict | None = None  # {"net_bps_1h", "net_bps_7d", "net_bps_borrow_x10"}
+    # the edge's cost lines over the hold, bps of notional (funding_bps is a cost: negative when received); None on a
+    # stale row, stock_spread_bps None on an oracle row
+    costs: dict | None = None  # {"perp_fee_bps", "perp_spread_bps", "stock_spread_bps", "funding_bps", "borrow_bps"}
 
 
 class Basis(_M):
@@ -455,6 +458,10 @@ def stock_perp_rows(perps: list[tuple[PerpCtx, Label, SnapPerp, Quote | None]], 
             next_funding_at=now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1),
             reference={"kind": ref.kind, "symbol": ref.symbol, "asof": ref.asof.isoformat()},
             trade=f"{perp_side} {sym} / {stock_side} {stock}", hold_hours=int(hold),
+            costs=None if not live else {
+                "perp_fee_bps": round(edge.perp_fee_bps, 4), "perp_spread_bps": round(edge.perp_spread_bps, 4),
+                "stock_spread_bps": None if edge.stock_spread_bps is None else round(edge.stock_spread_bps, 4),
+                "funding_bps": round(edge.funding_bps, 4), "borrow_bps": round(edge.borrow_bps, 4)},
             sensitivity=None if not live else {
                 "net_bps_1h": round(stock_perps.gross_to_net(edge, 1), 4),
                 "net_bps_7d": round(stock_perps.gross_to_net(edge, 168), 4),

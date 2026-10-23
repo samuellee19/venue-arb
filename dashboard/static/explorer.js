@@ -131,7 +131,7 @@ function refreshDetail() {
 function renderHead() {
   const p = byKey(S.sel), lab = p.verdict.label, t = VERDICT_TONES.find(([l]) => lab.startsWith(l))?.[1] ?? "none";
   const legs = p.legs.map(l => {
-    const k = l.venue === "kalshi", sp = isStock(p), [name, host] = VENUE[l.venue] ?? [`Stock (${l.venue.toUpperCase()})`, ""];
+    const k = l.venue === "kalshi", sp = isStock(p), [name, host] = VENUE[l.venue] ?? [`Stock (${esc(l.venue.toUpperCase())})`, ""];
     const id = k || sp ? l.market_id : l.url?.split("/event/")[1] || l.market_id;
     const body = `<span class="sw" style="background:var(--${l.venue === "polymarket" ? "pm" : l.url ? "k" : "mut"})"></span>`
       + `${name}, ${sp ? esc(l.side) : `buy ${esc(l.side.toUpperCase())}`} <span class="id">${esc(id)}</span>`;
@@ -208,7 +208,7 @@ function costSnap(q, s) {  // a history row: first ask level only
     + r("Capacity at ≥ 1¢ net", s.capacity_usd == null ? "—" : usd(s.capacity_usd));
 }
 
-// ---- stock perps: the cost table decomposes the bundle's net_bps from fee_params, funding and the hold ----
+// ---- stock perps: the cost table prints the bundle's cost lines (row.costs); net is at the walked fill, not basis minus lines ----
 const bp0 = x => Math.abs(x) < 0.05 ? "0.0 bps" : bps(x);
 const ageS = p => Math.round((Date.parse(S.bundle.computed_at) - Date.parse(p.reference.asof)) / 1000);
 const refTxt = p => !p.reference ? "—" : p.reference.kind === "oracle" ? "oracle only, no stock quote"
@@ -220,14 +220,11 @@ function costStock(p) {
     const c = p.verdict.checks.find(x => x.name === "fees_carry");
     return rows.join("") + r("Not scored", esc(c?.detail ?? ""));
   }
-  const long = p.direction === "long_perp_short_stock", hold = p.hold_hours, gross = (long ? -1 : 1) * p.basis_bps;
-  const taker = 2e4 * p.fee_params.perp.taker, spread = p.fees_cents * 100 - taker;
-  const fund = (long ? 1 : -1) * p.funding_bps_h * hold, borrow = long ? p.fee_params.stock.borrow_bps_yr * hold / 8760 : 0;
-  const fill = gross - taker - spread - fund - borrow - p.net_bps;  // what the book's spread and fill depth took, to net
-  const s = p.sensitivity;
-  return rows.join("") + r("Gross basis, mark vs reference", bps(gross))
-    + r("2× perp taker fee", bp0(-taker)) + r("Stock spread", bp0(-spread)) + r("Perp spread and fill depth", bp0(-fill))
-    + r(`Funding over ${hold} h`, bp0(-fund)) + r(`Borrow over ${hold} h`, bp0(-borrow))
+  const c = p.costs, s = p.sensitivity, cost = x => x == null ? "—" : bp0(-x);  // the bundle's cost lines, shown as costs
+  return rows.join("") + r("Basis, mark vs reference", bps(p.basis_bps))
+    + r("2× perp taker fee", cost(c.perp_fee_bps)) + r("Perp spread (exit)", cost(c.perp_spread_bps))
+    + r("Stock spread", c.stock_spread_bps == null ? "none: oracle only" : cost(c.stock_spread_bps))
+    + r(`Funding over ${p.hold_hours} h`, cost(c.funding_bps)) + r(`Borrow over ${p.hold_hours} h`, cost(c.borrow_bps))
     + r("Net after costs", `<span class="${tone(p.net_edge_cents, p)}">${bps(p.net_bps)}</span>`, "t")
     + r("Net at 1 h / 7 d / borrow ×10", `${bps(s.net_bps_1h)} / ${bps(s.net_bps_7d)} / ${bps(s.net_bps_borrow_x10)}`)
     + r("Capacity at top of book", usd(p.capacity_usd));

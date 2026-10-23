@@ -24,7 +24,7 @@ button { font:inherit; color:inherit; }
 .mono { font-family: ui-monospace, Menlo, monospace; }
 .pos { color:var(--pos); } .neg { color:var(--neg); } .warn { color:var(--warn); } .mut { color:var(--mut); }
 .banner { padding:8px 24px; font-size:13px; background:var(--warn-bg); color:var(--warn); border-bottom:1px solid var(--warn-line); }
-.banner[hidden], [hidden] { display:none; }
+[hidden] { display:none !important; }  /* wins over later display rules such as .size */
 
 header { display:flex; align-items:center; gap:16px 24px; padding:16px 24px; background:var(--panel); border-bottom:1px solid var(--line); flex-wrap:wrap; }
 .brand { flex:1 1 360px; min-width:0; }

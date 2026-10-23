@@ -101,6 +101,17 @@ def test_summary_krx_rows_use_the_korean_open_and_schwab_pre_market_is_ignored()
     assert s["weekends"] == 6 and s["names"] == 6
 
 
+def test_contained_is_the_one_place_for_the_open_fallback_and_the_floor():
+    assert wk.contained(row(100, 99, 101, 102)) == pytest.approx(0.5)  # (101 - 100) / (102 - 100)
+    assert wk.contained(row(100, 99, 99, 102)) == pytest.approx(-0.5)
+    assert wk.contained(row(100, 100.1, 100.1, 100.05)) is None  # 5 bps: under the floor
+    assert wk.contained(row(100, 100, 101, 100)) is None  # an unchanged open
+    assert wk.contained(row(100, 101, None, 102)) is None and wk.contained(row(100, 101, 101, None)) is None
+    assert wk.contained(row(0, 0, 1, 2)) is None
+    assert wk.contained(row(100, 101, 101, None, pre=102, kind="oracle_krx")) == pytest.approx(0.5)  # the Korean open
+    assert wk.contained(row(100, 101, 101, None, pre=102, kind="schwab")) is None  # never a Schwab pre-market quote
+
+
 def test_summary_empty_and_nulls():
     s = wk.summary([row(100, None, None, None), row(100, 100, 100, 100)])  # a null, then an unchanged open
     assert s == {"weekends": 2, "names": 1, "hit_rate_sun": None, "hit_rate_sat": None,

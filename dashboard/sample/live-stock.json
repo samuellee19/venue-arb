@@ -101,6 +101,7 @@
       "capacity_contracts": 0.0,
       "capacity_usd": 0.0,
       "category": "fed_macro",
+      "costs": null,
       "direction": "k_yes_pm_no",
       "fee_params": {
         "k": {
@@ -213,6 +214,7 @@
       "capacity_contracts": 0.0,
       "capacity_usd": 0.0,
       "category": "fed_macro",
+      "costs": null,
       "direction": "k_no_pm_yes",
       "fee_params": {
         "k": {
@@ -325,6 +327,7 @@
       "capacity_contracts": 1200.0,
       "capacity_usd": 1129.0,
       "category": "fed_macro",
+      "costs": null,
       "direction": "k_yes_pm_no",
       "fee_params": {
         "k": {
@@ -437,6 +440,7 @@
       "capacity_contracts": 0.0,
       "capacity_usd": 0.0,
       "category": "fed_macro",
+      "costs": null,
       "direction": "k_no_pm_yes",
       "fee_params": {
         "k": {
@@ -549,6 +553,7 @@
       "capacity_contracts": 0.0,
       "capacity_usd": 0.0,
       "category": "weather",
+      "costs": null,
       "direction": "k_yes_pm_no",
       "fee_params": {
         "k": {
@@ -661,6 +666,7 @@
       "capacity_contracts": 0.0,
       "capacity_usd": 0.0,
       "category": "weather",
+      "costs": null,
       "direction": "k_no_pm_yes",
       "fee_params": {
         "k": {
@@ -773,6 +779,7 @@
       "capacity_contracts": 0.0,
       "capacity_usd": 0.0,
       "category": "crypto_price",
+      "costs": null,
       "direction": "k_yes_pm_no",
       "fee_params": {
         "k": {
@@ -885,6 +892,7 @@
       "capacity_contracts": 0.0,
       "capacity_usd": 0.0,
       "category": "crypto_price",
+      "costs": null,
       "direction": "pm_yes_k_no",
       "fee_params": {
         "k": {
@@ -997,6 +1005,7 @@
       "capacity_contracts": 600.0,
       "capacity_usd": 583.0,
       "category": "crypto_price",
+      "costs": null,
       "direction": "k_yes_pm_no",
       "fee_params": {
         "k": {
@@ -1109,6 +1118,7 @@
       "capacity_contracts": 0.0,
       "capacity_usd": 0.0,
       "category": "crypto_price",
+      "costs": null,
       "direction": "k_yes_pm_no",
       "fee_params": {
         "k": {
@@ -1221,6 +1231,7 @@
       "capacity_contracts": 0.0,
       "capacity_usd": 0.0,
       "category": "crypto_price",
+      "costs": null,
       "direction": "pm_yes_k_no",
       "fee_params": {
         "k": {
@@ -1333,6 +1344,13 @@
       "capacity_contracts": 100.0,
       "capacity_usd": 21330.0,
       "category": "stock_perps",
+      "costs": {
+        "borrow_bps": 0.0,
+        "funding_bps": -2.4,
+        "perp_fee_bps": 1.8,
+        "perp_spread_bps": 4.686,
+        "stock_spread_bps": 4.6981
+      },
       "direction": "short_perp_long_stock",
       "fee_params": {
         "perp": {
@@ -1447,6 +1465,13 @@
       "capacity_contracts": 0.0,
       "capacity_usd": 0.0,
       "category": "stock_perps",
+      "costs": {
+        "borrow_bps": 0.0,
+        "funding_bps": -2.4,
+        "perp_fee_bps": 1.8,
+        "perp_spread_bps": 1.9968,
+        "stock_spread_bps": 3.9944
+      },
       "direction": "short_perp_long_stock",
       "fee_params": {
         "perp": {
@@ -1561,6 +1586,13 @@
       "capacity_contracts": 0.0,
       "capacity_usd": 0.0,
       "category": "stock_perps",
+      "costs": {
+        "borrow_bps": 0.0,
+        "funding_bps": -2.4,
+        "perp_fee_bps": 18.0,
+        "perp_spread_bps": 2.7778,
+        "stock_spread_bps": null
+      },
       "direction": "short_perp_long_stock",
       "fee_params": {
         "perp": {
@@ -1667,6 +1699,117 @@
           }
         ],
         "label": "Reference closed · oracle only"
+      }
+    },
+    {
+      "basis_bps": null,
+      "books": null,
+      "capacity_contracts": 0.0,
+      "capacity_usd": 0.0,
+      "category": "stock_perps",
+      "costs": null,
+      "direction": "long_perp_short_stock",
+      "fee_params": {
+        "perp": {
+          "growth_mode": true,
+          "taker": 9e-05
+        },
+        "stock": {
+          "borrow_bps_yr": 50.0
+        }
+      },
+      "fees_cents": null,
+      "funding_bps_h": 0.1,
+      "hold_hours": 24,
+      "key": "xyz:MSFT~MSFT~long_perp_short_stock",
+      "kind": "stock_perp",
+      "ladder": null,
+      "legs": [
+        {
+          "market_id": "xyz:MSFT",
+          "settlement_source": null,
+          "side": "long",
+          "snapshot_at": "2026-10-20T15:18:00Z",
+          "title": "xyz:MSFT",
+          "url": "https://app.hyperliquid.xyz/trade/xyz:MSFT",
+          "venue": "hyperliquid"
+        },
+        {
+          "market_id": "MSFT",
+          "settlement_source": null,
+          "side": "short",
+          "snapshot_at": "2026-10-20T15:29:46Z",
+          "title": "Microsoft",
+          "url": null,
+          "venue": "nasdaq"
+        }
+      ],
+      "live": false,
+      "net_bps": null,
+      "net_edge_bps": null,
+      "net_edge_cents": null,
+      "net_edge_roi": null,
+      "next_funding_at": "2026-10-20T16:00:00Z",
+      "reference": {
+        "asof": "2026-10-20T15:29:46+00:00",
+        "kind": "schwab",
+        "symbol": "MSFT"
+      },
+      "sensitivity": null,
+      "settles_at": null,
+      "spark": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "title": "Microsoft (NASDAQ)",
+      "trade": "long xyz:MSFT / short MSFT",
+      "us_executable": false,
+      "verdict": {
+        "checks": [
+          {
+            "detail": "Schwab quote 14 s old",
+            "name": "reference",
+            "status": "ok"
+          },
+          {
+            "detail": "not scored: a leg is stale",
+            "name": "fees_carry",
+            "status": "fail"
+          },
+          {
+            "detail": "not walked: a leg is stale",
+            "name": "fees_depth",
+            "status": "fail"
+          },
+          {
+            "detail": "anywhere: perp leg open · US: Hyperliquid blocks US traders",
+            "name": "jurisdiction",
+            "status": "partial"
+          }
+        ],
+        "label": "Stale · a leg has no snapshot in 5 min"
       }
     }
   ],
@@ -2092,7 +2235,8 @@
         "names": 3,
         "rows": [
           {
-            "friday": "2026-10-02",
+            "contained_sun": 0.9839999999999918,
+            "friday": "2026-09-25",
             "p_fri": 215.0,
             "p_open_pre": 213.75,
             "p_open_reg": 213.75,
@@ -2102,7 +2246,8 @@
             "symbol": "xyz:NVDA"
           },
           {
-            "friday": "2026-10-09",
+            "contained_sun": 0.6213592233009569,
+            "friday": "2026-10-02",
             "p_fri": 215.0,
             "p_open_pre": 213.97,
             "p_open_reg": 213.97,
@@ -2112,7 +2257,8 @@
             "symbol": "xyz:NVDA"
           },
           {
-            "friday": "2026-10-16",
+            "contained_sun": 0.669811320754723,
+            "friday": "2026-10-09",
             "p_fri": 215.0,
             "p_open_pre": 213.94,
             "p_open_reg": 213.94,
@@ -2122,7 +2268,8 @@
             "symbol": "xyz:NVDA"
           },
           {
-            "friday": "2026-10-23",
+            "contained_sun": 0.6551724137930975,
+            "friday": "2026-10-16",
             "p_fri": 215.0,
             "p_open_pre": 213.84,
             "p_open_reg": 213.84,
@@ -2132,7 +2279,8 @@
             "symbol": "xyz:NVDA"
           },
           {
-            "friday": "2026-10-02",
+            "contained_sun": 0.9298245614035219,
+            "friday": "2026-09-25",
             "p_fri": 250.0,
             "p_open_pre": 251.14,
             "p_open_reg": 251.14,
@@ -2142,7 +2290,8 @@
             "symbol": "xyz:TSLA"
           },
           {
-            "friday": "2026-10-09",
+            "contained_sun": 1.1551724137931099,
+            "friday": "2026-10-02",
             "p_fri": 250.0,
             "p_open_pre": 251.16,
             "p_open_reg": 251.16,
@@ -2152,7 +2301,8 @@
             "symbol": "xyz:TSLA"
           },
           {
-            "friday": "2026-10-16",
+            "contained_sun": 1.03676470588234,
+            "friday": "2026-10-09",
             "p_fri": 250.0,
             "p_open_pre": 251.36,
             "p_open_reg": 251.36,
@@ -2162,7 +2312,8 @@
             "symbol": "xyz:TSLA"
           },
           {
-            "friday": "2026-10-23",
+            "contained_sun": 0.7981651376146806,
+            "friday": "2026-10-16",
             "p_fri": 250.0,
             "p_open_pre": 251.09,
             "p_open_reg": 251.09,
@@ -2172,7 +2323,8 @@
             "symbol": "xyz:TSLA"
           },
           {
-            "friday": "2026-10-02",
+            "contained_sun": 0.7582417582417585,
+            "friday": "2026-09-25",
             "p_fri": 180.0,
             "p_open_pre": 180.91,
             "p_open_reg": 180.91,
@@ -2182,7 +2334,8 @@
             "symbol": "xyz:AAPL"
           },
           {
-            "friday": "2026-10-09",
+            "contained_sun": 0.917808219178078,
+            "friday": "2026-10-02",
             "p_fri": 180.0,
             "p_open_pre": 179.27,
             "p_open_reg": 179.27,
@@ -2192,7 +2345,8 @@
             "symbol": "xyz:AAPL"
           },
           {
-            "friday": "2026-10-16",
+            "contained_sun": 0.6185567010309228,
+            "friday": "2026-10-09",
             "p_fri": 180.0,
             "p_open_pre": 180.97,
             "p_open_reg": 180.97,
@@ -2202,7 +2356,8 @@
             "symbol": "xyz:AAPL"
           },
           {
-            "friday": "2026-10-23",
+            "contained_sun": 0.49999999999998607,
+            "friday": "2026-10-16",
             "p_fri": 180.0,
             "p_open_pre": 178.98,
             "p_open_reg": 178.98,

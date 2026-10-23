@@ -163,3 +163,15 @@ def test_js_reads_only_model_fields():
     for name, var, model in (("research.js", "r", ResearchSummary), ("scanner.js", "p", Pair)):
         read = set(re.findall(rf"\b{var}\.([a-z_0-9]+)", _read(name)))
         assert read and read <= set(model.model_fields), (name, read - set(model.model_fields))
+
+
+def test_stock_fix_round_one_client_rules():
+    assert "[hidden] { display:none !important; }" in _read("styles.css")  # beats .size { display:inline-flex }
+    js = _read("research.js")
+    assert "contained_sun" in js and "function contained" not in js and "p_open_reg" not in js  # plots the bundle's share
+    assert 'r.method[k] && (k !== "stock_perps" || r.stock_perps)' in js  # no stock prose without the block
+    ex = _read("explorer.js")
+    stock_fn = ex[ex.index("function costStock(p)"):ex.index("function costStockSnap")]
+    assert "p.costs" in stock_fn and "fee_params" not in stock_fn and "fees_cents" not in stock_fn  # prints the bundle's lines
+    assert "esc(l.venue.toUpperCase())" in ex
+    assert "p.legs[0].side" in _read("common.js") and 'split(" / ")' not in _read("common.js")

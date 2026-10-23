@@ -1,4 +1,5 @@
 import importlib.util
+from datetime import date
 from pathlib import Path
 
 import pyarrow.parquet as pq
@@ -64,15 +65,21 @@ def _stock():
 def test_sample_stock_covers_three_states():
     b = _stock()
     sp = [p for p in b.pairs if p.kind == "stock_perp"]
-    assert len(sp) == 3 and {p.kind for p in b.pairs} >= {"exact", "stock_perp"}
+    assert len(sp) == 4 and {p.kind for p in b.pairs} >= {"exact", "stock_perp"}
     labels = [p.verdict.label for p in sp]
     assert any(lab.startswith("Executable edge · +") for lab in labels)
     assert "Basis · within costs · no edge" in labels and "Reference closed · oracle only" in labels
+    assert "Stale · a leg has no snapshot in 5 min" in labels
+    [stale] = [p for p in sp if not p.live]
+    assert stale.net_bps is None and stale.basis_bps is None and stale.sensitivity is None and stale.costs is None
+    assert all(p.costs for p in sp if p.live) and all(date.fromisoformat(w["friday"]) < date(2026, 10, 20) and date.fromisoformat(w["friday"]).weekday() == 4
+                                                      for w in b.research.stock_perps.weekends["rows"])
     assert all(p.category == "stock_perps" and p.settles_at is None and p.legs[1].url is None for p in sp)
     assert "stock_perps" in b.categories and b.kpis.stock_perps is not None
     assert b.research.stock_perps is not None and b.research.stock_perps.hourly.ts
     assert set(b.research.method) >= {"matching", "edge", "crypto", "not_shown", "stock_perps"}
     assert _bundle().kpis.stock_perps is None and _bundle().research.stock_perps is None  # flag-off sample unchanged
+    assert set(_bundle().research.method) == {"matching", "edge", "crypto", "not_shown"}  # no stock-perp prose
 
 
 def test_sample_stock_is_reproducible(tmp_path):

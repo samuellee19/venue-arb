@@ -74,21 +74,28 @@ def _open(r: dict) -> float | None:
     return r.get("p_open_pre") if r.get("ref_kind") == "oracle_krx" else None
 
 
+def contained(row: dict) -> float | None:
+    """How much of Monday's move the Sunday perp already held: (Sunday - Friday) / (open - Friday). None when a price is
+    missing or the move is under FLOOR_BPS (noise). The open is `_open`'s, so a Schwab pre-market quote never counts."""
+    fri, sun, opn = row["p_fri"], row["p_sun"], _open(row)
+    if None in (fri, sun, opn) or not fri > 0 or abs(opn - fri) / fri * 1e4 < FLOOR_BPS:
+        return None
+    return (sun - fri) / (opn - fri)
+
+
 def summary(rows: list[dict]) -> dict:
     """Did the weekend perp lean the way Monday opened, and how much of the move had it already made?"""
+    cs = [c for c in map(contained, rows) if c is not None]
     rows = [{**r, "p_open_reg": _open(r)} for r in rows]
     def hit_rate(key: str) -> float | None:
         pairs = [(r[key], r["p_open_reg"], r["p_fri"]) for r in rows
                  if None not in (r[key], r["p_open_reg"], r["p_fri"]) and r["p_open_reg"] != r["p_fri"]]
         return sum(_sign(p - f) == _sign(o - f) for p, o, f in pairs) / len(pairs) if pairs else None
 
-    big = [r for r in rows if None not in (r["p_sun"], r["p_open_reg"], r["p_fri"]) and r["p_fri"] > 0
-           and abs(r["p_open_reg"] - r["p_fri"]) / r["p_fri"] * 1e4 >= FLOOR_BPS]
-    contained = [(r["p_sun"] - r["p_fri"]) / (r["p_open_reg"] - r["p_fri"]) for r in big]
     return {"weekends": len(rows), "names": len({r["symbol"] for r in rows}),
             "hit_rate_sun": hit_rate("p_sun"), "hit_rate_sat": hit_rate("p_sat"),
-            "contained_sun_median": median(contained) if contained else None,
-            "n_sun": len(contained), "enough": len(contained) >= ENOUGH}
+            "contained_sun_median": median(cs) if cs else None,
+            "n_sun": len(cs), "enough": len(cs) >= ENOUGH}
 
 
 def fridays(end: datetime, days: int = 60) -> list[date]:

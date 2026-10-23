@@ -1,5 +1,7 @@
 from datetime import UTC, date, datetime, timedelta
 
+import pytest
+
 from tests.test_note import ADM, BASIS, HOURS, T0, edge, episode, lepisode, lgroup, pair, screened
 from venue_arb.basis import BASIS_Q
 from venue_arb.bundle import ResearchSummary
@@ -112,6 +114,7 @@ def test_stock_perp_block_headline_and_series():
     assert [r["symbol"] for r in b.by_name] == ["xyz:B", "xyz:A"]  # sorted by max_net_bps, best first
     assert b.sensitivity == {"episodes_base": 1, "episodes_1h": 2, "episodes_7d": 0, "episodes_borrow_x10": 1, "window_days": 14}
     assert b.weekends["rows"][0]["friday"] == date(2026, 10, 16) and b.weekends["weekends"] == 1
+    assert b.weekends["rows"][0]["contained_sun"] == pytest.approx(0.5)  # (10.2 - 10.0) / (10.4 - 10.0)
     empty = research.stock_perp_block(sp_inputs(hourly=[], names=0, snapshots=0, window_start=None, episodes=0,
                                                 share_hours=None, by_name=[], weekend_rows=[]), NOW)
     assert "—" in empty.headline and "0 episodes" in empty.headline and empty.max_net_bps is None

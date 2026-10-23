@@ -569,8 +569,8 @@ def compute_research(readers: dict, now: datetime) -> ResearchSummary:
                                     computed_at=now)
     if config.DASHBOARD_SHOW_STOCK_PERPS:  # stock_perp_inputs() -> research.stock_perp_block's dict
         block = research.stock_perp_block(readers["stock_perp_inputs"](), now)
-        summary = summary.model_copy(update={"stock_perps": block})
-    return summary
+        return summary.model_copy(update={"stock_perps": block})
+    return research.without_stock_method(summary)
 
 
 def _dicts(cur) -> list[dict]:

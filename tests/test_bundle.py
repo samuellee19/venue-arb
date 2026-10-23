@@ -271,6 +271,22 @@ def test_stock_perp_row_executable():  # NVDA mark 215 vs Schwab 212.84, growth 
     assert Pair.model_validate_json(p.model_dump_json()) == p
 
 
+def test_stock_perp_row_costs_are_the_edges_lines():
+    [p] = stock_perp_rows([(CTX215, LABEL_NVDA, SP_SNAP, QUOTE)], {}, SP_NOW)
+    c = p.costs
+    assert set(c) == {"perp_fee_bps", "perp_spread_bps", "stock_spread_bps", "funding_bps", "borrow_bps"}
+    assert c["perp_fee_bps"] == pytest.approx(1.8) and c["stock_spread_bps"] == pytest.approx(3.7594, abs=1e-3)
+    assert c["funding_bps"] == pytest.approx(-2.4) and c["borrow_bps"] == 0  # short perp receives funding, pays no borrow
+    assert c["perp_spread_bps"] > 0 and p.fees_cents == pytest.approx((c["perp_fee_bps"] + c["stock_spread_bps"]) / 100, abs=1e-3)
+    long_p = stock_perp_rows([(replace(CTX215, mark=210.0), LABEL_NVDA, SP_SNAP, QUOTE)], {}, SP_NOW)[0]
+    assert long_p.costs["borrow_bps"] == pytest.approx(50.0 * 24 / (24 * 365), abs=1e-3) and long_p.costs["funding_bps"] == pytest.approx(2.4)
+    [oracle] = stock_perp_rows([(CTX215, replace(LABEL_NVDA, ref_kind="none"), SP_SNAP, QUOTE)], {}, SP_NOW)
+    assert oracle.costs["stock_spread_bps"] is None and oracle.costs["perp_fee_bps"] == pytest.approx(1.8)
+    [stale] = stock_perp_rows([(CTX215, LABEL_NVDA, (SP_NOW - timedelta(seconds=301), SP_BOOK), QUOTE)], {}, SP_NOW)
+    assert stale.costs is None
+    assert Pair.model_validate_json(p.model_dump_json()) == p
+
+
 def test_stock_perp_row_borrow_x10_on_long_perp():  # mark below the stock: long perp / short stock pays borrow
     ctx = replace(CTX215, mark=210.0)
     [p] = stock_perp_rows([(ctx, LABEL_NVDA, SP_SNAP, QUOTE)], {}, SP_NOW)

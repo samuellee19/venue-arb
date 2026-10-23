@@ -1,5 +1,5 @@
 """Synthetic dashboard sample: live.json + two history hours, built through bundle.* and publish.history_table, and
-live-stock.json (the same bundle with the stock-perp tier on: three invented stock-perp rows and a research block).
+live-stock.json (the same bundle with the stock-perp tier on: four invented stock-perp rows and a research block).
 
     uv run python dashboard/sample/make_sample.py
 
@@ -228,8 +228,8 @@ def research_section():
 
 
 def stock_inputs():
-    """Three invented stock perps through stock_perp_rows: NVDA executable (mark 213.4 vs Schwab 212.8/212.9), TSLA
-    inside costs (book on the mark), SKHX oracle-only (no stock quote: Korean shares)."""
+    """Four invented stock perps through stock_perp_rows: NVDA executable (mark 213.4 vs Schwab 212.8/212.9), TSLA
+    inside costs (book on the mark), SKHX oracle-only (no stock quote: Korean shares), MSFT stale (snapshot 12 min old)."""
     def book(mid, step, size):
         return [PerpLevel(side, i, round(mid + sign * (step / 2 + i * step), 2), size)
                 for side, sign in (("bid", -1), ("ask", 1)) for i in range(3)]
@@ -238,12 +238,15 @@ def stock_inputs():
     nvda = PerpCtx("xyz:NVDA", 213.4, 213.3, 213.4, 0.00001, 0.0005, 1e6, 5e6, True, 10)
     tsla = PerpCtx("xyz:TSLA", 250.4, 250.4, 250.4, 0.00001, 0.0001, 1e6, 4e6, True, 10)
     skhx = PerpCtx("xyz:SKHX", 180000.0, 179800.0, 180000.0, 0.00001, 0.0002, 5e5, 1e6, False, 5)
+    msft = PerpCtx("xyz:MSFT", 420.0, 420.0, 420.0, 0.00001, 0.0001, 1e6, 3e6, True, 10)
     return [
         (nvda, Label("xyz:NVDA", "schwab", "NVDA", "NASDAQ", "USD", "NVIDIA"), (snap, book(213.4, 0.2, 100.0)),
          Quote("NVDA", 212.8, 212.9, 300.0, 300.0, 212.85, q)),
         (tsla, Label("xyz:TSLA", "schwab", "TSLA", "NASDAQ", "USD", "Tesla"), (snap, book(250.4, 0.1, 100.0)),
          Quote("TSLA", 250.3, 250.4, 400.0, 400.0, 250.35, q)),
-        (skhx, Label("xyz:SKHX", "none", None, "KRX", "KRW", "SK hynix"), (snap, book(180000.0, 100.0, 20.0)), None)]
+        (skhx, Label("xyz:SKHX", "none", None, "KRX", "KRW", "SK hynix"), (snap, book(180000.0, 100.0, 20.0)), None),
+        (msft, Label("xyz:MSFT", "schwab", "MSFT", "NASDAQ", "USD", "Microsoft"),  # collector behind: the stale row
+         (NOW - timedelta(minutes=12), book(420.0, 0.2, 100.0)), Quote("MSFT", 419.9, 420.1, 200.0, 200.0, 420.0, q))]
 
 
 def stock_block():
@@ -255,7 +258,7 @@ def stock_block():
     weekend = []
     for sym, base in (("xyz:NVDA", 215.0), ("xyz:TSLA", 250.0), ("xyz:AAPL", 180.0)):
         for w in range(4):
-            fri = date(2026, 10, 2) + timedelta(days=7 * w)
+            fri = date(2026, 10, 16) - timedelta(days=7 * (3 - w))  # four Fridays ending before NOW (a Tuesday)
             move = round(base * rng.choice((-1, 1)) * (0.004 + 0.002 * rng.random()), 2)  # Monday's open vs Friday
             weekend.append({"symbol": sym, "friday": fri, "p_fri": base, "p_sat": round(base + move * 0.5, 2),
                             "p_sun": round(base + move * (0.4 + 0.8 * rng.random()), 2), "p_open_pre": base + move,
@@ -293,6 +296,8 @@ def make_bundle(rng, stock: bool = False):
     research_s = research_section()
     if stock:
         research_s = research_s.model_copy(update={"stock_perps": stock_block()})
+    else:  # the publisher drops the stock-perp prose while the tier is off; so does the sample
+        research_s = research.without_stock_method(research_s)
     return build_live(
         now=NOW, exact_rows=ex, ladder_rows=lad, basis=BASIS,
         episodes=[Episode(key=EXEC_KEY, start=BUMP_FROM, end=None, max_edge_cents=top.net_edge_cents,

@@ -475,10 +475,12 @@ def test_compute_research_attaches_stock_block_when_flag_on(monkeypatch):
     calls = []
     rd = research_readers(calls) | {"stock_perp_inputs": lambda: calls.append("stock") or _stock_inputs()}
     monkeypatch.setattr(config, "DASHBOARD_SHOW_STOCK_PERPS", False)
-    assert publish.compute_research(rd, NOW).stock_perps is None and "stock" not in calls
+    off = publish.compute_research(rd, NOW)
+    assert off.stock_perps is None and "stock" not in calls
+    assert set(off.method) == {"matching", "edge", "crypto", "not_shown"}  # no stock-perp prose while the tier is off
     monkeypatch.setattr(config, "DASHBOARD_SHOW_STOCK_PERPS", True)
     r = publish.compute_research(rd, NOW)
-    assert r.stock_perps.max_net_bps == 12.4 and calls[-1] == "stock"
+    assert r.stock_perps.max_net_bps == 12.4 and calls[-1] == "stock" and "stock_perps" in r.method
 
 
 def test_stock_perp_reader_failure_keeps_previous_summary(monkeypatch, tmp_path):

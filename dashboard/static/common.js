@@ -50,7 +50,7 @@ export const byKey = k => pairs().find(p => p.key === k);
 export const usBlocked = () => S.us && !pairs().some(p => p.us_executable);
 export const greyed = p => S.us && !p.us_executable;
 export const label = p => greyed(p) ? NOT_US : p.verdict.label;
-export const legsTxt = p => p.kind === "stock_perp" ? `${esc(p.trade.split(" ")[0])} perp / ${esc(p.trade.split(" / ")[1].split(" ")[0])} stock`
+export const legsTxt = p => p.kind === "stock_perp" ? `${esc(p.legs[0].side)} perp / ${esc(p.legs[1].side)} stock`
   : p.legs.map(l => `${l.venue === "kalshi" ? "K" : "PM"} ${esc(l.side)}`).join(" / ");
 
 export function settles(iso) {  // v1's long form, for the Explorer; a stock perp has no settlement

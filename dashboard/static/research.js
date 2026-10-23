@@ -58,21 +58,10 @@ export function renderResearch(bundle) {
       "admissible checks per counted hour; red marks: violations")
     + (r.stock_perps ? stockCards(r.stock_perps) : "")
     + `</div><div class="method"><h3>How it's measured</h3>`
-    + METHOD.filter(([k]) => r.method[k]).map(([k, h]) => `<h4>${h}</h4><p>${esc(r.method[k])}</p>`).join("")
+    + METHOD.filter(([k]) => r.method[k] && (k !== "stock_perps" || r.stock_perps)).map(([k, h]) => `<h4>${h}</h4><p>${esc(r.method[k])}</p>`).join("")
     + `<p class="mut">${rv ? `Match review: precision ${num(rv.precision, 2)} on ${num(rv.labels)} labels (${day(new Date(rv.asof))})`
       : "no review sitting yet"}</p></div>`;
   if (window.Plotly) draw(r);
-}
-
-// contained share per weekend: (Sunday perp - Friday) / (Monday open - Friday), for moves of at least MIN_BPS
-function contained(rows) {
-  const out = [];
-  for (const x of rows) {
-    const open = x.p_open_reg ?? (x.ref_kind === "oracle_krx" ? x.p_open_pre : null);
-    if (x.p_sun == null || open == null || !(x.p_fri > 0) || Math.abs(open - x.p_fri) / x.p_fri * 1e4 < MIN_BPS) continue;
-    out.push({symbol: x.symbol, friday: x.friday, share: (x.p_sun - x.p_fri) / (open - x.p_fri)});
-  }
-  return out;
 }
 
 function draw(r) {
@@ -111,8 +100,8 @@ function draw(r) {
   {...L, xaxis: date, yaxis: {...L.yaxis, ticksuffix: " bps"},
     shapes: [{type: "line", xref: "paper", x0: 0, x1: 1, y0: MIN_BPS, y1: MIN_BPS, line: {color: neg, width: 1, dash: "dash"}}]}, PLOT_CFG);
 
-  const pts = contained(sp.weekends.rows);
-  Plotly.react($("rc-wk"), [{type: "scatter", mode: "markers", x: pts.map(x => x.friday), y: pts.map(x => 100 * x.share),
+  const pts = sp.weekends.rows.filter(x => x.contained_sun != null);  // the bundle's share; the client computes none
+  Plotly.react($("rc-wk"), [{type: "scatter", mode: "markers", x: pts.map(x => x.friday), y: pts.map(x => 100 * x.contained_sun),
     text: pts.map(x => x.symbol), marker: {color: k, size: 8, opacity: 0.8},
     hovertemplate: "%{text}, weekend of %{x|%d %b}<br>%{y:.0f}% of Monday's move<extra></extra>"}],
   {...L, xaxis: {...L.xaxis, type: "date", nticks: 4, tickangle: 0}, yaxis: {...L.yaxis, ticksuffix: "%"},

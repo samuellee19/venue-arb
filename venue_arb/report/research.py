@@ -98,6 +98,11 @@ def from_summary(s: dict, *, review: dict | None, computed_at: datetime) -> Rese
     )
 
 
+def without_stock_method(s: ResearchSummary) -> ResearchSummary:
+    """The bundle of a dashboard whose stock-perp tier is off carries no stock-perp prose."""
+    return s.model_copy(update={"method": {k: v for k, v in s.method.items() if k != "stock_perps"}})
+
+
 def stock_perp_block(inputs: dict, computed_at: datetime) -> StockPerpResearch:
     """The publisher's stock-perp aggregates (publish.stock_perp_inputs) -> the Research tab's stock-perp block."""
     hourly = sorted(inputs["hourly"])
@@ -106,7 +111,8 @@ def stock_perp_block(inputs: dict, computed_at: datetime) -> StockPerpResearch:
     top5 = [r["symbol"] for r in by_name[:5]]
     rows = []
     for sym in top5:  # the last 8 weekends of each, oldest first
-        rows += sorted((r for r in inputs["weekend_rows"] if r["symbol"] == sym), key=lambda r: r["friday"])[-8:]
+        rows += [{**r, "contained_sun": weekends.contained(r)}
+                 for r in sorted((r for r in inputs["weekend_rows"] if r["symbol"] == sym), key=lambda r: r["friday"])[-8:]]
     start = inputs["window_start"]
     headline = copy.HEADLINE["stock_perps"].format(
         names=_n(inputs["names"], "stock perp"), snapshots=_n(inputs["snapshots"], "snapshot"),
