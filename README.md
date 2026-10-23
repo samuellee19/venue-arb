@@ -201,7 +201,7 @@ On the OptiPlex:
 8. Leave `DASHBOARD_SHOW_STOCK_PERPS = False` in `venue_arb/config.py`. The collector, scoring and bundle fields run
    regardless.
 
-Turning the category on, only after both terms reads in `docs/going-public.md`:
+Turning the category on, only after the first week of oracle-check reports (`docs/going-public.md`):
 
 1. Deploy the VM first (`deploy/server/README.md`, Update). The server validates the bundle against the new models.
 2. One-line commit setting `DASHBOARD_SHOW_STOCK_PERPS = True`, then `systemctl --user restart venue-arb-publish`.
