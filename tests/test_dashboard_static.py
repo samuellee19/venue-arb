@@ -9,12 +9,13 @@ STATIC = Path(__file__).parent.parent / "dashboard" / "static"
 TEXT = ("index.html", "styles.css", *sorted(p.name for p in STATIC.glob("*.js") if p.name != "plotly-basic.min.js"))
 VERDICTS = ("Exact match · no edge", "Executable edge", "Not an arbitrage · basis exposure",
             "Spread · within basis bound · no edge", "No asks on one side", "Stale · a leg has no snapshot in 5 min",
-            "Not executable from the US", "Basis · within costs · no edge", "Reference closed · oracle only")
+            "Not executable from the US", "Oracle basis · within perp costs", "Oracle internal · market closed", "Oracle basis")
 BANNERS = ("No pair is executable from the US: Polymarket rejects US orders (docs/venues.md). Gaps shown for reference.",
            "last update {n} min ago", "no books in 5 min")
 STOCK_COPY = ("Not advice. Hyperliquid blocks US traders; the perp leg is shown for reference.",
-              ("{n} stock perps — basis in bps of notional, net of 2× perp taker fee, stock spread, 24 h funding and "
-               "borrow — reference and its age on every row"), "basis is quoted in bps", "oracle only", "perpetual")
+              ("{n} stock perps — perp against the venue's oracle, net of 2× perp taker fee, perp spread and 24 h funding, "
+               "before stock-leg costs"), "basis is quoted in bps", "oracle internal", "perpetual",
+              "The stock leg is not modelled on this page.", "at 1 h / 7 d / with borrow")
 SCANNER_COPY = ("Example — what a row looks like when a pair clears the rule",
                 "per-leg quotes are not published (venue display terms)", "ROI = net edge ÷ all-in cost per contract",
                 "admissible ladder checks in the last scored hour", "violations", "no scored hour yet",
@@ -112,7 +113,7 @@ def test_scanner_has_stock_header_template():
         assert f">{th}<" in js or f">{th}</button>" in js, th
     for key in ("net_bps", "funding_bps_h", "basis_bps", "next_funding_at"):
         assert key in js, key
-    assert "oracle only" in js and "perpetual" in js
+    assert "oracle internal" in js and "perpetual" in js
 
 
 def test_research_has_stock_cards_copy():
@@ -175,3 +176,22 @@ def test_stock_fix_round_one_client_rules():
     assert "p.costs" in stock_fn and "fee_params" not in stock_fn and "fees_cents" not in stock_fn  # prints the bundle's lines
     assert "esc(l.venue.toUpperCase())" in ex
     assert "p.legs[0].side" in _read("common.js") and 'split(" / ")' not in _read("common.js")
+
+
+def test_no_schwab_on_the_page():
+    from venue_arb.report.copy import METHOD
+    root = Path(__file__).parent.parent / "dashboard"
+    files = [f for f in (root / "static").rglob("*") if f.is_file() and f.suffix in (".js", ".css", ".html", ".json", ".svg")]
+    files += list((root / "sample").glob("*.json"))
+    assert files
+    for f in files:
+        assert "schwab" not in f.read_text(encoding="utf-8").lower(), f
+    assert "schwab" not in METHOD["stock_perps"].lower()
+    assert len(re.findall(r"[.!?](?:\s|$)", METHOD["stock_perps"])) <= 6
+
+
+def test_client_reads_only_the_oracle_keys():
+    js = _js()
+    for old in ("stock_spread_bps", "borrow_bps", "borrow_x10", "reference.symbol", "borrow ×10"):
+        assert old not in js, old
+    assert "episodes_with_borrow" in _read("research.js") and "net_bps_with_borrow" in _read("explorer.js")

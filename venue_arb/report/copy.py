@@ -38,16 +38,14 @@ METHOD: dict[str, str] = {
         "cent per contract."),
     "stock_perps": (
         "A stock perp is a perpetual future on one US-listed (or Korean) share, traded on Hyperliquid's trade.xyz "
-        "markets. The venue prices it against an oracle, an external feed that follows the stock 24 hours a day on "
-        "weekdays (Blue Ocean's overnight session fills the hours the exchanges are shut) and, on weekends, the "
-        "perp's own smoothed price. The basis is the perp's price against a reference price, in basis points (bps, "
-        "hundredths of a percent); the reference is Schwab's consolidated quote from 4 AM to 8 PM New York time for "
-        "US stocks, and the oracle at other times and for Asia-listed stocks. The net basis is what is left after "
-        "a round trip held 24 hours: the perp's taker fee twice, the perp's half spread on exit (closing the perp "
-        "leg crosses half of its bid-ask spread), the stock's full spread, and funding and borrow for the hold; the "
-        "stock leg is capped at the size Schwab displays. The weekend test compares the perp's price at Friday 8 PM, Saturday noon and Sunday 6 PM "
-        "New York time with Monday's stock open (the Korean open on Sunday evening for KRX names). Hyperliquid blocks "
-        "US traders, so none of this can be executed from the US."),
+        "markets. The reference is the venue's own oracle: while the stock's market is open it is an external feed "
+        "that follows the stock, and when the market is closed it follows the perp's own smoothed price, so the row "
+        "reads oracle internal and is never an edge. The basis is the perp's price against the oracle in basis points "
+        "(bps, hundredths of a percent), and the net is what is left after a round trip held 24 hours: the perp's "
+        "taker fee twice, half the perp's bid-ask spread on exit, and funding for the hold. The stock leg is not "
+        "modelled, so its spread and borrow come off the net before any trade. The weekend test compares the perp's "
+        "price at Friday 8 PM, Saturday noon and Sunday 6 PM New York time with the oracle print at Monday's open. "
+        "Hyperliquid blocks US traders, so none of this can be executed from the US."),
 }
 
 HEADLINE: dict[str, str] = {

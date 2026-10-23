@@ -44,8 +44,8 @@ function when(iso) {
 
 // stock perps are quoted in bps: the unit switch cannot show them in ¢, so a ¢ setting shows the same bps (titled)
 const bps = (x, d = 0) => x == null ? "—" : signed(x, d, " bps");
-const ref = p => !p.reference ? "—" : p.reference.kind === "oracle" ? "oracle only"
-  : `${p.reference.kind} ${num(Math.round((Date.parse(S.bundle.computed_at) - Date.parse(p.reference.asof)) / 1000))}s`;
+const ref = p => !p.reference ? "—" : p.reference.state === "internal" ? "oracle internal"
+  : `oracle${p.live ? ", live" : ", stale"} ${num(Math.round((Date.parse(S.bundle.computed_at) - Date.parse(p.reference.asof)) / 1000))}s`;
 
 function row(p) {
   const t = tone(p.net_edge_cents, p), [k, pm] = p.legs, sp = isStock(p);

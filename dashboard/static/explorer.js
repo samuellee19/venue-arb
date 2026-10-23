@@ -211,8 +211,8 @@ function costSnap(q, s) {  // a history row: first ask level only
 // ---- stock perps: the cost table prints the bundle's cost lines (row.costs); net is at the walked fill, not basis minus lines ----
 const bp0 = x => Math.abs(x) < 0.05 ? "0.0 bps" : bps(x);
 const ageS = p => Math.round((Date.parse(S.bundle.computed_at) - Date.parse(p.reference.asof)) / 1000);
-const refTxt = p => !p.reference ? "—" : p.reference.kind === "oracle" ? "oracle only, no stock quote"
-  : `Schwab ${esc(p.reference.symbol)}, ${num(ageS(p))} s old`;
+const refTxt = p => !p.reference ? "—" : p.reference.state === "internal" ? "oracle internal, market closed"
+  : `oracle${p.live ? ", live" : ", stale"}, ${num(ageS(p))} s old`;
 
 function costStock(p) {
   const rows = [r("Trade", esc(p.trade)), r("Reference", refTxt(p))];
@@ -223,15 +223,15 @@ function costStock(p) {
   const c = p.costs, s = p.sensitivity, cost = x => x == null ? "—" : bp0(-x);  // the bundle's cost lines, shown as costs
   return rows.join("") + r("Basis, mark vs reference", bps(p.basis_bps))
     + r("2× perp taker fee", cost(c.perp_fee_bps)) + r("Perp spread (exit)", cost(c.perp_spread_bps))
-    + r("Stock spread", c.stock_spread_bps == null ? "none: oracle only" : cost(c.stock_spread_bps))
-    + r(`Funding over ${p.hold_hours} h`, cost(c.funding_bps)) + r(`Borrow over ${p.hold_hours} h`, cost(c.borrow_bps))
-    + r("Net after costs", `<span class="${tone(p.net_edge_cents, p)}">${bps(p.net_bps)}</span>`, "t")
-    + r("Net at 1 h / 7 d / borrow ×10", `${bps(s.net_bps_1h)} / ${bps(s.net_bps_7d)} / ${bps(s.net_bps_borrow_x10)}`)
-    + r("Capacity at top of book", usd(p.capacity_usd));
+    + r(`Funding over ${p.hold_hours} h`, cost(c.funding_bps))
+    + r("Net, before stock-leg costs", `<span class="${tone(p.net_edge_cents, p)}">${bps(p.net_bps)}</span>`, "t")
+    + r("Net at 1 h / 7 d / with borrow", `${bps(s.net_bps_1h)} / ${bps(s.net_bps_7d)} / ${bps(s.net_bps_with_borrow)}`)
+    + r("Perp depth at top of book", usd(p.capacity_usd))
+    + `<div class="note">The stock leg is not modelled on this page.</div>`;
 }
 
 function costStockSnap(s) {  // a history row of a stock perp
-  return r("Basis, mark vs reference", bps(s.basis_bps)) + r("Net after costs", bps(s.net_bps), "t")
+  return r("Basis, mark vs reference", bps(s.basis_bps)) + r("Net, before stock-leg costs", bps(s.net_bps), "t")
     + r("Capacity", s.capacity_usd == null ? "—" : usd(s.capacity_usd));
 }
 

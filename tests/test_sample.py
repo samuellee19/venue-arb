@@ -62,7 +62,7 @@ def _stock():
     return LiveBundle.model_validate_json((SAMPLE / "live-stock.json").read_text(encoding="utf-8"))
 
 
-def test_sample_stock_covers_three_states():
+def test_sample_stock_covers_four_states():
     b = _stock()
     sp = [p for p in b.pairs if p.kind == "stock_perp"]
     assert len(sp) == 4 and {p.kind for p in b.pairs} >= {"exact", "stock_perp"}

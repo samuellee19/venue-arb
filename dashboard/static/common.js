@@ -13,13 +13,13 @@ export const EXEC = "Executable edge";
 export const VERDICT_TONES = [["Exact match · no edge", "none"], [EXEC, "exec"], ["Not an arbitrage · basis exposure", "basis"],
   ["Spread · within basis bound · no edge", "none"], ["No asks on one side", "stale"],
   ["Stale · a leg has no snapshot in 5 min", "stale"], [NOT_US, "stale"],
-  ["Basis · within costs · no edge", "none"], ["Reference closed · oracle only", "stale"]];  // the last two: stock perps
+  ["Oracle basis · within perp costs", "none"], ["Oracle internal · market closed", "stale"], ["Oracle basis", "exec"]];  // the last three: stock perps, most specific first
 export const EXAMPLE = "Example — what a row looks like when a pair clears the rule";
 export const FOOT = "{n} pairs listed — per-leg quotes are not published (venue display terms) — ROI = net edge ÷ all-in cost per contract — ";
 export const FOOT_CHECKS = "{checks} admissible ladder checks in the last scored hour, {violations} violations";
 export const FOOT_NO_HOUR = "no scored hour yet";
 export const NOT_ADVICE = "Not advice. Hyperliquid blocks US traders; the perp leg is shown for reference.";
-export const FOOT_STOCK = "{n} stock perps — basis in bps of notional, net of 2× perp taker fee, stock spread, 24 h funding and borrow — reference and its age on every row";
+export const FOOT_STOCK = "{n} stock perps — perp against the venue's oracle, net of 2× perp taker fee, perp spread and 24 h funding, before stock-leg costs";
 export const NO_BPS = "basis is quoted in bps";
 export const STOCK_MIN_BPS = 10;  // config.STOCK_PERP_MIN_NET_BPS: the net a stock perp must clear to read as an edge
 

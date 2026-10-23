@@ -26,7 +26,7 @@ function stockCards(s) {
     `max net ${dash(s.max_net_bps, x => num(x, 1))} bps; ${dash(s.share_hours_abs_ge_10bps, x => num(100 * x))}% of session hours over ${MIN_BPS} bps; `
       + `${num(s.names)} names ${since(s.window_start)}`,
     `max net bps per hour; dashed: ${MIN_BPS} bps. Episodes in the last ${num(se.window_days)} d: ${num(se.episodes_base)} at a 24 h hold, `
-      + `${num(se.episodes_1h)} at 1 h, ${num(se.episodes_7d)} at 7 d, ${num(se.episodes_borrow_x10)} with borrow ×10`)
+      + `${num(se.episodes_1h)} at 1 h, ${num(se.episodes_7d)} at 7 d, ${num(se.episodes_with_borrow)} with borrow`)
     + card("rc-wk", "Weekends", `${num(w.names)} names`, `${dash(w.hit_rate_sun, x => num(100 * x))}% <span>lean the right way</span>`,
       [`${num(w.n_sun)} name-weekends`, "perp at Sunday 6 PM ET vs Monday's open", ...(w.enough ? [] : ["too few weekends to conclude"])].join("; "),
       "share of Monday's move the Sunday perp already held, one dot per name; dashed: all of it");
