@@ -64,9 +64,16 @@ def test_labels_cover_every_equity_and_catalog_flags_unlabelled(fx):
     assert "xyz:SPCX" not in labels and "xyz:GOLD" not in labels  # pre-IPO and commodities out of scope
     assert len(labels) >= 100 and all(k.startswith("xyz:") for k in labels)
     assert all(lb.ref_kind != "schwab" or lb.ref_symbol for lb in labels.values())
-    assert "xyz:GOLD" in hl.load_excluded() and not hl.load_excluded() & set(labels)
+    assert "xyz:GOLD" in hl.load_excluded()
     kept, unlabelled = hl.catalog(hl.fetch_ctxs(post=lambda body: fx["meta_ctxs"]), labels, hl.load_excluded())
     assert [c.symbol for c in kept] == ["xyz:NVDA"] and unlabelled == ["xyz:NEWCO"]  # GOLD: labelled out, not unlabelled
+
+
+def test_a_labelled_name_may_also_be_excluded(fx):
+    # the excluded file hides a name from every public path (publish reads it); a labelled name stays catalogued
+    labels = {"xyz:NVDA": hl.load_labels()["xyz:NVDA"]}
+    kept, unlabelled = hl.catalog(hl.fetch_ctxs(post=lambda body: fx["meta_ctxs"]), labels, {"xyz:NVDA", "xyz:GOLD"})
+    assert [c.symbol for c in kept] == ["xyz:NVDA"] and unlabelled == ["xyz:NEWCO"]
 
 
 def test_catalog_drops_delisted_perps(fx):

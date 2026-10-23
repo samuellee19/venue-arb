@@ -531,7 +531,7 @@ def test_stock_perp_inputs_assembles_the_block_inputs():
     rows = {publish.SP_COUNTS_SQL: [(1, 3, NOW)], publish.SP_SHARE_SQL: [(0.4, 2)],
             publish.SP_HOURLY_SQL: [(NOW, 25.0)], publish.SP_BY_NAME_SQL: [("xyz:NVDA", 25.0, 2)],
             publish.SP_EDGES_SQL: [tuple(_sp_row(m).values()) for m in range(3)]}
-    ch = SimpleNamespace(query=lambda sql: SimpleNamespace(result_rows=rows[sql]))
+    ch = SimpleNamespace(query=lambda sql, parameters=None: SimpleNamespace(result_rows=rows[sql]))
     cols = ["symbol", "friday", "p_fri", "p_sat", "p_sun", "p_open_pre", "p_open_reg", "ref_kind"]
     wk = ("xyz:NVDA", date(2026, 10, 16), 1.0, 1.0, 1.0, None, 1.0, "schwab")
 
@@ -542,7 +542,7 @@ def test_stock_perp_inputs_assembles_the_block_inputs():
         def fetchall(self):
             return [wk]
 
-    conn = SimpleNamespace(execute=lambda sql: Cur(description=[SimpleNamespace(name=c) for c in cols]))
+    conn = SimpleNamespace(execute=lambda sql, params=None: Cur(description=[SimpleNamespace(name=c) for c in cols]))
     out = publish.stock_perp_inputs(ch, conn, {"xyz:NVDA": Label("xyz:NVDA", "schwab", "NVDA", "NASDAQ", "USD", "NVIDIA")})
     assert out["names"] == 1 and out["snapshots"] == 3 and out["window_start"] == NOW and out["episodes"] == 7
     assert out["share_hours"] == 0.4 and out["hourly"] == [(NOW, 25.0)]
@@ -584,3 +584,86 @@ def test_research_sql_reads_oracle_mode_only():
     assert not hasattr(publish, "PERP_QUOTES_SQL") and "schwab" not in publish.SP_BY_NAME_SQL
     assert "source = 'stock_perp_oracle'" in publish.SP_EPISODES_ALL_SQL
     assert "ref_kind IN ('oracle_us', 'oracle_krx')" in publish.SP_WEEKENDS_SQL
+
+
+def _recording_ch(rows_for, log):
+    def query(sql, parameters=None):
+        log.append((sql, parameters))
+        return SimpleNamespace(result_rows=rows_for(sql))
+    return SimpleNamespace(query=query)
+
+
+class _Cur(SimpleNamespace):
+    def fetchone(self):
+        return self.one
+
+    def fetchall(self):
+        return self.rows
+
+
+def _recording_conn(log, one=(0,), rows=(), cols=()):
+    def execute(sql, params=None):
+        log.append((sql, params))
+        return _Cur(one=None if "check_results" in sql else one, rows=list(rows),
+                    description=[SimpleNamespace(name=c) for c in cols])
+    return SimpleNamespace(execute=execute)
+
+
+def test_excluded_labelled_symbol_reaches_no_public_path(monkeypatch, tmp_path):
+    from datetime import date
+
+    from venue_arb.sources import hyperliquid
+
+    monkeypatch.setattr(config, "DASHBOARD_SHOW_STOCK_PERPS", True)
+    monkeypatch.setattr(hyperliquid, "load_excluded", lambda: {"xyz:NVDA", "xyz:GOLD"})
+    assert "xyz:NVDA" in hyperliquid.load_labels()  # labelled and excluded: hidden, still in the private tables
+    # the live rows: the perps reader drops it, so the bundle has no row for it
+    ts = SP_SNAP[0]
+    ctx = (ts, "xyz:NVDA", 215.0, 214.0, 215.0, 0.0, 0.0, 1.0, 1.0, 1)
+    ch_log: list = []
+    ch = _recording_ch(lambda sql: [ctx] if sql == publish.PERP_CTX_SQL else [], ch_log)
+    assert publish.read_perps(ch) == []
+    monkeypatch.setattr(hyperliquid, "load_excluded", lambda: set())
+    assert [c.symbol for c, _, _ in publish.read_perps(ch)] == ["xyz:NVDA"]  # the same reader without the exclusion
+    monkeypatch.setattr(hyperliquid, "load_excluded", lambda: {"xyz:NVDA", "xyz:GOLD"})
+    assert bundle.stock_perp_rows(publish.read_perps(ch), {}, SP_NOW) == []
+    # every stock_perp_edges query gets the list as a server-side parameter
+    want = ["xyz:GOLD", "xyz:NVDA"]
+    publish.write_history_hour(ch, tmp_path, datetime(2026, 10, 20, 15, tzinfo=UTC))
+    [hour] = [p for s, p in ch_log if s == publish.STOCK_PERP_HOUR_SQL]
+    assert hour["ex"] == want
+    pg_log: list = []
+    publish.load_context(_recording_conn(pg_log), _recording_ch(lambda sql: [(0, 0, 0)] if "screened" in sql else [], ch_log), NOW)
+    assert next(p for s, p in ch_log if s == publish.SPARKS_SQL)["ex"] == want
+    assert next(p for s, p in pg_log if s == publish.STOCK_PERP_EPISODES_SQL) == {"ex": want}
+    # the research block: aggregates filtered in SQL, weekend rows in Python
+    ch_log.clear()
+    pg_log.clear()
+    one = {publish.SP_COUNTS_SQL: [(0, 0, None)], publish.SP_SHARE_SQL: [(None, 0)]}
+    cols = ["symbol", "friday", "p_fri", "p_sat", "p_sun", "p_open_pre", "p_open_reg", "ref_kind"]
+    wk = [(s, date(2026, 10, 16), 1.0, 1.0, 1.0, None, 1.0, "oracle_us") for s in ("xyz:NVDA", "xyz:TSLA")]
+    out = publish.stock_perp_inputs(_recording_ch(lambda sql: one.get(sql, []), ch_log),
+                                    _recording_conn(pg_log, rows=wk, cols=cols), hyperliquid.load_labels(), want)
+    assert [r["symbol"] for r in out["weekend_rows"]] == ["xyz:TSLA"]
+    for sql in (publish.SP_COUNTS_SQL, publish.SP_SHARE_SQL, publish.SP_BY_NAME_SQL, publish.SP_HOURLY_SQL,
+                publish.SP_EDGES_SQL):
+        assert [p for s, p in ch_log if s == sql] == [{"ex": want}]
+    assert [p for s, p in pg_log if s == publish.SP_EPISODES_ALL_SQL] == [{"ex": want}]
+
+
+def test_every_public_stock_perp_query_filters_the_excluded_names():
+    sqls = {n: v for n, v in vars(publish).items() if n.isupper() and isinstance(v, str)}
+    edges = {n: v for n, v in sqls.items() if "stock_perp_edges" in v}
+    assert len(edges) == 7
+    for n, v in edges.items():
+        assert "NOT has({ex:Array(String)}, symbol)" in v.split("stock_perp_edges")[1], n
+    for n in ("STOCK_PERP_EPISODES_SQL", "SP_EPISODES_ALL_SQL"):
+        assert "kalshi_id <> ALL(%(ex)s)" in sqls[n], n
+
+
+def test_public_stock_perp_sql_reads_oracle_mode_and_never_refs():
+    for n, v in vars(publish).items():
+        if n.isupper() and isinstance(v, str):
+            assert "stock_perp_refs" not in v, n
+            if "stock_perp_edges" in v:
+                assert "mode = 'oracle'" in v, n

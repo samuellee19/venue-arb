@@ -87,9 +87,11 @@ SELECT k, p, d, toStartOfHour(ts) AS h, avg(e) FROM (
   WHERE ts >= {start:DateTime64(3, 'UTC')} AND k_id NOT LIKE 'ZZTEST-%'
   UNION ALL
   SELECT toStartOfHour(ts) AS hts, symbol, '', 'stock_perp', max(net_bps) / 1e4 FROM venue_arb.stock_perp_edges FINAL
-  WHERE ts >= {start:DateTime64(3, 'UTC')} AND mode = 'oracle' AND session = 'external' GROUP BY hts, symbol
+  WHERE ts >= {start:DateTime64(3, 'UTC')} AND mode = 'oracle' AND session = 'external' AND NOT has({ex:Array(String)}, symbol) GROUP BY hts, symbol
 ) GROUP BY k, p, d, h
 """
+# every query that reads stock_perp_edges takes {ex}, the names in labels/stock_perps_excluded.txt (excluded()):
+# hidden from every public path, their rows stay in the private tables
 # the stock-perp tier: rows with p = '' take their reference symbol from labels (spark_series refs) and d = 'stock_perp'
 # (bundle.stock_key: one row a name, either direction); the hourly max of the oracle-mode net_bps / 1e4 over
 # external-session ticks reads, x100 like the pair rows, as net_bps / 100
@@ -103,7 +105,7 @@ ORDER BY start_ts
 # the stock-perp tier's episodes (kalshi_id = perp symbol), counted apart from the pair tiers' (bps, not ¢)
 STOCK_PERP_EPISODES_SQL = """
 SELECT count(*) FROM venue_arb.opportunities
-WHERE source = 'stock_perp_oracle' AND coalesce(end_ts, now()) > now() - interval '7 days'
+WHERE source = 'stock_perp_oracle' AND coalesce(end_ts, now()) > now() - interval '7 days' AND kalshi_id <> ALL(%(ex)s)
 """
 # the latest ladder_score run's denominator, from runs without a failed error-severity check (as note.ADMISSIBLE_SQL)
 LADDER_KPI_SQL = f"""
@@ -129,25 +131,29 @@ GROUP BY asset, basis_up, basis_down ORDER BY first_ts
 STOCK_PERP_HOUR_SQL = """
 SELECT ts, symbol, direction, basis_bps, net_bps, capacity_usd FROM venue_arb.stock_perp_edges FINAL
 WHERE ts >= {lo:DateTime64(3, 'UTC')} AND ts < {hi:DateTime64(3, 'UTC')} AND mode = 'oracle' AND session = 'external'
+  AND NOT has({ex:Array(String)}, symbol)
 """
 # the Research tab's stock-perp block (stock_perp_inputs): aggregates in ClickHouse; EDGES is the trailing
 # STOCK_PERP_SENSITIVITY_DAYS in one query (8 columns per scored tick, kept as tuples), re-run through episodes.find
 # every research query reads the oracle mode over external-session ticks only (public output: nothing from the
 # executable mode); hours_ge_10 counts |basis| >= 10 bps hours
 SP_HOURLY_SQL = ("SELECT toStartOfHour(ts) AS h, max(net_bps) FROM venue_arb.stock_perp_edges FINAL "
-                 "WHERE mode = 'oracle' AND session = 'external' GROUP BY h ORDER BY h")
+                 "WHERE mode = 'oracle' AND session = 'external' AND NOT has({ex:Array(String)}, symbol) GROUP BY h ORDER BY h")
 # after FINAL one row per (symbol, ts) (direction is a function of the tick), so count() is the distinct snapshots
 SP_COUNTS_SQL = ("SELECT uniqExact(symbol), count(), min(ts) FROM venue_arb.stock_perp_edges FINAL "
-                 "WHERE mode = 'oracle' AND session = 'external'")
+                 "WHERE mode = 'oracle' AND session = 'external' AND NOT has({ex:Array(String)}, symbol)")
 # per hour the share of rows over 10 bps, then averaged
 SP_SHARE_SQL = ("SELECT avg(s), count() FROM (SELECT toStartOfHour(ts) AS h, avg(abs(basis_bps) >= 10) AS s "
-                "FROM venue_arb.stock_perp_edges FINAL WHERE mode = 'oracle' AND session = 'external' GROUP BY h)")
+                "FROM venue_arb.stock_perp_edges FINAL WHERE mode = 'oracle' AND session = 'external' AND NOT has({ex:Array(String)}, symbol) "
+                "GROUP BY h)")
 SP_BY_NAME_SQL = ("SELECT symbol, max(net_bps), uniqExactIf(toStartOfHour(ts), abs(basis_bps) >= 10) "
-                  "FROM venue_arb.stock_perp_edges FINAL WHERE mode = 'oracle' AND session = 'external' GROUP BY symbol")
+                  "FROM venue_arb.stock_perp_edges FINAL WHERE mode = 'oracle' AND session = 'external' AND NOT has({ex:Array(String)}, symbol) "
+                  "GROUP BY symbol")
 SP_EDGES_SQL = ("SELECT ts, symbol, direction, net_bps, funding_bps, borrow_bps, capacity_contracts, capacity_usd "
                 f"FROM venue_arb.stock_perp_edges FINAL WHERE ts >= now() - INTERVAL {config.STOCK_PERP_SENSITIVITY_DAYS} DAY "
-                "AND mode = 'oracle' AND session = 'external' ORDER BY symbol, ts")
-SP_EPISODES_ALL_SQL = "SELECT count(*) FROM venue_arb.opportunities WHERE source = 'stock_perp_oracle'"
+                "AND mode = 'oracle' AND session = 'external' AND NOT has({ex:Array(String)}, symbol) ORDER BY symbol, ts")
+SP_EPISODES_ALL_SQL = ("SELECT count(*) FROM venue_arb.opportunities WHERE source = 'stock_perp_oracle' "
+                       "AND kalshi_id <> ALL(%(ex)s)")
 SP_WEEKENDS_SQL = ("SELECT symbol, friday, p_fri, p_sat, p_sun, p_open_pre, p_open_reg, ref_kind "
                    "FROM venue_arb.stock_perp_weekends WHERE ref_kind IN ('oracle_us', 'oracle_krx') ORDER BY friday")
 # the perps() reader: the last PERP_LOOKBACK_S of contexts and books (the newest tick per symbol is kept in Python,
@@ -301,7 +307,7 @@ def write_history_hour(ch, out_dir: Path, hour: datetime, sides: dict | None = N
     ).result_rows) if k else {}
     stock, refs = [], {}
     if config.DASHBOARD_SHOW_STOCK_PERPS:  # the parquet is public output: gated like the bundle rows
-        stock = ch.query(STOCK_PERP_HOUR_SQL, parameters={"lo": lo, "hi": hi}).result_rows
+        stock = ch.query(STOCK_PERP_HOUR_SQL, parameters={"lo": lo, "hi": hi, "ex": excluded()}).result_rows
         refs = stock_refs()
     buf = io.BytesIO()
     pq.write_table(history_table(edge, lad, books, sides, stock, refs), buf, compression="zstd")
@@ -353,6 +359,12 @@ def history_size_mb(out_dir: Path, now: datetime) -> float:
     return sum(f.stat().st_size for f in (out_dir / "history").glob("pairs-*.parquet") if f.name > cutoff) / 1e6
 
 
+def excluded() -> list[str]:
+    """labels/stock_perps_excluded.txt, re-read on every call: these names are hidden from every public path (live rows,
+    sparks, history, research, episode counts); the collector and the private tables are unaffected."""
+    return sorted(hyperliquid.load_excluded())
+
+
 def stock_refs() -> dict[str, str]:
     """{perp symbol: reference symbol} from the labels; a perp without a stock symbol is its own reference."""
     return {perp: lb.ref_symbol or perp for perp, lb in hyperliquid.load_labels().items()}
@@ -393,7 +405,8 @@ def load_context(conn, ch, now: datetime) -> dict:
     from venue_arb.report.note import SCOPE_SQL  # lazily: keeps the report module (numpy) off the import path
 
     start = _hour(now) - timedelta(hours=bundle.SPARK_HOURS - 1)
-    sparks = spark_series(ch.query(SPARKS_SQL, parameters={"start": start}).result_rows, start,
+    ex = excluded()
+    sparks = spark_series(ch.query(SPARKS_SQL, parameters={"start": start, "ex": ex}).result_rows, start,
                           stock_refs() if config.DASHBOARD_SHOW_STOCK_PERPS else None)
     scope = {(k, p): {"exact": rel == "exact", "bad_review": bad}
              for k, p, rel, bad, _closed in conn.execute(SCOPE_SQL, {"pv": PROMPT_VERSION}).fetchall()}
@@ -405,7 +418,7 @@ def load_context(conn, ch, now: datetime) -> dict:
     notes += [Annotation(kind="basis_change", at=_utc(t), until=None, key=None,
                          label=f"{asset} basis bound: up ${up:,.0f} / down ${down:,.0f}")
               for asset, up, down, t in ch.query(BASIS_CHANGES_SQL).result_rows]
-    (stock_eps,) = conn.execute(STOCK_PERP_EPISODES_SQL).fetchone()
+    (stock_eps,) = conn.execute(STOCK_PERP_EPISODES_SQL, {"ex": ex}).fetchone()
     kpi: dict = {"stock_perps": {"episodes_7d": int(stock_eps)}}
     if row := conn.execute(LADDER_KPI_SQL).fetchone():
         observed, checked_at = row
@@ -542,18 +555,21 @@ def sensitivity_episodes(rows) -> dict[str, int]:
     return out | {"window_days": config.STOCK_PERP_SENSITIVITY_DAYS}
 
 
-def stock_perp_inputs(ch, conn, labels: dict) -> dict:
-    """research.stock_perp_block's inputs from ClickHouse (`ch`) and Postgres (`conn`), `labels` = load_labels()."""
-    names, snapshots, first = ch.query(SP_COUNTS_SQL).result_rows[0]
-    share, share_hours = ch.query(SP_SHARE_SQL).result_rows[0]
+def stock_perp_inputs(ch, conn, labels: dict, ex: list[str] = ()) -> dict:
+    """research.stock_perp_block's inputs from ClickHouse (`ch`) and Postgres (`conn`), `labels` = load_labels(),
+    `ex` = excluded() (filtered in SQL, the weekend rows here)."""
+    p = {"ex": list(ex)}
+    q = lambda sql: ch.query(sql, parameters=p).result_rows
+    names, snapshots, first = q(SP_COUNTS_SQL)[0]
+    share, share_hours = q(SP_SHARE_SQL)[0]
     by_name = [{"symbol": sym, "name": hyperliquid.label_or_none(sym, labels).name, "max_net_bps": mx,
-                "hours_ge_10": int(hours)} for sym, mx, hours in ch.query(SP_BY_NAME_SQL).result_rows]
-    return {"hourly": [(_utc(h), v) for h, v in ch.query(SP_HOURLY_SQL).result_rows], "names": int(names),
+                "hours_ge_10": int(hours)} for sym, mx, hours in q(SP_BY_NAME_SQL)]
+    return {"hourly": [(_utc(h), v) for h, v in q(SP_HOURLY_SQL)], "names": int(names),
             "snapshots": int(snapshots), "window_start": _utc(first) if snapshots else None,
-            "episodes": conn.execute(SP_EPISODES_ALL_SQL).fetchone()[0],
+            "episodes": conn.execute(SP_EPISODES_ALL_SQL, p).fetchone()[0],
             "share_hours": share if share_hours else None, "by_name": by_name,
-            "sensitivity": sensitivity_episodes(ch.query(SP_EDGES_SQL).result_rows),
-            "weekend_rows": _dicts(conn.execute(SP_WEEKENDS_SQL))}
+            "sensitivity": sensitivity_episodes(q(SP_EDGES_SQL)),
+            "weekend_rows": [r for r in _dicts(conn.execute(SP_WEEKENDS_SQL)) if r["symbol"] not in p["ex"]]}
 
 
 def compute_research(readers: dict, now: datetime) -> ResearchSummary:
@@ -580,6 +596,19 @@ def _dicts(cur) -> list[dict]:
 
 def load_sides(conn) -> dict[tuple[str, str], str]:
     return {(k, p): ym for k, p, ym in conn.execute(SIDES_SQL, {"pv": PROMPT_VERSION}).fetchall()}
+
+
+def read_perps(ch) -> list:
+    """Per perp not in excluded(): the newest context within PERP_LOOKBACK_S and its books at that ts."""
+    ctxs, ex = {}, set(excluded())
+    for ts, sym, mark, oracle, mid, fund, prem, oi, vol, growth in ch.query(PERP_CTX_SQL).result_rows:
+        ctxs[sym] = (_utc(ts), PerpCtx(sym, mark, oracle, mid, fund, prem, oi, vol, bool(growth), 0))
+    books: dict[tuple[str, datetime], list[PerpLevel]] = {}
+    for ts, sym, side, level, price, size in ch.query(PERP_BOOKS_SQL).result_rows:
+        books.setdefault((sym, _utc(ts)), []).append(PerpLevel(side, level, price, size))
+    labels = hyperliquid.load_labels()
+    return [(ctx, hyperliquid.label_or_none(sym, labels), (ts, books.get((sym, ts), [])))
+            for sym, (ts, ctx) in sorted(ctxs.items()) if sym not in ex]
 
 
 def default_readers(db) -> dict:
@@ -625,20 +654,10 @@ def default_readers(db) -> dict:
 
     def stock_perp_research():
         with db.pg() as conn:
-            return stock_perp_inputs(db.ch(), conn, hyperliquid.load_labels())
+            return stock_perp_inputs(db.ch(), conn, hyperliquid.load_labels(), excluded())
 
     def perps():
-        """Per perp: the newest context within PERP_LOOKBACK_S and its books at that ts."""
-        ch = db.ch()
-        ctxs = {}
-        for ts, sym, mark, oracle, mid, fund, prem, oi, vol, growth in ch.query(PERP_CTX_SQL).result_rows:
-            ctxs[sym] = (_utc(ts), PerpCtx(sym, mark, oracle, mid, fund, prem, oi, vol, bool(growth), 0))
-        books: dict[tuple[str, datetime], list[PerpLevel]] = {}
-        for ts, sym, side, level, price, size in ch.query(PERP_BOOKS_SQL).result_rows:
-            books.setdefault((sym, _utc(ts)), []).append(PerpLevel(side, level, price, size))
-        labels = hyperliquid.load_labels()
-        return [(ctx, hyperliquid.label_or_none(sym, labels), (ts, books.get((sym, ts), [])))
-                for sym, (ts, ctx) in sorted(ctxs.items())]
+        return read_perps(db.ch())
 
     return {"pairs": pairs, "ladders": ladders, "listings": listings, "perps": perps, "series_fee": kalshi.fetch_series,
             "books": books, "context": context, "research_inputs": research_inputs, "review_labels": review_labels,

@@ -36,7 +36,8 @@ Before the repo's visibility changes (Sam's action, after every box is ticked). 
   `data/private/` (git-ignored). Re-check any new public field against this before shipping.
 - [ ] **Manual exclusion (Sam).** After a week of `data/private/oracle-check-*.md`, decide by hand whether any name
   should leave the public page: add `xyz:SYMBOL  # neutral reason` to `labels/stock_perps_excluded.txt`. The comment
-  must not cite Schwab. Nothing is hidden automatically.
+  must not cite Schwab. Nothing is hidden automatically. The publisher re-reads the file and drops the name from every
+  public path (live rows, sparklines, history Parquet, research block, episode counts); the private tables keep it.
 - [ ] **`DASHBOARD_SHOW_STOCK_PERPS` stays `False`** until the first week of oracle-check reports is read and the
   rewritten `copy.METHOD["stock_perps"]` is reviewed on the rendered page.
 - [ ] **OPEN DECISION (Sam): Polymarket terms vs the live pair tier.** The Polymarket Terms of Use (effective
