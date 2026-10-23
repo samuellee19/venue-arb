@@ -266,7 +266,7 @@ on such a day a name may read external against a stale oracle.
 ## Data terms and caveats
 
 Quotes are not displayed publicly: `DASHBOARD_SHOW_BOOKS = False`, because Kalshi's data terms forbid public
-display without written authorization and Polymarket's terms could not be read. Kalshi's taker fee coefficient
+display without written authorization and Polymarket's terms, read on 2026-10-23, restrict the data (`docs/venues.md`, terms record). Kalshi's taker fee coefficient
 (0.07) is secondhand and unverified, as are the jurisdictions each venue admits; both are recorded with sources in
 `docs/venues.md`, and the going-public checklist is `docs/going-public.md`. The stock-perp figures are held back for the same reason:
 the public view is held behind `DASHBOARD_SHOW_STOCK_PERPS` until the oracle-check reports are read. Schwab's agreement

@@ -189,15 +189,12 @@ verdict (spec §5).
 ### Access (2026-10-22)
 - Hyperliquid blocks US traders. Read access is public. The dashboard's US cut states the perp leg as zero (spec §4).
 
-### Terms (unread: Sam to read)
-- `https://app.hyperliquid.xyz/terms` is a JavaScript shell, so the text does not appear in a fetch.
-  `hyperliquid.xyz` returns HTTP 403 to fetches. The data-display terms are therefore unread.
-  `DASHBOARD_SHOW_STOCK_PERPS = False` until Sam reads them in a browser (`docs/going-public.md`).
-- Two points for that read, from the code reviews:
-  1. A published `basis_bps` plus the venue's public mark recovers the Schwab mid, since the reference is
-     `mark / (1 + basis_bps / 1e4)`. The Schwab quote is never shown raw, but a derived figure discloses it.
-  2. `fees_cents` on a stock-perp row is `(perp_fee_bps + stock_spread_bps) / 100` (`venue_arb/bundle.py`), so it
-     embeds the Schwab spread.
+### Terms (read 2026-10-23)
+- Read on 2026-10-23; see "Terms record (2026-10-23)" below. The earlier fetch problems (`app.hyperliquid.xyz/terms` is
+  a JavaScript shell, `hyperliquid.xyz` answers HTTP 403) no longer block anything.
+- The two derived-value points raised in the 2026-10-22 code reviews (`basis_bps` plus the public mark recovering the
+  Schwab mid; `fees_cents` embedding the Schwab spread) described Schwab-referenced public fields. Those fields no
+  longer exist publicly: the public view uses the venue oracle only (spec 2026-10-23 §2).
 
 ## Schwab Market Data
 
@@ -232,16 +229,15 @@ verdict (spec §5).
      the URL and the CLI decodes it before the exchange).
   3. The CLI writes `SCHWAB_REFRESH_TOKEN` and `SCHWAB_REFRESH_ISSUED_AT` with `bws secret create|edit` and restarts
      `venue-arb-perps` (`--no-restart` skips that). It prints secret names and the restart result, never values.
-- Personal-use terms (unverified: recalled from the design spec, Schwab's terms not read): Schwab Market Data is understood to be licensed for personal use, so quotes are never shown raw on the demo (same
-  rule as `DASHBOARD_SHOW_BOOKS`). Whether displaying derived values (basis, verdicts) is allowed: **Sam to read** the
-  Schwab developer portal terms before turning on `DASHBOARD_SHOW_STOCK_PERPS`.
+- Personal-use terms: read on 2026-10-23, see "Terms record (2026-10-23)". Schwab data is licensed for the developer's
+  own use, so quotes and anything derived from them stay on the OptiPlex.
 
 ### Display terms for stock-perp figures (2026-10-22)
 - The developer app is for personal use (spec §6). Schwab is approved for Market Data (Production, "Ready For Use",
   2026-10-20, per the spec).
-- The developer-portal terms on display of derived values are unread. **Sam to read** them before
-  `DASHBOARD_SHOW_STOCK_PERPS` is turned on. The two points under Hyperliquid apply here too: a published `basis_bps`
-  with the perp's public mark discloses the Schwab mid, and `fees_cents` embeds the Schwab spread.
+- The terms were read on 2026-10-23 ("Terms record (2026-10-23)"): third-party use and derivative works are barred, so
+  no Schwab-derived figure is displayed. The old `basis_bps` / `fees_cents` disclosure points no longer apply, since
+  those Schwab-referenced fields are not public.
 - When the refresh token lapses, the collector's stock leg stops (the first failed call is logged; `schwab_auth` is
   recorded at the next QA flush, every five ticks) and rows fall back to the oracle. `schwab_token_expires` warns 24 h before expiry.
 
@@ -254,11 +250,11 @@ verdict (spec §5).
   spec leaves room for a client behind `PYTH_API_KEY` later; none exists in the repo. Paid data needs Sam's approval
   (spec §7), so nothing here calls Pyth.
 - JIO and RELIANCE have no Pyth equity feed in any case (spec §3).
-- Pyth's off-chain display terms are unread. They matter only once a client exists.
+- Pyth's terms were read on 2026-10-23 ("Terms record (2026-10-23)"): no reuse right on the website, equities with display rights need Pro.
 
 ## Terms record (2026-10-23)
 
-Read by Sam's reading of the documents on 2026-10-23 (spec `2026-10-23-venue-arb-stock-perp-public-view-design.md`
+Read by Sam on 2026-10-23 (spec `2026-10-23-venue-arb-stock-perp-public-view-design.md`
 §7). This is a reading, not legal advice. It supersedes the "unread" notes above (Hyperliquid Terms, Schwab
 personal-use terms, Pyth display terms).
 
