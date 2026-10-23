@@ -237,9 +237,31 @@ Snapshots land in ClickHouse `venue_arb.book_levels_v2` (daily partitions, 90-da
 
 ### Schwab
 
-Stock reference quotes for the stock-perp tier come from Schwab Market Data (Market Data product only). The refresh
+Stock reference quotes come from Schwab Market Data (Market Data product only) and are private: they feed the full
+two-leg stock-perp tier and the oracle check below, never the public page or any pushed file. The refresh
 token expires every 7 days; re-issue it with `python -m venue_arb.sources.schwab login`. The runbook, token lifetimes
-and terms are in the "Schwab Market Data" section of `docs/venues.md`.
+and the terms record are in `docs/venues.md`.
+
+### Public oracle view and private validation
+
+The public Stock perps view uses Hyperliquid data only: the perp's mark against the trade.xyz venue oracle
+(`oracle_basis_bps`), perp-side costs, depth and funding. Outside a name's external session the oracle is the venue's
+own average, so those rows read "oracle internal" and carry no verdict. Oracle-mode episodes are stored with
+`pm_id = 'oracle'` and `source = 'stock_perp_oracle'`.
+
+The `stock_perp_oracle_check` deployment (cron `30 1 * * 2-6`, registered by `venue_arb/flows/serve.py`; restart
+`venue-arb-flows` to pick it up) compares the oracle with the Schwab mid per name and day. It writes ClickHouse
+`venue_arb.stock_perp_oracle_check` (migration `ch/009`) and the Markdown report
+`data/private/oracle-check-YYYY-MM-DD.md` (git-ignored; never pushed), and warns `oracle_drift` when a name's trailing
+5-day p95 exceeds 10 bps. Run by hand:
+
+```bash
+secrets uv run python -m venue_arb.flows.stock_perp_oracle_check
+```
+
+No name is hidden automatically. After a week of reports, remove a name from the public page by hand in
+`labels/stock_perps_excluded.txt` with a neutral comment. Asian exchange holidays are not in the session calendar, so
+on such a day a name may read external against a stale oracle.
 
 ## Data terms and caveats
 
@@ -247,5 +269,6 @@ Quotes are not displayed publicly: `DASHBOARD_SHOW_BOOKS = False`, because Kalsh
 display without written authorization and Polymarket's terms could not be read. Kalshi's taker fee coefficient
 (0.07) is secondhand and unverified, as are the jurisdictions each venue admits; both are recorded with sources in
 `docs/venues.md`, and the going-public checklist is `docs/going-public.md`. The stock-perp figures are held back for the same reason:
-Hyperliquid's terms are unread (`docs/venues.md`), and a published `basis_bps` with the perp's public mark discloses the
-Schwab quote.
+the public view is held behind `DASHBOARD_SHOW_STOCK_PERPS` until the oracle-check reports are read. Schwab's agreement
+bars third-party use of its data, so nothing derived from it is published (terms record in `docs/venues.md`, a reading,
+not legal advice).

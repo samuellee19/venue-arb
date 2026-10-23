@@ -255,3 +255,51 @@ verdict (spec §5).
   (spec §7), so nothing here calls Pyth.
 - JIO and RELIANCE have no Pyth equity feed in any case (spec §3).
 - Pyth's off-chain display terms are unread. They matter only once a client exists.
+
+## Terms record (2026-10-23)
+
+Read by Sam's reading of the documents on 2026-10-23 (spec `2026-10-23-venue-arb-stock-perp-public-view-design.md`
+§7). This is a reading, not legal advice. It supersedes the "unread" notes above (Hyperliquid Terms, Schwab
+personal-use terms, Pyth display terms).
+
+### Schwab Trader API Developer Program Agreement, May 2023 (as read on 2026-10-23)
+- Texas law. The app is "Trader API - Individual", Market Data Production only.
+- §2 and §6.2: an app whose output reaches third parties is a "Commercial Application", which needs a company profile
+  and review, with limits on passing market data to users who are not entitled to it.
+- §9.4: data is for use through your own application only, with no third-party use. §9.4.2: exchange data is licensed
+  to you personally, to be neither shared nor re-used.
+- §5(n) and §8.1: no derivative works of Schwab property, which includes its data.
+- §5(v): automated collection only through your own app.
+- §8.3: Schwab names are not to be used without written permission.
+- §10: keep records for 18 months; Schwab has audit rights.
+- Consequence (spec §2): nothing derived from Schwab data leaves the OptiPlex. The public stock-perp view is built on
+  Hyperliquid data only; Schwab feeds the private two-leg tier and the private oracle check.
+
+### Hyperliquid Terms of Use, updated 2026-06-15 (as read on 2026-10-23)
+- They govern the `app.hyperliquid.xyz` interface only. US persons are barred from that interface. There is no
+  data-licence or scraping clause; automated use beyond reasonable usage is prohibited.
+- The collector reads the public API (`api.hyperliquid.xyz/info`), not the interface, at a rate set in "Info endpoint
+  and rate budget" above.
+
+### trade.xyz Terms of Use, updated 2026-09-06 (as read on 2026-10-23)
+- They govern `app.trade.xyz`. US persons are barred. Scraping that interface without permission is not allowed.
+- We read the Hyperliquid API, not their interface.
+
+### Pyth (as read on 2026-10-23)
+- The website terms grant no right to reuse price data and limit use to private, non-commercial purposes.
+- Plans: Free (view-only, no API, no redistribution); Starter $500 a month (crypto only); Pro from $2,500 a month
+  (equities, display rights, limited redistribution). Not used: paid data is out of scope.
+
+### Polymarket Terms of Use, effective 2026-08-11 (as read on 2026-10-23)
+- US persons may use only the news and information features. Robots and scrapers are barred.
+- Capital Market Clients and market-data distributors may not use the Data (raw, derived or aggregated), and it may not
+  be redistributed to them. This bears on the live pair tier, which publishes Polymarket-derived figures. Open
+  decision for Sam: `docs/going-public.md`.
+
+### Conventions that follow from the record
+- Oracle-mode episodes in `stock_perp_window` carry `pm_id = 'oracle'` (`ORACLE_PM_ID`) and `source =
+  'stock_perp_oracle'`; the private two-leg tier keeps `source = 'stock_perp'`.
+- Exclusion is manual only: a name leaves the public page when someone adds it to `labels/stock_perps_excluded.txt`
+  by hand with a neutral comment that does not cite Schwab. Nothing hides a name automatically.
+- Asian exchange holidays are not modelled in the session calendar (`venue_arb/sessions.py`); on such a day a name
+  can read as external against a stale oracle.

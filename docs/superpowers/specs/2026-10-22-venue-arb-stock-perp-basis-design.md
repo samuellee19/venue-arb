@@ -229,3 +229,6 @@ collector has run. Screened and executable tiers are labelled apart, as elsewher
 - The sign-test threshold for the weekend tier's "enough weekends" sentence.
 - Exact Scanner column widths and the Explorer's band rendering; Plotly figure specs for the two cards.
 - The `labels/stock_perps.csv` initial fill (from the venue's spec index and the listings) and its test.
+
+**Update 2026-10-23 (Plan 7).** Superseded in part by `2026-10-23-venue-arb-stock-perp-public-view-design.md`: the
+public view uses the venue oracle only, Schwab data stays private, and the terms are recorded in `docs/venues.md`.

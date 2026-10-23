@@ -45,3 +45,9 @@ def test_readme_mentions_perps_unit_and_login():
     text = (ROOT / "README.md").read_text()
     assert "venue-arb-perps" in text
     assert "python -m venue_arb.sources.schwab login" in text
+
+
+def test_readme_mentions_oracle_check():
+    text = (ROOT / "README.md").read_text()
+    assert "stock_perp_oracle_check" in text
+    assert "data/private/" in text

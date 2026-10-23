@@ -27,13 +27,21 @@ Before the repo's visibility changes (Sam's action, after every box is ticked). 
 - [ ] **Repo links the page.** Replace the `https://<server>` placeholder under "Live dashboard" in `README.md` with the deployed URL, and check that it opens.
 - [ ] **Backlog (2026-10-22): decimate `exec_hourly` to daily past 60 days** (research section passes 150 KB around
   early Feb 2027; `research_bytes` warns).
-- [ ] **Hyperliquid / trade.xyz terms (Sam).** Read `https://app.hyperliquid.xyz/terms` in a browser: the page is a
-  JavaScript shell, and `hyperliquid.xyz` returns 403 to fetches. Decide whether derived stock-perp figures may be
-  shown. Two points for the read are in `docs/venues.md` (Hyperliquid, Terms): a published `basis_bps` plus the
-  public mark recovers the Schwab mid, and `fees_cents` embeds the Schwab spread.
-- [ ] **Schwab Market Data terms (Sam).** Read the developer-portal terms on display of derived values, with the same
-  two points (`docs/venues.md`, Schwab Market Data, "Display terms").
-- [ ] **`DASHBOARD_SHOW_STOCK_PERPS` stays `False`** until both reads above are done. The collector, scoring and bundle
-  fields run regardless; only the Scanner chip and the Research cards are hidden.
-- [ ] **Pyth: nothing to read yet.** No client is built (`docs/venues.md`, Pyth Network). Its display terms become a
-  checklist item only if a paid key is approved.
+- [x] **Stock-perp terms read (2026-10-23).** Record in `docs/venues.md`, "Terms record (2026-10-23)". Hyperliquid's and
+  trade.xyz's terms cover their websites, not the API we read. Schwab's agreement bars third-party use and derivative
+  works of its data.
+- [x] **The rule: nothing derived from Schwab data leaves the OptiPlex** (spec `2026-10-23-venue-arb-stock-perp-public-view-design.md`
+  §2). Not in `live.json`, the history Parquet, the research block, committed files or page copy. The public stock-perp
+  view uses Hyperliquid data only (perp against the venue oracle); Schwab quotes stay in ClickHouse and in
+  `data/private/` (git-ignored). Re-check any new public field against this before shipping.
+- [ ] **Manual exclusion (Sam).** After a week of `data/private/oracle-check-*.md`, decide by hand whether any name
+  should leave the public page: add `xyz:SYMBOL  # neutral reason` to `labels/stock_perps_excluded.txt`. The comment
+  must not cite Schwab. Nothing is hidden automatically.
+- [ ] **`DASHBOARD_SHOW_STOCK_PERPS` stays `False`** until the first week of oracle-check reports is read and the
+  rewritten `copy.METHOD["stock_perps"]` is reviewed on the rendered page.
+- [ ] **OPEN DECISION (Sam): Polymarket terms vs the live pair tier.** The Polymarket Terms of Use (effective
+  2026-08-11) bar robots and scrapers, restrict US persons to the news and information features, and bar Capital Market
+  Clients and market-data distributors from using or receiving the Data (raw, derived, aggregated). The live pair tier
+  publishes Polymarket-derived figures. Decide whether to keep, change or withdraw it before the repo or page is
+  linked publicly. A reading, not legal advice.
+- [x] **Pyth: not used.** Equities with display rights need Pro (from $2,500 a month); out of scope (`docs/venues.md`).
