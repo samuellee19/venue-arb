@@ -150,7 +150,7 @@ def test_edge_row_columns():
     r = sp.edge_row(NOW, E_OK, "v")
     assert set(r) == {"ts", "symbol", "direction", "ref_kind", "reference", "mark", "basis_bps", "perp_fee_bps", "perp_spread_bps",
                       "stock_spread_bps", "funding_bps", "borrow_bps", "net_bps", "capacity_contracts",
-                      "capacity_usd", "fee_version"}
+                      "capacity_usd", "fee_version", "mode", "session"}
 
 
 def _net_book(bids, ask0=100.19):
@@ -182,3 +182,47 @@ def test_capacity_stops_at_the_first_level_below_the_floor():
 def test_walk_perp_accept_predicate_stops_the_walk():
     c, usd, _ = sp.walk_perp(BIDS, "bid", None, accept=lambda px: px > 214.85)
     assert c == 100.0 and usd == pytest.approx(21_490.0)
+
+
+CTX_ORACLE_100 = replace(CTX, mark=100.1, oracle=100.0, funding_h=0.0)
+BOOK_12_5 = _net_book([100.17, 100.10])  # vs oracle 100.0: 17 and 10 bps of price edge, fixed perp costs about 2.8
+BOOK_12_5_LEVEL1_USD = 100.17 * 100.0
+
+
+def test_oracle_mode_ignores_the_schwab_reference():
+    e = sp.score(replace(CTX, mark=215.0), BOOK, REF_SCHWAB, mode="oracle")
+    assert e.mode == "oracle" and e.ref_kind == "oracle" and e.reference == CTX.oracle
+    assert e.stock_spread_bps is None and e.stock_cap_usd is None
+
+
+def test_oracle_mode_net_excludes_stock_spread_and_borrow():
+    e = sp.score(replace(CTX, mark=215.0), BOOK, REF_ORACLE, mode="oracle")
+    fill = e.capacity_usd / e.capacity_contracts
+    assert e.net_bps == pytest.approx(sp.basis_bps(fill, CTX.oracle) - e.perp_fee_bps - e.perp_spread_bps - e.funding_bps)
+    assert e.borrow_bps >= 0.0   # computed, not subtracted (long stock here: 0)
+
+
+def test_oracle_mode_borrow_is_reported_but_not_subtracted():
+    ctx = replace(CTX, mark=210.0)  # long perp / short stock: borrow applies
+    e = sp.score(ctx, BOOK, REF_ORACLE, mode="oracle")
+    assert e.borrow_bps > 0
+    fill = e.capacity_usd / e.capacity_contracts if e.capacity_contracts else BOOK[2].price
+    assert e.net_bps == pytest.approx(-sp.basis_bps(fill, CTX.oracle) - e.perp_fee_bps - e.perp_spread_bps - e.funding_bps)
+
+
+def test_oracle_mode_capacity_is_perp_depth_at_ten_bps():
+    e = sp.score(CTX_ORACLE_100, BOOK_12_5, REF_ORACLE, mode="oracle")
+    assert e.capacity_usd == pytest.approx(BOOK_12_5_LEVEL1_USD) and e.capacity_usd > 0
+
+
+def test_edge_row_carries_mode_and_session():
+    e = sp.score(CTX_ORACLE_100, BOOK_12_5, REF_ORACLE, mode="oracle", session="internal")
+    r = sp.edge_row(NOW, e, "v")
+    assert r["mode"] == "oracle" and r["session"] == "internal"
+    assert sp.edge_row(NOW, E_OK, "v")["mode"] == "executable" and sp.edge_row(NOW, E_OK, "v")["session"] == "external"
+
+
+def test_gross_to_net_oracle_mode_rescales_funding_only():
+    e = replace(sp.score(replace(CTX, mark=210.0), BOOK, REF_ORACLE, mode="oracle"), funding_bps=2.0, hold_h=24)
+    assert e.borrow_bps > 0
+    assert sp.gross_to_net(e, 48) == pytest.approx(e.net_bps - e.funding_bps)
