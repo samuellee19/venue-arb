@@ -583,3 +583,4 @@ def test_research_sql_reads_oracle_mode_only():
     assert "stock_perp_refs" not in publish.PERP_CTX_SQL + publish.PERP_BOOKS_SQL
     assert not hasattr(publish, "PERP_QUOTES_SQL") and "schwab" not in publish.SP_BY_NAME_SQL
     assert "source = 'stock_perp_oracle'" in publish.SP_EPISODES_ALL_SQL
+    assert "ref_kind IN ('oracle_us', 'oracle_krx')" in publish.SP_WEEKENDS_SQL

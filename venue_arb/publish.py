@@ -149,7 +149,7 @@ SP_EDGES_SQL = ("SELECT ts, symbol, direction, net_bps, funding_bps, borrow_bps,
                 "AND mode = 'oracle' AND session = 'external' ORDER BY symbol, ts")
 SP_EPISODES_ALL_SQL = "SELECT count(*) FROM venue_arb.opportunities WHERE source = 'stock_perp_oracle'"
 SP_WEEKENDS_SQL = ("SELECT symbol, friday, p_fri, p_sat, p_sun, p_open_pre, p_open_reg, ref_kind "
-                   "FROM venue_arb.stock_perp_weekends ORDER BY friday")
+                   "FROM venue_arb.stock_perp_weekends WHERE ref_kind IN ('oracle_us', 'oracle_krx') ORDER BY friday")
 # the perps() reader: the last PERP_LOOKBACK_S of contexts and books (the newest tick per symbol is kept in Python,
 # its books are those at the same ts). Twice LIVE_MAX_AGE_S, so a stalled name stays in the bundle and its row reads Stale rather than vanishing.
 PERP_LOOKBACK_S = 2 * bundle.LIVE_MAX_AGE_S

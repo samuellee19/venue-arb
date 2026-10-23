@@ -306,6 +306,7 @@ def test_stock_perp_row_stale():
     old = (SP_NOW - timedelta(seconds=301), SP_BOOK)
     [p] = stock_perp_rows([(CTXB, LABEL_NVDA, old)], {}, SP_NOW)
     assert not p.live and p.costs is None
+    assert p.verdict.checks[0].status == "partial" and p.verdict.checks[0].detail == "oracle 301 s old"
     assert p.net_bps is None and p.net_edge_cents is None and p.net_edge_bps is None and p.sensitivity is None
 
 

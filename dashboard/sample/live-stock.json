@@ -1783,9 +1783,9 @@
       "verdict": {
         "checks": [
           {
-            "detail": "oracle live, 720 s old",
+            "detail": "oracle 720 s old",
             "name": "reference",
-            "status": "ok"
+            "status": "partial"
           },
           {
             "detail": "not scored: a leg is stale",

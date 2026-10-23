@@ -397,8 +397,9 @@ def stock_perp_verdict(edge: StockPerpEdge, state: str, live: bool, now: datetim
     nobook = live and not has_book
     ok = live and edge.net_bps >= config.STOCK_PERP_MIN_NET_BPS and edge.capacity_usd >= MIN_CAPACITY_USD
     age = max(0.0, (now - (asof or now)).total_seconds())
-    checks = [Check(name="reference", status="partial" if internal else "ok",
-                    detail="oracle internal: market closed" if internal else f"oracle live, {age:.0f} s old")]
+    checks = [Check(name="reference", status="ok" if live and not internal else "partial",
+                    detail="oracle internal: market closed" if internal
+                    else f"oracle live, {age:.0f} s old" if live else f"oracle {age:.0f} s old")]
     if live:
         net = edge.net_bps
         checks.append(Check(name="fees_carry", status="ok" if net >= config.STOCK_PERP_MIN_NET_BPS else "fail",
