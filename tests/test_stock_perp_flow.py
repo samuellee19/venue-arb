@@ -39,44 +39,47 @@ def window(ref_missing=()):
 
 def test_score_window_episode_oracle_only_and_stats():
     rows, eps, stats = window()
+    rows = [r for r in rows if r["mode"] == "executable"]
     nvda = [r for r in rows if r["symbol"] == "xyz:NVDA"]
     assert {r["ref_kind"] for r in nvda} == {"schwab"} and {r["direction"] for r in nvda} == {"short_perp_long_stock"}
     assert all(r["net_bps"] > 10 and r["capacity_usd"] >= 100 for r in nvda)
     oracle = [r for r in rows if r["symbol"] == "xyz:XYZ100"]
     assert len(oracle) == 4 and {r["ref_kind"] for r in oracle} == {"oracle"}
     assert all(r["capacity_contracts"] == 0 for r in oracle)
-    [ep] = eps
+    [ep] = [e for src, e in eps if src == "stock_perp"]
     assert (ep.kalshi_id, ep.pm_id, ep.direction, ep.snapshots) == ("xyz:NVDA", "NVDA", "short_perp_long_stock", 4)
     assert (ep.start, ep.end) == (TICKS[0], TICKS[-1]) and ep.annualized > 0
-    assert stats == {"symbols": 2, "snapshots": 8, "edge_rows": 8, "rows_with_capacity": 4, "episodes": 1,
-                     "oracle_only_rows": 4}
+    assert stats == {"symbols": 2, "snapshots": 8, "edge_rows": 16, "rows_with_capacity": 8, "episodes": 2,
+                     "oracle_only_rows": 4, "oracle_rows": 8, "internal_rows": 4}
 
 
 def test_missing_or_stale_ref_falls_back_to_oracle():
     rows, eps, stats = window(ref_missing={TICKS[1]})
-    assert [r["ref_kind"] for r in rows if r["symbol"] == "xyz:NVDA"] == ["schwab", "oracle", "schwab", "schwab"]
-    assert [(e.start, e.end, e.snapshots) for e in eps] == [(TICKS[2], TICKS[3], 2)]  # the oracle tick breaks the run
+    assert [r["ref_kind"] for r in rows if r["symbol"] == "xyz:NVDA" and r["mode"] == "executable"] == ["schwab", "oracle", "schwab", "schwab"]
+    assert [(e.start, e.end, e.snapshots) for src, e in eps if src == "stock_perp"] == [(TICKS[2], TICKS[3], 2)]  # the oracle tick breaks the run
     assert stats["oracle_only_rows"] == 5
     ctxs = [ctx("xyz:NVDA", TICKS[0], 100.2, 100.0)]
     stale = [ref("xyz:NVDA", TICKS[0], 99.99, 100.01, quote_time=TICKS[0] - timedelta(seconds=300))]
-    [row], _, _ = score_window(ctxs, book("xyz:NVDA", TICKS[0], 100.2, 100.21), stale, LABELS, start=START, end=END)
-    assert row["ref_kind"] == "oracle"
+    rows, _, _ = score_window(ctxs, book("xyz:NVDA", TICKS[0], 100.2, 100.21), stale, LABELS, start=START, end=END)
+    assert {r["ref_kind"] for r in rows} == {"oracle"}
 
 
 def test_daily_refs_and_unlabelled_symbols_are_ignored_or_oracle():
     daily = {**ref("xyz:NVDA", TICKS[0], 100.0, 100.0), "ref_kind": "schwab_daily"}
-    [row], _, _ = score_window([ctx("xyz:NEW", TICKS[0], 10.0, 10.0)], book("xyz:NEW", TICKS[0], 9.99, 10.01), [daily],
-                               LABELS, start=START, end=END)
-    assert row["symbol"] == "xyz:NEW" and row["ref_kind"] == "oracle"
-    [row], _, _ = score_window([ctx("xyz:NVDA", TICKS[0], 100.2, 100.0)], book("xyz:NVDA", TICKS[0], 100.2, 100.21),
-                               [daily], LABELS, start=START, end=END)
-    assert row["ref_kind"] == "oracle"
+    rows, _, _ = score_window([ctx("xyz:NEW", TICKS[0], 10.0, 10.0)], book("xyz:NEW", TICKS[0], 9.99, 10.01), [daily],
+                              LABELS, start=START, end=END)
+    assert {r["symbol"] for r in rows} == {"xyz:NEW"} and {r["ref_kind"] for r in rows} == {"oracle"}
+    rows, _, _ = score_window([ctx("xyz:NVDA", TICKS[0], 100.2, 100.0)], book("xyz:NVDA", TICKS[0], 100.2, 100.21),
+                              [daily], LABELS, start=START, end=END)
+    assert {r["ref_kind"] for r in rows} == {"oracle"}
 
 
 def test_opportunity_row_is_not_us_executable():
-    _, [ep], _ = window()
-    row = stock_perp_opportunity_row(ep)
+    _, eps, _ = window()
+    [ep] = [e for src, e in eps if src == "stock_perp"]
+    row = stock_perp_opportunity_row(ep, "stock_perp")
     assert (row["kalshi_id"], row["pm_id"], row["source"]) == ("xyz:NVDA", "NVDA", "stock_perp")
+    assert stock_perp_opportunity_row(ep, "stock_perp_oracle")["source"] == "stock_perp_oracle"
     assert row["us_executable"] is False and row["transfer_cost_usd"] == 0.0
     assert row["start_ts"] == ep.start and row["snapshots"] == 4
     assert set(row) == {"kalshi_id", "pm_id", "direction", "start_ts", "end_ts", "snapshots", "max_edge",
@@ -129,6 +132,33 @@ def test_a_tick_in_the_other_direction_ends_the_run():
     books = [r for t, (_, b, a) in zip(ticks, marks, strict=True) for r in book("xyz:NVDA", t, b, a)]
     refs = [ref("xyz:NVDA", t, 99.99, 100.01) for t in ticks]
     rows, eps, _ = score_window(ctxs, books, refs, LABELS, start=START, end=END)
+    rows = [r for r in rows if r["mode"] == "executable"]
     assert [r["direction"] for r in rows] == ["short_perp_long_stock", "long_perp_short_stock", "short_perp_long_stock"]
     assert all(r["net_bps"] > 10 and r["capacity_usd"] >= 100 for r in rows)  # each tick qualifies alone
-    assert eps == []  # A and C are not bridged across B
+    assert [e for src, e in eps if src == "stock_perp"] == []  # A and C are not bridged across B
+
+
+def test_two_modes_two_sources():
+    rows, eps, st = window()
+    assert {r["mode"] for r in rows} == {"executable", "oracle"} and len(rows) == 2 * st["snapshots"]
+    assert {src for src, _ in eps} <= {"stock_perp", "stock_perp_oracle"}
+    assert st["oracle_rows"] == st["snapshots"]
+    assert {(r["symbol"], r["session"]) for r in rows} == {("xyz:NVDA", "external"), ("xyz:XYZ100", "internal")}
+
+
+def test_internal_ticks_make_no_oracle_episode():
+    sat = datetime(2026, 10, 24, 14, 0, tzinfo=UTC)  # Saturday: the oracle follows the perp
+    ticks = [sat + timedelta(seconds=60 * i) for i in range(4)]
+    ctxs = [ctx("xyz:NVDA", t, 100.2, 100.0) for t in ticks]
+    books = [r for t in ticks for r in book("xyz:NVDA", t, 100.2, 100.21)]
+    rows, eps, st = score_window(ctxs, books, [], LABELS, start=sat - timedelta(hours=1), end=sat + timedelta(hours=1))
+    oracle = [r for r in rows if r["mode"] == "oracle"]
+    assert len(oracle) == 4 and {r["session"] for r in oracle} == {"internal"} and st["internal_rows"] == 4
+    assert all(r["net_bps"] > 10 for r in oracle)  # it would qualify; the session keeps it out
+    assert [src for src, _ in eps if src == "stock_perp_oracle"] == []
+
+
+def test_external_oracle_ticks_make_an_oracle_episode():
+    _, eps, _ = window()
+    assert [(src, e.direction, e.snapshots) for src, e in eps if src == "stock_perp_oracle"] == [
+        ("stock_perp_oracle", "short_perp_long_stock", 4)]

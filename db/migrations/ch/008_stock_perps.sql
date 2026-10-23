@@ -2,8 +2,8 @@
 -- 90 days; the candle table is the weekend tier's long history and has no TTL. Edges are kept without a TTL.
 -- books: venue order-book levels per perp symbol. ctx: per-tick perp context (mark, oracle, funding, open interest).
 -- refs: stock reference quotes; ts is the collector tick, quote_time the venue's own quote time.
--- candles: hourly stock bars (ReplacingMergeTree dedupes a re-loaded hour). edges: scored executable spreads per
--- direction; direction is 'short_perp_long_stock' or 'long_perp_short_stock'.
+-- candles: hourly stock bars (ReplacingMergeTree dedupes a re-loaded hour). edges: scored spreads per mode ('executable' or 'oracle') and
+-- direction, session = whether the venue oracle was 'external' or 'internal' at the tick; direction is 'short_perp_long_stock' or 'long_perp_short_stock'.
 CREATE TABLE IF NOT EXISTS venue_arb.stock_perp_books (
     ts DateTime64(3, 'UTC'),
     symbol LowCardinality(String),
@@ -66,6 +66,8 @@ CREATE TABLE IF NOT EXISTS venue_arb.stock_perp_edges (
     symbol LowCardinality(String),
     direction LowCardinality(String),
     ref_kind LowCardinality(String),
+    mode LowCardinality(String),
+    session LowCardinality(String),
     reference Float64,
     mark Float64,
     basis_bps Float64,
@@ -80,4 +82,4 @@ CREATE TABLE IF NOT EXISTS venue_arb.stock_perp_edges (
     fee_version String
 ) ENGINE = ReplacingMergeTree
 PARTITION BY toYYYYMM(ts)
-ORDER BY (symbol, direction, ts);
+ORDER BY (symbol, mode, direction, ts);

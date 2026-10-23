@@ -1,5 +1,5 @@
 """Stock-perp score flow: the collector's contexts, books and Schwab quotes -> executable basis edges (ClickHouse) and
-opportunity episodes (Postgres, source 'stock_perp'), via qa.
+opportunity episodes (Postgres, sources 'stock_perp' and 'stock_perp_oracle'), via qa.
 
     secrets uv run python -m venue_arb.flows.stock_perp_score
 """
@@ -15,12 +15,12 @@ from venue_arb import episodes
 from venue_arb.config import PIPELINE_PREFIX, SQL_CHECKS
 from venue_arb.flows.score import OPEN_START, upsert_opportunities
 from venue_arb.sources import hyperliquid
-from venue_arb.stock_perp_window import score_window, stock_perp_opportunity_row
+from venue_arb.stock_perp_window import SOURCES, score_window, stock_perp_opportunity_row
 
 PIPELINE = f"{PIPELINE_PREFIX}_stock_perp_score"
 EDGES = "venue_arb.stock_perp_edges"
 OPPS = "venue_arb.opportunities"
-CONTRACT = {"ts": "datetime", "symbol": "str", "direction": "str", "ref_kind": "str", "reference": "float",
+CONTRACT = {"ts": "datetime", "symbol": "str", "direction": "str", "ref_kind": "str", "mode": "str", "session": "str", "reference": "float",
             "mark": "float", "basis_bps": "float", "perp_fee_bps": "float", "perp_spread_bps": "float",
             "stock_spread_bps": "float", "funding_bps": "float", "borrow_bps": "float", "net_bps": "float",
             "capacity_contracts": "float", "capacity_usd": "float", "fee_version": "str"}
@@ -57,8 +57,8 @@ def stock_perp_score_flow(window_hours: int = WINDOW_HOURS, end: datetime | None
         end = end or datetime.now(UTC)
         start = end - timedelta(hours=window_hours)
         with db.pg() as conn:
-            (open_start,) = conn.execute(
-                OPEN_START, {"start": start, "gap": episodes.MAX_GAP_S, "source": "stock_perp"}).fetchone()
+            open_start = min((o for src in SOURCES.values() if (o := conn.execute(
+                OPEN_START, {"start": start, "gap": episodes.MAX_GAP_S, "source": src}).fetchone()[0])), default=None)
         # ponytail: read back to an open episode's start so it keeps its key, capped at READBACK_CAP before `end`
         if open_start and open_start < start:
             start = max(open_start, end - READBACK_CAP)
@@ -70,7 +70,7 @@ def stock_perp_score_flow(window_hours: int = WINDOW_HOURS, end: datetime | None
             by_symbol.setdefault(c["symbol"], []).append(c)
         del ctx_rows
         stats = {"symbols": 0, "snapshots": 0, "edge_rows": 0, "rows_with_capacity": 0, "episodes": 0,
-                 "oracle_only_rows": 0, "symbols_no_books": 0}
+                 "oracle_only_rows": 0, "oracle_rows": 0, "internal_rows": 0, "symbols_no_books": 0}
         stored_total = 0
         opps = []
         for symbol, ctxs in sorted(by_symbol.items()):
@@ -91,7 +91,7 @@ def stock_perp_score_flow(window_hours: int = WINDOW_HOURS, end: datetime | None
                                                              "hi": max(r["ts"] for r in rows)}).result_rows[0]
                 stored_total += stored
             del rows
-            opps += [stock_perp_opportunity_row(e) for e in eps]
+            opps += [stock_perp_opportunity_row(e, src) for src, e in eps]
         if stats["snapshots"]:  # contexts exist but not one symbol had books: a collector fault, fail the run
             results.append(checks.expect_rows(stats["edge_rows"], EDGES))
         results.append(checks.Result("expect_schema", True, 0, 0, f"{stats['edge_rows']} rows checked per symbol "
