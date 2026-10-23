@@ -75,6 +75,7 @@ def test_sample_stock_covers_three_states():
     assert all(p.costs for p in sp if p.live) and all(date.fromisoformat(w["friday"]) < date(2026, 10, 20) and date.fromisoformat(w["friday"]).weekday() == 4
                                                       for w in b.research.stock_perps.weekends["rows"])
     assert all(p.category == "stock_perps" and p.settles_at is None and p.legs[1].url is None for p in sp)
+    assert all(p.key == f"{p.legs[0].market_id}~{p.legs[1].market_id}~stock_perp" for p in sp)  # no direction in the key
     assert "stock_perps" in b.categories and b.kpis.stock_perps is not None
     assert b.research.stock_perps is not None and b.research.stock_perps.hourly.ts
     assert set(b.research.method) >= {"matching", "edge", "crypto", "not_shown", "stock_perps"}

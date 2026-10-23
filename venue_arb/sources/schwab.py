@@ -28,7 +28,9 @@ SERVICE = "venue-arb-perps"
 
 
 class SchwabAuthError(RuntimeError):
-    """HTTP 401 from the token or the data endpoint: the refresh token is expired or revoked."""
+    """HTTP 401 from a data endpoint, or any 4xx from the token endpoint: the refresh token is expired or revoked.
+    Schwab most likely answers an expired refresh token with 400 `refresh_token_authentication_error` (schwab-py;
+    unverified, as recalled)."""
 
 
 @dataclass(frozen=True)
@@ -52,8 +54,8 @@ def _ms(dt: datetime) -> int:
 
 def _checked(r, url: str):
     path = urlparse(url).path
-    if r.status_code == 401:
-        raise SchwabAuthError(f"{path} returned HTTP 401: Schwab login expired, re-run the login CLI")
+    if r.status_code == 401 or (url == TOKEN_URL and 400 <= r.status_code < 500):
+        raise SchwabAuthError(f"{path} returned HTTP {r.status_code}: Schwab login expired, re-run the login CLI")
     if r.status_code >= 400:
         raise RuntimeError(f"{path} failed: HTTP {r.status_code}")
     return r.json()

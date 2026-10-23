@@ -24,7 +24,7 @@ from venue_arb.sources.schwab import Quote
 from venue_arb.stock_perps import Reference, StockPerpEdge
 
 LIVE_MAX_AGE_S = 300  # a leg's latest snapshot older than this -> not live
-PAIR_KEY_SEP = "~"  # key = f"{k_id}~{pm_id}~{direction}"
+PAIR_KEY_SEP = "~"  # key = f"{k_id}~{pm_id}~{direction}"; a stock perp's: f"{perp}~{stock}~stock_perp" (stock_key)
 MIN_CAPACITY_USD = 100.0  # the episode rule (episodes.find's default): executable = >= 1¢ net and >= $100
 SPARK_HOURS = 24
 US = US_EXECUTABLE["kalshi"] and US_EXECUTABLE["polymarket"]
@@ -224,6 +224,11 @@ def pair_key(k_id: str, pm_id: str, direction: str) -> str:
     return PAIR_KEY_SEP.join((k_id, pm_id, direction))
 
 
+def stock_key(perp: str, stock: str) -> str:
+    """A stock-perp row's key: the direction is a field, not identity, so a basis sign flip keeps the row's history."""
+    return pair_key(perp, stock, "stock_perp")
+
+
 def market_url(venue: str, listing: dict) -> str:
     ev = listing["raw"]["event"]
     if venue == "kalshi":
@@ -385,14 +390,15 @@ def _rank(edge: Edge | None) -> float:
 
 def stock_perp_verdict(edge: StockPerpEdge, ref: Reference, live: bool, now: datetime, *,
                        has_book: bool = True) -> Verdict:
-    """The stock-perp analogue of verdict(): checks reference, fees_carry, fees_depth, jurisdiction. An oracle-only row
+    """The stock-perp analogue of verdict(): checks reference, fees_carry, fees_depth, jurisdiction. `now` is the
+    snapshot's tick time (the quote's age is judged against it, as reference() does). An oracle-only row
     is never executable (no size behind the price). `has_book` False (the perp book fetch failed) on a live Schwab row:
     "No asks on one side", as the pair tiers word a missing side."""
     nobook = live and ref.kind == "schwab" and not has_book
     schwab = ref.kind == "schwab"
     ok = live and schwab and edge.net_bps >= config.STOCK_PERP_MIN_NET_BPS and edge.capacity_usd >= MIN_CAPACITY_USD
     checks = [Check(name="reference", status="ok" if schwab else "partial",
-                    detail=f"Schwab quote {(now - ref.asof).total_seconds():.0f} s old" if schwab
+                    detail=f"Schwab quote {max(0.0, (now - ref.asof).total_seconds()):.0f} s old" if schwab
                     else "oracle only: stock market closed or no quote")]
     if live:
         net = edge.net_bps
@@ -423,16 +429,18 @@ def stock_perp_verdict(edge: StockPerpEdge, ref: Reference, live: bool, now: dat
 def stock_perp_rows(perps: list[tuple[PerpCtx, Label, SnapPerp, Quote | None]], sparks: dict,
                     now: datetime) -> list[Pair]:
     """One row per perp name. net_edge_cents is net_bps / 100 (bps of notional read as ¢ per $100), so the Explorer's
-    ¢ axis and sparkline share a unit with the pair rows. Past LIVE_MAX_AGE_S the row is unscored (Stale, nets None)."""
+    ¢ axis and sparkline share a unit with the pair rows. Past LIVE_MAX_AGE_S the row is unscored (Stale, nets None).
+    The reference is aged from the snapshot's tick `ts`, not `now` (the collector inserts every few ticks, so a stored
+    tick is minutes old), as stock_perp_window.score_window does."""
     rows = []
     for ctx, label, (ts, levels), quote in perps:
-        ref = stock_perps.reference(ctx, quote, label, now)
+        ref = stock_perps.reference(ctx, quote, label, ts)
         edge = stock_perps.score(ctx, levels, ref)
         live = now - ts <= timedelta(seconds=LIVE_MAX_AGE_S)
         sym, stock = ctx.symbol, label.ref_symbol or ctx.symbol
         short_perp = edge.direction == "short_perp_long_stock"
         perp_side, stock_side = ("short", "long") if short_perp else ("long", "short")
-        key = pair_key(sym, stock, edge.direction)
+        key = stock_key(sym, stock)
         net = round(edge.net_bps, 4) if live else None
         taker = HYPERLIQUID_TAKER["growth" if ctx.growth_mode else "standard"]
         hold = edge.hold_h
@@ -450,7 +458,7 @@ def stock_perp_rows(perps: list[tuple[PerpCtx, Label, SnapPerp, Quote | None]], 
             fees_cents=None if net is None else round((edge.perp_fee_bps + (edge.stock_spread_bps or 0)) / 100, 4),
             capacity_contracts=edge.capacity_contracts if live else 0.0,
             capacity_usd=edge.capacity_usd if live else 0.0, books=None,
-            verdict=stock_perp_verdict(edge, ref, live, now, has_book=bool(levels)), us_executable=False,
+            verdict=stock_perp_verdict(edge, ref, live, ts, has_book=bool(levels)), us_executable=False,
             fee_params={"perp": {"taker": taker, "growth_mode": ctx.growth_mode},
                         "stock": {"borrow_bps_yr": config.STOCK_PERP_BORROW_BPS_YR}},
             spark=sparks.get(key, [None] * SPARK_HOURS),

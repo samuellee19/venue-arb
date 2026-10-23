@@ -109,3 +109,12 @@ def test_post_json_retries_then_raises_without_leaking_body(monkeypatch):
 
     with pytest.raises(RuntimeError, match="HTTP 400"):
         hl.post_json({"type": "l2Book"}, post=bad)
+
+
+def test_load_labels_rejects_a_bad_row(tmp_path):
+    head = "perp,ref_kind,ref_symbol,exchange,currency,name\n"
+    for row, needle in (("xyz:FOO,schwab,,NASDAQ,USD,Foo\n", "xyz:FOO"), ("xyz:BAR,yahoo,BAR,NYSE,USD,Bar\n", "xyz:BAR")):
+        p = tmp_path / "labels.csv"
+        p.write_text(head + "xyz:OK,none,,KRX,KRW,Ok\n" + row)
+        with pytest.raises(ValueError, match=needle):
+            hl.load_labels(p)

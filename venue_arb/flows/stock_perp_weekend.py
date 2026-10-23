@@ -22,7 +22,7 @@ CH_FROM, CH_TO = "{lo:DateTime64(3, 'UTC')}", "{hi:DateTime64(3, 'UTC')}"
 CTX_SQL = f"SELECT symbol, ts, mark, oracle FROM venue_arb.stock_perp_ctx WHERE ts >= {CH_FROM} AND ts < {CH_TO}"
 CANDLES_SQL = ("SELECT symbol, hour, close FROM venue_arb.stock_perp_candles FINAL "
                "WHERE hour >= {lo:DateTime('UTC')} AND hour < {hi:DateTime('UTC')}")
-REFS_SQL = ("SELECT symbol, ref_kind, ts, bid, ask FROM venue_arb.stock_perp_refs "
+REFS_SQL = ("SELECT symbol, ref_kind, ts, bid, ask, quote_time FROM venue_arb.stock_perp_refs "
             f"WHERE ref_kind IN ('schwab', 'schwab_daily') AND ts >= {CH_FROM} AND ts < {CH_TO}")
 # finished: the open this label's reference kind can give is there; anything else is re-tried on the next run
 DONE_SQL = ("SELECT symbol, friday FROM venue_arb.stock_perp_weekends WHERE friday >= %(lo)s AND "
@@ -81,7 +81,9 @@ def stock_perp_weekend_flow(end: datetime | None = None, pipeline: str = PIPELIN
                 candles.setdefault(sym, []).append((_utc(hour) + timedelta(hours=1), close))
             live: dict[str, list] = {}
             daily: dict[str, list] = {}
-            for sym, kind, ts, bid, ask in ch.query(REFS_SQL, parameters=p).result_rows:
+            for sym, kind, ts, bid, ask, qt in ch.query(REFS_SQL, parameters=p).result_rows:
+                if kind == "schwab" and not weekends.fresh_quote(_utc(ts), _utc(qt)):
+                    continue  # a holiday's stale quote is not an open: the row stays unfinished and is retried
                 if (m := _mid(bid, ask)) is not None:
                     (live if kind == "schwab" else daily).setdefault(sym, []).append((_utc(ts), m))
             for sym in todo:

@@ -9,7 +9,9 @@ import logging
 import os
 import time
 import uuid
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from functools import partial
 
@@ -61,9 +63,8 @@ def _snapshot_refs(perps, labels, quotes, buf, stats, now) -> None:
             log.error("schwab login expired, stock leg stopped: re-run the login CLI")
         stats["schwab_auth"] += 1
         return
-    except Exception as e:  # noqa: BLE001
-        stats["refs"][0] += 1
-        stats["refs"][1] += 1
+    except Exception as e:  # noqa: BLE001 — a Schwab fault is the stock leg's warn (flush_results), not a refs error
+        stats["schwab_fetch_errors"] += 1
         log.warning("schwab quotes failed error=%s", type(e).__name__)
         return
     stats["refs"][0] += 1
@@ -80,7 +81,8 @@ def _snapshot_refs(perps, labels, quotes, buf, stats, now) -> None:
 def tick(perps: list[PerpCtx] | None, labels: dict, fetch_ctxs, fetch_book, quotes, buf: dict[str, list[dict]],
          stats: dict, now: datetime, workers: int = 8) -> list[PerpCtx]:
     """Snapshot contexts, books and stock quotes into buf. `perps` is the previous catalog, reused when the contexts
-    call fails; `quotes` is None when Schwab is not configured. stats[table] = [attempts, errors, empty];
+    call fails; `quotes` is None when Schwab is not configured. stats[table] = [attempts, errors, empty]; a failed
+    Schwab call counts in stats["schwab_fetch_errors"] instead (warn severity: the perp side does not depend on it);
     failures are logged and counted, never raised. Returns the catalog for the next tick."""
     stats["ctx"][0] += 1
     try:
@@ -125,6 +127,9 @@ def flush_results(checks, stats: dict, issued_at: datetime | None, now: datetime
                                      round(left.total_seconds() / 3600, 1), WARN_TOKEN_LEFT.total_seconds() / 3600,
                                      f"Schwab refresh token expires in {left}; re-run the login CLI",
                                      severity="warn", target=PIPELINE))
+    n = stats["schwab_fetch_errors"]
+    results.append(checks.Result("schwab_fetch_errors", n == 0, n, 0, f"{n} Schwab quote calls failed since the last flush",
+                                 severity="warn", target=PIPELINE))
     unlabelled = stats["unlabelled"]
     results.append(checks.Result("unlabelled_perps", not unlabelled, len(unlabelled), 0,
                                  f"listed but in neither label file: {', '.join(unlabelled) or 'none'}",
@@ -135,16 +140,20 @@ def flush_results(checks, stats: dict, issued_at: datetime | None, now: datetime
 def flush(buf, loader_for, record, run_sql, checks, stats, issued_at, now, cycles: list[float] = (),
           interval_s: float = SNAPSHOT_INTERVAL_S) -> list:
     """collect.flush once per table (`loader_for(key)` returns that table's loader), then the stock-leg checks, SQL
-    checks, record. A table nothing was tried for (e.g. Schwab unset) is skipped unless it holds retry rows."""
+    checks, record. A table nothing was tried for (e.g. Schwab unset) is skipped unless it holds retry rows. The refs
+    table's expect_rows is a warn: no quote back is a Schwab fault, and the perp side keeps its error-severity checks."""
     results = []
     for key, table in TABLES.items():
         if not stats[key][0] and not buf[key]:
             continue
-        results += collect.flush(buf, {key}, loader_for(key), lambda r: None, list, checks, stats, cycles=cycles,
-                                 interval_s=interval_s, table=table, contract=CONTRACTS[key], nullable=NULLABLE[key])
+        out = collect.flush(buf, {key}, loader_for(key), lambda r: None, list, checks, stats, cycles=cycles,
+                            interval_s=interval_s, table=table, contract=CONTRACTS[key], nullable=NULLABLE[key])
+        if key == "refs":
+            out = [replace(r, severity="warn") if r.check == "expect_rows" else r for r in out]
+        results += out
         cycles = ()
     results += flush_results(checks, stats, issued_at, now)
-    stats["schwab_auth"] = 0
+    stats["schwab_auth"] = stats["schwab_fetch_errors"] = 0
     results += run_sql()
     record(results)
     return results
@@ -159,6 +168,18 @@ def _schwab_from_env(env=os.environ):
     return client.quotes, datetime.fromisoformat(env[names[3]])
 
 
+def reload_labels(last: tuple[dict, set], load: Callable[[], dict], load_excluded: Callable[[], set]) -> tuple[dict, set]:
+    """(labels, excluded), re-read; on a failed read the last good pair (a bad edit must not stall the collector).
+    With nothing good yet (`last` labels empty) the error propagates: the cycle fails and is retried."""
+    try:
+        return load(), load_excluded()
+    except Exception as e:
+        if not last[0]:
+            raise
+        log.error("label reload failed error=%s, keeping the last good labels", type(e).__name__)
+        return last
+
+
 def run_forever(interval_s: int = SNAPSHOT_INTERVAL_S, flush_every: int = 5) -> None:
     import obs
     from qa import checks, db, sql, store
@@ -167,7 +188,7 @@ def run_forever(interval_s: int = SNAPSHOT_INTERVAL_S, flush_every: int = 5) -> 
     quotes, issued_at = _schwab_from_env()
     post = partial(hyperliquid.post_json, delay=0)  # no polite delay: the worker count bounds the rate
     buf, n, perps, labels, excluded, cycles = {k: [] for k in TABLES}, 0, None, {}, set(), []
-    stats = {**{k: [0, 0, 0] for k in TABLES}, "schwab_auth": 0, "unlabelled": []}
+    stats = {**{k: [0, 0, 0] for k in TABLES}, "schwab_auth": 0, "schwab_fetch_errors": 0, "unlabelled": []}
 
     def fetch_ctxs():
         return [c for c in hyperliquid.fetch_ctxs(post=post) if c.symbol not in excluded]
@@ -184,7 +205,7 @@ def run_forever(interval_s: int = SNAPSHOT_INTERVAL_S, flush_every: int = 5) -> 
         started = time.monotonic()
         try:
             if n % 10 == 0:
-                labels, excluded = hyperliquid.load_labels(), hyperliquid.load_excluded()
+                labels, excluded = reload_labels((labels, excluded), hyperliquid.load_labels, hyperliquid.load_excluded)
             n += 1
             perps = tick(perps, labels, fetch_ctxs, partial(hyperliquid.fetch_book, post=post), quotes, buf, stats,
                          datetime.now(UTC))

@@ -290,8 +290,8 @@ function walk() {
 // ---- chart ----
 async function loadChart() {
   const p = byKey(S.sel), base = p.key.slice(0, p.key.lastIndexOf("~") + 1);
-  // same two markets, other direction; a stock perp has one row a name in the bundle, so no sibling (ponytail: a
-  // direction flip starts a new key and a new history)
+  // same two markets, other direction; a stock perp has one row a name, keyed "perp~stock~stock_perp" whichever
+  // direction it holds, so no sibling and a direction flip keeps its history
   const sib = isStock(p) ? null : pairs().find(q => q.key !== p.key && q.key.startsWith(base));
   const keys = [p, sib].filter(Boolean).map(q => q.key), sel = S.sel, range = S.range;
   const res = await Promise.all(keys.map(k => fetch(`/api/pair/${enc(k)}/history?range=${range}`)

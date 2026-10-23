@@ -234,7 +234,7 @@ def stock_inputs():
         return [PerpLevel(side, i, round(mid + sign * (step / 2 + i * step), 2), size)
                 for side, sign in (("bid", -1), ("ask", 1)) for i in range(3)]
     snap = NOW - timedelta(seconds=40)
-    q = NOW - timedelta(seconds=14)
+    q = snap - timedelta(seconds=14)  # quotes are aged from the snapshot's tick
     nvda = PerpCtx("xyz:NVDA", 213.4, 213.3, 213.4, 0.00001, 0.0005, 1e6, 5e6, True, 10)
     tsla = PerpCtx("xyz:TSLA", 250.4, 250.4, 250.4, 0.00001, 0.0001, 1e6, 4e6, True, 10)
     skhx = PerpCtx("xyz:SKHX", 180000.0, 179800.0, 180000.0, 0.00001, 0.0002, 5e5, 1e6, False, 5)
@@ -246,7 +246,8 @@ def stock_inputs():
          Quote("TSLA", 250.3, 250.4, 400.0, 400.0, 250.35, q)),
         (skhx, Label("xyz:SKHX", "none", None, "KRX", "KRW", "SK hynix"), (snap, book(180000.0, 100.0, 20.0)), None),
         (msft, Label("xyz:MSFT", "schwab", "MSFT", "NASDAQ", "USD", "Microsoft"),  # collector behind: the stale row
-         (NOW - timedelta(minutes=12), book(420.0, 0.2, 100.0)), Quote("MSFT", 419.9, 420.1, 200.0, 200.0, 420.0, q))]
+         (NOW - timedelta(minutes=12), book(420.0, 0.2, 100.0)), Quote("MSFT", 419.9, 420.1, 200.0, 200.0, 420.0,
+                                                          NOW - timedelta(minutes=12, seconds=14)))]
 
 
 def stock_block():

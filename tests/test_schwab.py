@@ -57,6 +57,23 @@ def test_401_raises_auth_error(fx):
         c.access_token()
 
 
+def test_token_endpoint_4xx_is_an_auth_error_and_names_no_token(fx):
+    # an expired refresh token most likely comes back 400 refresh_token_authentication_error (schwab-py; unverified)
+    for status in (400, 403):
+        c = schwab.Client("id", "sec", "r-secret", post=lambda *a, s=status, **k: _resp({}, s))
+        with pytest.raises(schwab.SchwabAuthError) as e:
+            c.access_token()
+        assert "r-secret" not in str(e.value) and "/v1/oauth/token" in str(e.value) and str(status) in str(e.value)
+    c = schwab.Client("id", "sec", "r", post=lambda *a, **k: _resp({}, 500))
+    with pytest.raises(RuntimeError) as e:
+        c.access_token()
+    assert not isinstance(e.value, schwab.SchwabAuthError)
+    c = schwab.Client("id", "sec", "r", post=lambda *a, **k: _resp(fx["token"]), get=lambda url, **k: _resp({}, 400))
+    with pytest.raises(RuntimeError) as e:
+        c.quotes(["NVDA"])
+    assert not isinstance(e.value, schwab.SchwabAuthError)  # a data-endpoint 400 is a bad request, not a login
+
+
 def test_price_history_rows(fx):
     urls = []
     c = schwab.Client("id", "sec", "r", post=lambda *a, **k: _resp(fx["token"]),

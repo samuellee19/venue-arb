@@ -6,6 +6,7 @@ from datetime import date, datetime, time, timedelta
 from statistics import median
 from zoneinfo import ZoneInfo
 
+from venue_arb.config import REF_MAX_AGE_S
 from venue_arb.sources.hyperliquid import Label
 
 ET = ZoneInfo("America/New_York")
@@ -32,6 +33,12 @@ def sample(points: list[tuple[datetime, float]], at: datetime, tol: timedelta = 
         if at - tol <= ts <= at and (best is None or ts > best[0]):
             best = (ts, v)
     return None if best is None else best[1]
+
+
+def fresh_quote(ts: datetime, quote_time: datetime, max_age_s: int = REF_MAX_AGE_S) -> bool:
+    """A live Schwab ref counts only while its quote is at most max_age_s older than the tick that stored it (the
+    executable tier's rule): on a US holiday Monday the collector stores Friday's quote under a fresh ts."""
+    return ts - quote_time <= timedelta(seconds=max_age_s)
 
 
 def first_between(points: list[tuple[datetime, float]], lo: datetime, hi: datetime) -> float | None:

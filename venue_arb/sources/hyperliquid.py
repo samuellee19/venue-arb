@@ -122,11 +122,16 @@ def fetch_funding(symbol: str, start: datetime, post=post_json) -> list[dict]:
 
 
 def load_labels(path: Path = LABELS) -> dict[str, Label]:
+    """ValueError naming the row when ref_kind is not schwab/none or a schwab row has no ref_symbol."""
+    out = {}
     with path.open(newline="") as f:
-        return {
-            r["perp"]: Label(r["perp"], r["ref_kind"], r["ref_symbol"] or None, r["exchange"], r["currency"], r["name"])
-            for r in csv.DictReader(f)
-        }
+        for r in csv.DictReader(f):
+            if r["ref_kind"] not in ("schwab", "none") or (r["ref_kind"] == "schwab" and not r["ref_symbol"].strip()):
+                raise ValueError(f"{path}: bad label row {r['perp']!r} (ref_kind={r['ref_kind']!r}, "
+                                 f"ref_symbol={r['ref_symbol']!r})")
+            out[r["perp"]] = Label(r["perp"], r["ref_kind"], r["ref_symbol"] or None, r["exchange"], r["currency"],
+                                   r["name"])
+    return out
 
 
 def load_excluded(path: Path = EXCLUDED) -> set[str]:

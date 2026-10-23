@@ -1364,7 +1364,7 @@
       "fees_cents": 0.065,
       "funding_bps_h": 0.1,
       "hold_hours": 24,
-      "key": "xyz:NVDA~NVDA~short_perp_long_stock",
+      "key": "xyz:NVDA~NVDA~stock_perp",
       "kind": "stock_perp",
       "ladder": null,
       "legs": [
@@ -1381,7 +1381,7 @@
           "market_id": "NVDA",
           "settlement_source": null,
           "side": "long",
-          "snapshot_at": "2026-10-20T15:29:46Z",
+          "snapshot_at": "2026-10-20T15:29:06Z",
           "title": "NVIDIA",
           "url": null,
           "venue": "nasdaq"
@@ -1394,7 +1394,7 @@
       "net_edge_roi": 0.00123575,
       "next_funding_at": "2026-10-20T16:00:00Z",
       "reference": {
-        "asof": "2026-10-20T15:29:46+00:00",
+        "asof": "2026-10-20T15:29:06+00:00",
         "kind": "schwab",
         "symbol": "NVDA"
       },
@@ -1485,7 +1485,7 @@
       "fees_cents": 0.0579,
       "funding_bps_h": 0.1,
       "hold_hours": 24,
-      "key": "xyz:TSLA~TSLA~short_perp_long_stock",
+      "key": "xyz:TSLA~TSLA~stock_perp",
       "kind": "stock_perp",
       "ladder": null,
       "legs": [
@@ -1502,7 +1502,7 @@
           "market_id": "TSLA",
           "settlement_source": null,
           "side": "long",
-          "snapshot_at": "2026-10-20T15:29:46Z",
+          "snapshot_at": "2026-10-20T15:29:06Z",
           "title": "Tesla",
           "url": null,
           "venue": "nasdaq"
@@ -1515,7 +1515,7 @@
       "net_edge_roi": -0.00053912,
       "next_funding_at": "2026-10-20T16:00:00Z",
       "reference": {
-        "asof": "2026-10-20T15:29:46+00:00",
+        "asof": "2026-10-20T15:29:06+00:00",
         "kind": "schwab",
         "symbol": "TSLA"
       },
@@ -1606,7 +1606,7 @@
       "fees_cents": 0.18,
       "funding_bps_h": 0.1,
       "hold_hours": 24,
-      "key": "xyz:SKHX~xyz:SKHX~short_perp_long_stock",
+      "key": "xyz:SKHX~xyz:SKHX~stock_perp",
       "kind": "stock_perp",
       "ladder": null,
       "legs": [
@@ -1636,7 +1636,7 @@
       "net_edge_roi": -0.00100352,
       "next_funding_at": "2026-10-20T16:00:00Z",
       "reference": {
-        "asof": "2026-10-20T15:30:00+00:00",
+        "asof": "2026-10-20T15:29:20+00:00",
         "kind": "oracle",
         "symbol": "xyz:SKHX"
       },
@@ -1721,7 +1721,7 @@
       "fees_cents": null,
       "funding_bps_h": 0.1,
       "hold_hours": 24,
-      "key": "xyz:MSFT~MSFT~long_perp_short_stock",
+      "key": "xyz:MSFT~MSFT~stock_perp",
       "kind": "stock_perp",
       "ladder": null,
       "legs": [
@@ -1738,7 +1738,7 @@
           "market_id": "MSFT",
           "settlement_source": null,
           "side": "short",
-          "snapshot_at": "2026-10-20T15:29:46Z",
+          "snapshot_at": "2026-10-20T15:17:46Z",
           "title": "Microsoft",
           "url": null,
           "venue": "nasdaq"
@@ -1751,7 +1751,7 @@
       "net_edge_roi": null,
       "next_funding_at": "2026-10-20T16:00:00Z",
       "reference": {
-        "asof": "2026-10-20T15:29:46+00:00",
+        "asof": "2026-10-20T15:17:46+00:00",
         "kind": "schwab",
         "symbol": "MSFT"
       },

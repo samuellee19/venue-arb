@@ -25,7 +25,7 @@ from tests.test_bundle import (
     SP_SNAP,
     TITLES,
 )
-from venue_arb import config, publish
+from venue_arb import bundle, config, publish
 from venue_arb.bundle import LiveBundle
 from venue_arb.models import Level
 
@@ -428,10 +428,13 @@ def test_episodes_sql_and_scope_exclude_stock_perp():
 
 def test_spark_series_maps_stock_perp_rows_to_the_bundle_key():
     start = datetime(2026, 10, 19, 16, tzinfo=UTC)
-    rows = [("xyz:NVDA", "", "short_perp_long_stock", start, 0.008432)]
-    s = publish.spark_series(rows, start, refs={"xyz:NVDA": "NVDA"})["xyz:NVDA~NVDA~short_perp_long_stock"]
+    rows = [("xyz:NVDA", "", "stock_perp", start, 0.008432)]
+    s = publish.spark_series(rows, start, refs={"xyz:NVDA": "NVDA"})["xyz:NVDA~NVDA~stock_perp"]
     assert s[0] == pytest.approx(0.8432)  # SPARKS_SQL emits net_bps / 1e4; x100 -> net_bps / 100 (¢ of the net)
     assert "stock_perp_edges" in publish.SPARKS_SQL and "max(net_bps)" in publish.SPARKS_SQL
+    stock_leg = publish.SPARKS_SQL.split("stock_perp_edges")[1]
+    assert "ref_kind = 'schwab'" in stock_leg and "GROUP BY hts, symbol\n" in stock_leg  # one key a name, any side
+    assert "'stock_perp'" in publish.SPARKS_SQL
 
 
 def test_history_table_has_basis_columns_null_for_pairs():
@@ -443,7 +446,7 @@ def test_history_table_has_basis_columns_null_for_pairs():
     assert tab.schema.field("basis_bps").type == pa.float64() and tab.schema.field("net_bps").type == pa.float64()
     assert all(r["basis_bps"] is None and r["net_bps"] is None for r in rows[:-1])
     sp = rows[-1]
-    assert (sp["key"], sp["kind"], sp["direction"]) == ("xyz:NVDA~NVDA~short_perp_long_stock", "stock_perp",
+    assert (sp["key"], sp["kind"], sp["direction"]) == ("xyz:NVDA~NVDA~stock_perp", "stock_perp",
                                                         "short_perp_long_stock")
     assert (sp["basis_bps"], sp["net_bps"], sp["capacity_usd"]) == (101.2, 84.3, 63864.0)
     assert sp["net_edge_cents"] == pytest.approx(0.843) and sp["k_ask"] is None and sp["fees_cents"] is None
@@ -462,7 +465,7 @@ def test_write_history_hour_reads_stock_perp_edges_only_while_flag_on(tmp_path, 
     assert pq.read_table(publish.write_history_hour(ch, tmp_path, hour)).num_rows == 0
     monkeypatch.setattr(config, "DASHBOARD_SHOW_STOCK_PERPS", True)
     [row] = pq.read_table(publish.write_history_hour(ch, tmp_path, hour)).to_pylist()
-    assert row["key"] == "xyz:NVDA~NVDA~short_perp_long_stock" and row["net_bps"] == 84.3  # labels/stock_perps.csv
+    assert row["key"] == "xyz:NVDA~NVDA~stock_perp" and row["net_bps"] == 84.3  # labels/stock_perps.csv
 
 
 def _stock_inputs():
@@ -549,3 +552,32 @@ def test_stock_perp_inputs_assembles_the_block_inputs():
     from venue_arb.report import research
 
     research.stock_perp_block(out, NOW)  # the reader's output is the reducer's input
+
+
+def test_perp_readers_look_back_twice_the_live_age():  # a stalled name stays in the bundle and reads Stale
+    window = f"INTERVAL {2 * bundle.LIVE_MAX_AGE_S} SECOND"
+    assert all(window in sql for sql in (publish.PERP_CTX_SQL, publish.PERP_BOOKS_SQL, publish.PERP_QUOTES_SQL))
+
+
+def test_stock_research_sql_reads_executable_rows_and_counts_ticks():
+    assert "WHERE ref_kind = 'schwab'" in publish.SP_HOURLY_SQL
+    assert "maxOrNullIf(net_bps, ref_kind = 'schwab')" in publish.SP_BY_NAME_SQL
+    assert "uniqExactIf(toStartOfHour(ts), abs(basis_bps) >= 10)" in publish.SP_BY_NAME_SQL  # hours_ge_10: every row
+    assert "count()" in publish.SP_COUNTS_SQL and "uniqExact((symbol, ts))" not in publish.SP_COUNTS_SQL
+
+
+def test_stock_perp_inputs_drops_oracle_only_names_from_by_name():
+    rows = {publish.SP_COUNTS_SQL: [(2, 3, NOW)], publish.SP_SHARE_SQL: [(0.4, 2)], publish.SP_HOURLY_SQL: [],
+            publish.SP_BY_NAME_SQL: [("xyz:NVDA", 25.0, 2), ("xyz:SKHX", None, 5)], publish.SP_EDGES_SQL: []}
+    ch = SimpleNamespace(query=lambda sql: SimpleNamespace(result_rows=rows[sql]))
+
+    class Cur(SimpleNamespace):
+        def fetchone(self):
+            return (0,)
+
+        def fetchall(self):
+            return []
+
+    conn = SimpleNamespace(execute=lambda sql: Cur(description=[]))
+    out = publish.stock_perp_inputs(ch, conn, {})
+    assert [r["symbol"] for r in out["by_name"]] == ["xyz:NVDA"]

@@ -87,12 +87,13 @@ SELECT k, p, d, toStartOfHour(ts) AS h, avg(e) FROM (
   SELECT ts, k_id, pm_id, direction, best_edge FROM venue_arb.ladder_edges FINAL
   WHERE ts >= {start:DateTime64(3, 'UTC')} AND k_id NOT LIKE 'ZZTEST-%'
   UNION ALL
-  SELECT toStartOfHour(ts) AS hts, symbol, '', direction, max(net_bps) / 1e4 FROM venue_arb.stock_perp_edges FINAL
-  WHERE ts >= {start:DateTime64(3, 'UTC')} GROUP BY hts, symbol, direction
+  SELECT toStartOfHour(ts) AS hts, symbol, '', 'stock_perp', max(net_bps) / 1e4 FROM venue_arb.stock_perp_edges FINAL
+  WHERE ts >= {start:DateTime64(3, 'UTC')} AND ref_kind = 'schwab' GROUP BY hts, symbol
 ) GROUP BY k, p, d, h
 """
-# the stock-perp tier: rows with p = '' take their reference symbol from labels (spark_series refs); the hourly max of
-# net_bps / 1e4 reads, x100 like the pair rows, as net_bps / 100
+# the stock-perp tier: rows with p = '' take their reference symbol from labels (spark_series refs) and d = 'stock_perp'
+# (bundle.stock_key: one row a name, either direction); the hourly max of Schwab-referenced net_bps / 1e4 (an
+# oracle-only row carries no executable reading) reads, x100 like the pair rows, as net_bps / 100
 # both sources; pair-source rows are scoped in Python (scope_episodes) with note.SCOPE_SQL's rows, as the note does
 EPISODES_SQL = """
 SELECT source, kalshi_id, pm_id, direction, start_ts, end_ts, max_edge, median_capacity_usd, transfer_cost_usd
@@ -132,13 +133,17 @@ WHERE ts >= {lo:DateTime64(3, 'UTC')} AND ts < {hi:DateTime64(3, 'UTC')}
 """
 # the Research tab's stock-perp block (stock_perp_inputs): aggregates in ClickHouse; EDGES is the trailing
 # STOCK_PERP_SENSITIVITY_DAYS in one query (8 columns per scored tick, kept as tuples), re-run through episodes.find
+# the headline, the by-name max and the sparks read Schwab-referenced rows only: an oracle-only row never carries an
+# executable reading (spec §5); hours_ge_10 (|basis|) counts every row
 SP_HOURLY_SQL = ("SELECT toStartOfHour(ts) AS h, max(net_bps) FROM venue_arb.stock_perp_edges FINAL "
-                 "GROUP BY h ORDER BY h")
-SP_COUNTS_SQL = "SELECT uniqExact(symbol), uniqExact((symbol, ts)), min(ts) FROM venue_arb.stock_perp_edges FINAL"
+                 "WHERE ref_kind = 'schwab' GROUP BY h ORDER BY h")
+# after FINAL one row per (symbol, ts) (direction is a function of the tick), so count() is the distinct snapshots
+SP_COUNTS_SQL = "SELECT uniqExact(symbol), count(), min(ts) FROM venue_arb.stock_perp_edges FINAL"
 # Schwab-referenced rows are the session hours (4 AM to 8 PM ET); per hour the share of rows over 10 bps, then averaged
 SP_SHARE_SQL = ("SELECT avg(s), count() FROM (SELECT toStartOfHour(ts) AS h, avg(abs(basis_bps) >= 10) AS s "
                 "FROM venue_arb.stock_perp_edges FINAL WHERE ref_kind = 'schwab' GROUP BY h)")
-SP_BY_NAME_SQL = ("SELECT symbol, max(net_bps), uniqExactIf(toStartOfHour(ts), abs(basis_bps) >= 10) "
+SP_BY_NAME_SQL = ("SELECT symbol, maxOrNullIf(net_bps, ref_kind = 'schwab'), "
+                  "uniqExactIf(toStartOfHour(ts), abs(basis_bps) >= 10) "
                   "FROM venue_arb.stock_perp_edges FINAL GROUP BY symbol")
 SP_EDGES_SQL = ("SELECT ts, symbol, direction, net_bps, funding_bps, borrow_bps, capacity_contracts, capacity_usd "
                 f"FROM venue_arb.stock_perp_edges FINAL WHERE ts >= now() - INTERVAL {config.STOCK_PERP_SENSITIVITY_DAYS} DAY "
@@ -146,20 +151,22 @@ SP_EDGES_SQL = ("SELECT ts, symbol, direction, net_bps, funding_bps, borrow_bps,
 SP_EPISODES_ALL_SQL = "SELECT count(*) FROM venue_arb.opportunities WHERE source = 'stock_perp'"
 SP_WEEKENDS_SQL = ("SELECT symbol, friday, p_fri, p_sat, p_sun, p_open_pre, p_open_reg, ref_kind "
                    "FROM venue_arb.stock_perp_weekends ORDER BY friday")
-# the perps() reader: the last LIVE_MAX_AGE_S of contexts and books (the newest tick per symbol is kept in Python,
-# its books are those at the same ts), and each symbol's latest Schwab quote (reference() checks its age)
+# the perps() reader: the last PERP_LOOKBACK_S of contexts and books (the newest tick per symbol is kept in Python,
+# its books are those at the same ts), and each symbol's latest Schwab quote (reference() checks its age against the
+# tick). Twice LIVE_MAX_AGE_S, so a stalled name stays in the bundle and its row reads Stale rather than vanishing.
+PERP_LOOKBACK_S = 2 * bundle.LIVE_MAX_AGE_S
 PERP_CTX_SQL = f"""
 SELECT ts, symbol, mark, oracle, mid, funding_h, premium, open_interest, day_volume_usd, growth_mode
-FROM venue_arb.stock_perp_ctx WHERE ts > now64(3) - INTERVAL {bundle.LIVE_MAX_AGE_S} SECOND ORDER BY symbol, ts
+FROM venue_arb.stock_perp_ctx WHERE ts > now64(3) - INTERVAL {PERP_LOOKBACK_S} SECOND ORDER BY symbol, ts
 """
 PERP_BOOKS_SQL = f"""
 SELECT ts, symbol, toString(side), level, price, size FROM venue_arb.stock_perp_books
-WHERE ts > now64(3) - INTERVAL {bundle.LIVE_MAX_AGE_S} SECOND
+WHERE ts > now64(3) - INTERVAL {PERP_LOOKBACK_S} SECOND
 """
 PERP_QUOTES_SQL = f"""
 SELECT symbol, argMax(ref_symbol, ts), argMax(bid, ts), argMax(ask, ts), argMax(bid_size, ts), argMax(ask_size, ts),
        argMax(last, ts), argMax(quote_time, ts)
-FROM venue_arb.stock_perp_refs WHERE ref_kind = 'schwab' AND ts > now64(3) - INTERVAL {bundle.LIVE_MAX_AGE_S} SECOND
+FROM venue_arb.stock_perp_refs WHERE ref_kind = 'schwab' AND ts > now64(3) - INTERVAL {PERP_LOOKBACK_S} SECOND
 GROUP BY symbol
 """
 EDGES_HOUR_SQL = """
@@ -250,7 +257,8 @@ def history_table(edge_rows, ladder_rows, books, sides: dict | None = None, stoc
     pair's yes mapping in `sides` {(kalshi_id, pm_id): "yes"|"no"} to know the Polymarket side, else asks are null.
     Asks and sizes are null while config.DASHBOARD_SHOW_BOOKS is False; fees_cents (derived) is kept.
     `stock_rows` = STOCK_PERP_HOUR_SQL rows (ts, symbol, direction, basis_bps, net_bps, capacity_usd), keyed with
-    `refs` {perp: reference symbol} as the bundle rows are; net_edge_cents is net_bps / 100, asks and fees null."""
+    `refs` {perp: reference symbol} as the bundle rows are (bundle.stock_key; `direction` keeps the side);
+    net_edge_cents is net_bps / 100, asks and fees null."""
     sides, flip = sides or {}, {"yes": "no", "no": "yes"}
     show = config.DASHBOARD_SHOW_BOOKS  # read at call time (tests monkeypatch it); fees stay, quotes go
     rows = []
@@ -279,7 +287,7 @@ def history_table(edge_rows, ladder_rows, books, sides: dict | None = None, stoc
             cols[c].append(v)
     refs = refs or {}
     for ts, sym, d, basis, net, cap in stock_rows:
-        for c, v in (("ts", _utc(ts)), ("key", pair_key(sym, refs.get(sym, sym), d)), ("kind", "stock_perp"),
+        for c, v in (("ts", _utc(ts)), ("key", bundle.stock_key(sym, refs.get(sym, sym))), ("kind", "stock_perp"),
                      ("direction", d), ("net_edge_cents", None if net is None else net / 100), ("capacity_usd", cap),
                      ("k_ask", None), ("k_size", None), ("pm_ask", None), ("pm_size", None), ("fees_cents", None),
                      ("basis_bps", basis), ("net_bps", net)):
@@ -360,7 +368,8 @@ def stock_refs() -> dict[str, str]:
 
 def spark_series(rows, start: datetime, refs: dict | None = None) -> dict[str, list[float | None]]:
     """SPARKS_SQL rows (k, p, direction, hour, avg best_edge) -> {key: SPARK_HOURS hourly ¢ points from `start`}.
-    A stock-perp row has p = '' and takes its reference symbol from `refs` {perp: reference symbol}."""
+    A stock-perp row has p = '' and d = 'stock_perp', and takes its reference symbol from `refs` {perp: reference
+    symbol}, so its key is bundle.stock_key's."""
     out: dict[str, list[float | None]] = {}
     for k, p, d, h, avg in rows:
         p = p or (refs or {}).get(k, k)
@@ -547,7 +556,8 @@ def stock_perp_inputs(ch, conn, labels: dict) -> dict:
     share, share_hours = ch.query(SP_SHARE_SQL).result_rows[0]
     by_name = [{"symbol": sym, "name": (lb := hyperliquid.label_or_none(sym, labels)).name, "max_net_bps": mx,
                 "hours_ge_10": int(hours), "ref_kind": lb.ref_kind}
-               for sym, mx, hours in ch.query(SP_BY_NAME_SQL).result_rows]
+               for sym, mx, hours in ch.query(SP_BY_NAME_SQL).result_rows
+               if mx is not None]  # an oracle-only name has no executable max to rank
     return {"hourly": [(_utc(h), v) for h, v in ch.query(SP_HOURLY_SQL).result_rows], "names": int(names),
             "snapshots": int(snapshots), "window_start": _utc(first) if snapshots else None,
             "episodes": conn.execute(SP_EPISODES_ALL_SQL).fetchone()[0],
@@ -628,7 +638,7 @@ def default_readers(db) -> dict:
             return stock_perp_inputs(db.ch(), conn, hyperliquid.load_labels())
 
     def perps():
-        """Per perp: the newest context within LIVE_MAX_AGE_S, its books at that ts, the latest Schwab quote."""
+        """Per perp: the newest context within PERP_LOOKBACK_S, its books at that ts, the latest Schwab quote."""
         ch = db.ch()
         ctxs = {}
         for ts, sym, mark, oracle, mid, fund, prem, oi, vol, growth in ch.query(PERP_CTX_SQL).result_rows:

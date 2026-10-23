@@ -250,7 +250,8 @@ SP_SNAP = (datetime.fromisoformat(SPF["book_ts"]), SP_BOOK)
 def test_stock_perp_row_executable():  # NVDA mark 215 vs Schwab 212.84, growth fee, 300 shares displayed
     [p] = stock_perp_rows([(CTX215, LABEL_NVDA, SP_SNAP, QUOTE)], {}, SP_NOW)
     assert p.kind == "stock_perp" and p.category == "stock_perps" and p.settles_at is None and p.books is None
-    assert p.key == "xyz:NVDA~NVDA~short_perp_long_stock" and p.title == "NVIDIA (NASDAQ)" and p.live
+    assert p.key == "xyz:NVDA~NVDA~stock_perp" and p.title == "NVIDIA (NASDAQ)" and p.live
+    assert p.direction == "short_perp_long_stock"
     assert p.trade == "short xyz:NVDA / long NVDA" and p.reference["kind"] == "schwab" and p.hold_hours == 24
     assert p.reference == {"kind": "schwab", "symbol": "NVDA", "asof": QUOTE.quote_time.isoformat()}
     assert re.fullmatch(r"Executable edge · \+\d+ bps · \$[\d,]+ at top of book", p.verdict.label)
@@ -297,7 +298,7 @@ def test_stock_perp_row_borrow_x10_on_long_perp():  # mark below the stock: long
 
 def test_stock_perp_row_oracle_only_never_executable():
     for label, quote in ((replace(LABEL_NVDA, ref_kind="none"), QUOTE),
-                         (LABEL_NVDA, replace(QUOTE, quote_time=SP_NOW - timedelta(seconds=121)))):
+                         (LABEL_NVDA, replace(QUOTE, quote_time=SP_SNAP[0] - timedelta(seconds=121)))):
         [p] = stock_perp_rows([(CTX215, label, SP_SNAP, quote)], {}, SP_NOW)
         assert p.verdict.label == "Reference closed · oracle only" and p.capacity_usd == 0 and p.reference["kind"] == "oracle"
         assert p.verdict.checks[0].status == "partial"
@@ -320,8 +321,8 @@ def test_stock_perp_row_stale():
 
 def test_stock_perp_row_label_none_and_spark():
     lab = Label("xyz:FOO", "none", None, "", "USD", "xyz:FOO")
-    [p] = stock_perp_rows([(replace(CTX215, symbol="xyz:FOO"), lab, SP_SNAP, None)], {"xyz:FOO~xyz:FOO~short_perp_long_stock": [1.0] * 24}, SP_NOW)
-    assert p.key == "xyz:FOO~xyz:FOO~short_perp_long_stock" and p.title == "xyz:FOO" and p.spark == [1.0] * 24
+    [p] = stock_perp_rows([(replace(CTX215, symbol="xyz:FOO"), lab, SP_SNAP, None)], {"xyz:FOO~xyz:FOO~stock_perp": [1.0] * 24}, SP_NOW)
+    assert p.key == "xyz:FOO~xyz:FOO~stock_perp" and p.title == "xyz:FOO" and p.spark == [1.0] * 24
     assert p.trade == "short xyz:FOO / long xyz:FOO"
 
 
@@ -349,3 +350,20 @@ def test_stock_perp_row_live_schwab_without_a_book():
     assert p.live and p.verdict.label == "No asks on one side" and p.capacity_usd == 0
     assert p.verdict.checks[2].name == "fees_depth" and p.verdict.checks[2].status == "fail"
     assert p.verdict.checks[2].detail == "not walked: no perp book"
+
+
+def test_stock_perp_reference_is_aged_from_the_snapshot_tick():
+    # the collector inserts every few ticks: a tick 250 s behind the publisher, its quote 30 s older than the tick
+    tick = SP_NOW - timedelta(seconds=250)
+    quote = replace(QUOTE, quote_time=tick - timedelta(seconds=30))
+    [p] = stock_perp_rows([(CTX215, LABEL_NVDA, (tick, SP_BOOK), quote)], {}, SP_NOW)
+    assert p.live and p.reference["kind"] == "schwab" and p.verdict.checks[0].detail == "Schwab quote 30 s old"
+    [old] = stock_perp_rows([(CTX215, LABEL_NVDA, (SP_NOW - timedelta(seconds=400), SP_BOOK), quote)], {}, SP_NOW)
+    assert old.verdict.label == "Stale · a leg has no snapshot in 5 min" and not old.live
+
+
+def test_stock_perp_key_ignores_direction():  # a basis sign flip keeps the row's identity, sparks and history
+    long_p = stock_perp_rows([(replace(CTX215, mark=210.0), LABEL_NVDA, SP_SNAP, QUOTE)], {}, SP_NOW)[0]
+    [short_p] = stock_perp_rows([(CTX215, LABEL_NVDA, SP_SNAP, QUOTE)], {"xyz:NVDA~NVDA~stock_perp": [2.0] * 24}, SP_NOW)
+    assert long_p.direction != short_p.direction and long_p.key == short_p.key == "xyz:NVDA~NVDA~stock_perp"
+    assert short_p.spark == [2.0] * 24

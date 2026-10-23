@@ -2,6 +2,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
+import pytest
+
 from venue_arb import collect_perps as cp
 from venue_arb.sources.hyperliquid import Label, PerpCtx, PerpLevel
 from venue_arb.sources.schwab import Quote, SchwabAuthError
@@ -40,7 +42,7 @@ QUOTES = {s: Quote(s, 99.8, 100.2, 100.0, 200.0, None, NOW - timedelta(seconds=3
 
 def fresh():
     return {"books": [], "ctx": [], "refs": []}, {"books": [0, 0, 0], "ctx": [0, 0, 0], "refs": [0, 0, 0],
-                                                  "schwab_auth": 0, "unlabelled": []}
+                                                  "schwab_auth": 0, "schwab_fetch_errors": 0, "unlabelled": []}
 
 
 def test_tick_fills_three_buffers_and_quotes_once():
@@ -96,9 +98,10 @@ def test_quote_failure_counted_and_missing_quote_is_empty():
         raise TimeoutError
 
     cp.tick(None, LABELS, lambda: CTXS, lambda s: (NOW, BOOK), down, buf, stats, NOW)
-    assert stats["refs"] == [1, 1, 0] and stats["schwab_auth"] == 0
+    # a Schwab fault is the stock leg's warn, not the refs table's error-severity fetch_errors
+    assert stats["refs"] == [0, 0, 0] and stats["schwab_auth"] == 0 and stats["schwab_fetch_errors"] == 1
     cp.tick(None, LABELS, lambda: CTXS, lambda s: (NOW, BOOK), lambda syms: {"NVDA": QUOTES["NVDA"]}, buf, stats, NOW)
-    assert stats["refs"] == [2, 1, 1] and [r["symbol"] for r in buf["refs"]] == ["xyz:NVDA"]
+    assert stats["refs"] == [1, 0, 1] and [r["symbol"] for r in buf["refs"]] == ["xyz:NVDA"]
 
 
 def test_ctx_failure_reuses_previous_catalog():
@@ -121,7 +124,7 @@ def test_no_schwab_client_skips_quotes():
 
 def test_flush_results_warn_day_before_expiry():
     issued = NOW - timedelta(days=6, hours=1)
-    res = {r.check: r for r in cp.flush_results(FAKE_CHECKS, {"schwab_auth": 0, "unlabelled": ["xyz:NEWCO"]}, issued, NOW)}
+    res = {r.check: r for r in cp.flush_results(FAKE_CHECKS, {"schwab_auth": 0, "schwab_fetch_errors": 0, "unlabelled": ["xyz:NEWCO"]}, issued, NOW)}
     assert not res["schwab_token_expires"].passed and res["schwab_token_expires"].severity == "warn"
     assert not res["unlabelled_perps"].passed and "xyz:NEWCO" in res["unlabelled_perps"].detail
     assert res["schwab_auth"].passed
@@ -129,14 +132,14 @@ def test_flush_results_warn_day_before_expiry():
 
 def test_flush_results_healthy_and_auth_failed():
     issued = NOW - timedelta(days=1)
-    res = {r.check: r for r in cp.flush_results(FAKE_CHECKS, {"schwab_auth": 0, "unlabelled": []}, issued, NOW)}
+    res = {r.check: r for r in cp.flush_results(FAKE_CHECKS, {"schwab_auth": 0, "schwab_fetch_errors": 0, "unlabelled": []}, issued, NOW)}
     assert all(r.passed for r in res.values())
-    res = {r.check: r for r in cp.flush_results(FAKE_CHECKS, {"schwab_auth": 2, "unlabelled": []}, issued, NOW)}
+    res = {r.check: r for r in cp.flush_results(FAKE_CHECKS, {"schwab_auth": 2, "schwab_fetch_errors": 0, "unlabelled": []}, issued, NOW)}
     assert not res["schwab_auth"].passed and res["schwab_auth"].severity == "warn"
 
 
 def test_flush_results_without_token_warns_and_skips_expiry():
-    res = {r.check: r for r in cp.flush_results(FAKE_CHECKS, {"schwab_auth": 0, "unlabelled": []}, None, NOW)}
+    res = {r.check: r for r in cp.flush_results(FAKE_CHECKS, {"schwab_auth": 0, "schwab_fetch_errors": 0, "unlabelled": []}, None, NOW)}
     assert not res["schwab_auth"].passed and res["schwab_auth"].detail == "SCHWAB_REFRESH_TOKEN not set"
     assert "schwab_token_expires" not in res
 
@@ -159,3 +162,38 @@ def test_flush_skips_refs_when_nothing_was_tried():
     out = cp.flush(buf, lambda key: (lambda rows: None), lambda r: None, list, FAKE_CHECKS, stats, None, NOW)
     assert not [r for r in out if r.target.endswith(":refs")]
     assert next(r for r in out if r.check == "schwab_auth").detail == "SCHWAB_REFRESH_TOKEN not set"
+
+
+def test_schwab_fetch_failure_is_a_warn_and_refs_raise_no_error():
+    buf, stats = fresh()
+
+    def down(syms):
+        raise TimeoutError
+
+    for _ in range(3):
+        cp.tick(None, LABELS, lambda: CTXS, lambda s: (NOW, BOOK), down, buf, stats, NOW)
+    out = cp.flush(buf, lambda key: (lambda rows: None), lambda r: None, list, FAKE_CHECKS, stats,
+                   NOW - timedelta(days=1), NOW)
+    [warn] = [r for r in out if r.check == "schwab_fetch_errors"]
+    assert not warn.passed and warn.severity == "warn" and warn.observed == 3
+    assert not [r for r in out if not r.passed and r.severity == "error"]  # the perp side is healthy
+    assert stats["schwab_fetch_errors"] == 0
+    cp.tick(None, LABELS, lambda: CTXS, lambda s: (NOW, BOOK), lambda syms: {}, buf, stats, NOW)  # quotes all missing
+    out = cp.flush(buf, lambda key: (lambda rows: None), lambda r: None, list, FAKE_CHECKS, stats,
+                   NOW - timedelta(days=1), NOW)
+    [rows] = [r for r in out if r.check == "expect_rows" and r.target.endswith(":refs")]
+    assert not rows.passed and rows.severity == "warn"
+
+
+def test_label_reload_keeps_the_last_good_labels(caplog):
+    good = (LABELS, {"xyz:SPX"})
+
+    def bad():
+        raise ValueError("bad label row 'xyz:FOO'")
+
+    assert cp.reload_labels(good, lambda: {"x": 1}, lambda: set()) == ({"x": 1}, set())
+    with caplog.at_level("ERROR"):
+        assert cp.reload_labels(good, bad, lambda: set()) == good
+    assert "ValueError" in caplog.text
+    with pytest.raises(ValueError):
+        cp.reload_labels(({}, set()), bad, lambda: set())  # nothing good yet: the cycle fails and retries
