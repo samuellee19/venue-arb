@@ -30,7 +30,6 @@ from venue_arb.fees import transfer_cost
 from venue_arb.matching.crypto_rule import Strike
 from venue_arb.models import Level
 from venue_arb.sources.hyperliquid import Label, PerpCtx, PerpLevel
-from venue_arb.sources.schwab import Quote
 
 FIX = Path(__file__).parent / "fixtures" / "bundle"
 EXF = json.loads((FIX / "exact_pair.json").read_text())
@@ -242,92 +241,83 @@ SPF = json.loads((FIX / "stock_perp.json").read_text())
 SP_NOW = datetime.fromisoformat(SPF["now"])
 CTX215 = PerpCtx(**SPF["ctx"])
 LABEL_NVDA = Label(**SPF["label"])
-QUOTE = Quote(**{**SPF["quote"], "quote_time": datetime.fromisoformat(SPF["quote"]["quote_time"])})
 SP_BOOK = [PerpLevel(**x) for x in SPF["book"]]
 SP_SNAP = (datetime.fromisoformat(SPF["book_ts"]), SP_BOOK)
 
 
-def test_stock_perp_row_executable():  # NVDA mark 215 vs Schwab 212.84, growth fee, 300 shares displayed
-    [p] = stock_perp_rows([(CTX215, LABEL_NVDA, SP_SNAP, QUOTE)], {}, SP_NOW)
+CTXB = replace(CTX215, oracle=214.0)  # mark 215 vs oracle 214: a 47 bps basis, short perp
+SAT = datetime.fromisoformat("2026-10-24T15:00:00+00:00")  # Saturday: the oracle is internal
+
+
+def test_stock_perp_row_oracle_basis():
+    [p] = stock_perp_rows([(CTXB, LABEL_NVDA, SP_SNAP)], {}, SP_NOW)
     assert p.kind == "stock_perp" and p.category == "stock_perps" and p.settles_at is None and p.books is None
     assert p.key == "xyz:NVDA~NVDA~stock_perp" and p.title == "NVIDIA (NASDAQ)" and p.live
-    assert p.direction == "short_perp_long_stock"
-    assert p.trade == "short xyz:NVDA / long NVDA" and p.reference["kind"] == "schwab" and p.hold_hours == 24
-    assert p.reference == {"kind": "schwab", "symbol": "NVDA", "asof": QUOTE.quote_time.isoformat()}
-    assert re.fullmatch(r"Executable edge · \+\d+ bps · \$[\d,]+ at top of book", p.verdict.label)
+    assert p.direction == "short_perp_long_stock" and p.hold_hours == 24
+    assert p.trade == "short xyz:NVDA / long NVDA"
+    assert p.reference == {"kind": "oracle", "state": "external", "asof": SP_SNAP[0].isoformat()}
+    assert re.fullmatch(r"Oracle basis · \+\d+ bps before stock costs · \$[\d,]+ perp depth", p.verdict.label)
     assert [c.name for c in p.verdict.checks] == ["reference", "fees_carry", "fees_depth", "jurisdiction"]
-    assert p.verdict.checks[0].detail == "Schwab quote 14 s old"
+    assert p.verdict.checks[0].detail == "oracle live, 30 s old" and p.verdict.checks[0].status == "ok"
+    assert "after 2× taker, perp spread and 24 h funding" in p.verdict.checks[1].detail
     assert p.net_edge_bps == pytest.approx(p.net_bps) and p.net_edge_cents == pytest.approx(p.net_bps / 100)
-    assert p.net_edge_roi == pytest.approx(p.net_bps / 1e4) and p.capacity_usd == pytest.approx(300 * 212.88, rel=1e-3)  # the stock leg's 300 shares cap the walk
-    assert p.us_executable is False and p.legs[0].url == "https://app.hyperliquid.xyz/trade/xyz:NVDA"
-    assert p.legs[1].url is None and (p.legs[0].side, p.legs[1].side) == ("short", "long")
-    assert (p.legs[0].venue, p.legs[1].venue, p.legs[1].market_id) == ("hyperliquid", "nasdaq", "NVDA")
+    assert p.capacity_usd > 100 and p.us_executable is False and p.legs[0].url == "https://app.hyperliquid.xyz/trade/xyz:NVDA"
     assert p.fee_params == {"perp": {"taker": 0.00009, "growth_mode": True}, "stock": {"borrow_bps_yr": 50.0}}
     assert p.next_funding_at == datetime.fromisoformat("2026-10-22T16:00:00+00:00")
-    assert p.funding_bps_h == pytest.approx(0.1) and p.spark == [None] * 24
+    assert p.fees_cents == pytest.approx(1.8 / 100, abs=1e-3) and p.spark == [None] * 24
+    assert set(p.costs) == {"perp_fee_bps", "perp_spread_bps", "funding_bps"}
+    assert p.costs["perp_fee_bps"] == pytest.approx(1.8) and p.costs["funding_bps"] == pytest.approx(-2.4)
     s = p.sensitivity
-    assert set(s) == {"net_bps_1h", "net_bps_7d", "net_bps_borrow_x10"}
-    assert s["net_bps_borrow_x10"] == pytest.approx(p.net_bps)  # short perp / long stock pays no borrow
-    assert p.fees_cents == pytest.approx((1.8 + 3.7594) / 100, abs=1e-3)  # 2 x 0.9 bps taker + 0.08/212.84 spread
+    assert set(s) == {"net_bps_1h", "net_bps_7d", "net_bps_with_borrow"}
+    assert s["net_bps_with_borrow"] == pytest.approx(p.net_bps)  # short perp / long stock pays no borrow
     assert Pair.model_validate_json(p.model_dump_json()) == p
 
 
-def test_stock_perp_row_costs_are_the_edges_lines():
-    [p] = stock_perp_rows([(CTX215, LABEL_NVDA, SP_SNAP, QUOTE)], {}, SP_NOW)
-    c = p.costs
-    assert set(c) == {"perp_fee_bps", "perp_spread_bps", "stock_spread_bps", "funding_bps", "borrow_bps"}
-    assert c["perp_fee_bps"] == pytest.approx(1.8) and c["stock_spread_bps"] == pytest.approx(3.7594, abs=1e-3)
-    assert c["funding_bps"] == pytest.approx(-2.4) and c["borrow_bps"] == 0  # short perp receives funding, pays no borrow
-    assert c["perp_spread_bps"] > 0 and p.fees_cents == pytest.approx((c["perp_fee_bps"] + c["stock_spread_bps"]) / 100, abs=1e-3)
-    long_p = stock_perp_rows([(replace(CTX215, mark=210.0), LABEL_NVDA, SP_SNAP, QUOTE)], {}, SP_NOW)[0]
-    assert long_p.costs["borrow_bps"] == pytest.approx(50.0 * 24 / (24 * 365), abs=1e-3) and long_p.costs["funding_bps"] == pytest.approx(2.4)
-    [oracle] = stock_perp_rows([(CTX215, replace(LABEL_NVDA, ref_kind="none"), SP_SNAP, QUOTE)], {}, SP_NOW)
-    assert oracle.costs["stock_spread_bps"] is None and oracle.costs["perp_fee_bps"] == pytest.approx(1.8)
-    [stale] = stock_perp_rows([(CTX215, LABEL_NVDA, (SP_NOW - timedelta(seconds=301), SP_BOOK), QUOTE)], {}, SP_NOW)
-    assert stale.costs is None
-    assert Pair.model_validate_json(p.model_dump_json()) == p
+def test_public_labels():
+    book = [replace(lv, price=round(lv.price - 1.0, 2)) for lv in SP_BOOK]  # the book follows the oracle
+    cases = {
+        "Stale · a leg has no snapshot in 5 min": (CTXB, (SP_NOW - timedelta(seconds=301), SP_BOOK), SP_NOW),
+        "Oracle internal · market closed": (CTXB, (SAT, SP_BOOK), SAT),
+        "No asks on one side": (CTXB, (SP_SNAP[0], []), SP_NOW),
+        "Oracle basis · within perp costs": (replace(CTX215, oracle=214.95), (SP_SNAP[0], book), SP_NOW),
+    }
+    for label, (ctx, snap, now) in cases.items():
+        [p] = stock_perp_rows([(ctx, LABEL_NVDA, snap)], {}, now)
+        assert p.verdict.label == label and not p.verdict.label.startswith("Executable edge")
+    [p] = stock_perp_rows([(CTXB, LABEL_NVDA, SP_SNAP)], {}, SP_NOW)
+    assert p.verdict.label.startswith("Oracle basis · +")
 
 
-def test_stock_perp_row_borrow_x10_on_long_perp():  # mark below the stock: long perp / short stock pays borrow
-    ctx = replace(CTX215, mark=210.0)
-    [p] = stock_perp_rows([(ctx, LABEL_NVDA, SP_SNAP, QUOTE)], {}, SP_NOW)
-    assert p.trade == "long xyz:NVDA / short NVDA"
-    borrow = 50.0 * 24 / (24 * 365)
-    assert p.sensitivity["net_bps_borrow_x10"] == pytest.approx(p.net_bps - 9 * borrow)
+def test_stock_perp_row_internal_and_no_book_checks():
+    [p] = stock_perp_rows([(CTXB, LABEL_NVDA, (SAT, SP_BOOK))], {}, SAT)
+    assert p.reference["state"] == "internal" and p.verdict.checks[0].status == "partial"
+    assert p.verdict.checks[0].detail == "oracle internal: market closed"
+    [nb] = stock_perp_rows([(CTXB, LABEL_NVDA, (SP_SNAP[0], []))], {}, SP_NOW)
+    assert nb.live and nb.capacity_usd == 0 and nb.verdict.checks[2].detail == "not walked: no perp book"
 
 
-def test_stock_perp_row_oracle_only_never_executable():
-    for label, quote in ((replace(LABEL_NVDA, ref_kind="none"), QUOTE),
-                         (LABEL_NVDA, replace(QUOTE, quote_time=SP_SNAP[0] - timedelta(seconds=121)))):
-        [p] = stock_perp_rows([(CTX215, label, SP_SNAP, quote)], {}, SP_NOW)
-        assert p.verdict.label == "Reference closed · oracle only" and p.capacity_usd == 0 and p.reference["kind"] == "oracle"
-        assert p.verdict.checks[0].status == "partial"
-        assert p.verdict.checks[0].detail == "oracle only: stock market closed or no quote"
-
-
-def test_stock_perp_row_within_costs():
-    book = [replace(lv, price=round(lv.price - 2.1, 2)) for lv in SP_BOOK]  # the book follows the mark
-    [p] = stock_perp_rows([(replace(CTX215, mark=212.9), LABEL_NVDA, (SP_SNAP[0], book), QUOTE)], {}, SP_NOW)
-    assert p.verdict.label == "Basis · within costs · no edge" and p.live
-    assert [c.status for c in p.verdict.checks][1:3] == ["fail", "fail"]
+def test_stock_perp_row_borrow_only_in_the_sensitivity():  # mark below the oracle: long perp, borrow is the assumption
+    [p] = stock_perp_rows([(replace(CTX215, oracle=216.0), LABEL_NVDA, SP_SNAP)], {}, SP_NOW)
+    assert p.trade == "long xyz:NVDA / short NVDA" and "borrow_bps" not in p.costs
+    assert p.sensitivity["net_bps_with_borrow"] == pytest.approx(p.net_bps - 50.0 * 24 / (24 * 365), abs=1e-3)
 
 
 def test_stock_perp_row_stale():
     old = (SP_NOW - timedelta(seconds=301), SP_BOOK)
-    [p] = stock_perp_rows([(CTX215, LABEL_NVDA, old, QUOTE)], {}, SP_NOW)
-    assert p.verdict.label == "Stale · a leg has no snapshot in 5 min" and not p.live
+    [p] = stock_perp_rows([(CTXB, LABEL_NVDA, old)], {}, SP_NOW)
+    assert not p.live and p.costs is None
     assert p.net_bps is None and p.net_edge_cents is None and p.net_edge_bps is None and p.sensitivity is None
 
 
 def test_stock_perp_row_label_none_and_spark():
     lab = Label("xyz:FOO", "none", None, "", "USD", "xyz:FOO")
-    [p] = stock_perp_rows([(replace(CTX215, symbol="xyz:FOO"), lab, SP_SNAP, None)], {"xyz:FOO~xyz:FOO~stock_perp": [1.0] * 24}, SP_NOW)
+    [p] = stock_perp_rows([(replace(CTX215, symbol="xyz:FOO"), lab, SP_SNAP)], {"xyz:FOO~xyz:FOO~stock_perp": [1.0] * 24}, SP_NOW)
     assert p.key == "xyz:FOO~xyz:FOO~stock_perp" and p.title == "xyz:FOO" and p.spark == [1.0] * 24
     assert p.trade == "short xyz:FOO / long xyz:FOO"
 
 
 def test_build_live_stock_perps_kpi_and_best_edge_ignores_them():
-    [sp] = stock_perp_rows([(CTX215, LABEL_NVDA, SP_SNAP, QUOTE)], {}, SP_NOW)
+    [sp] = stock_perp_rows([(CTX215, LABEL_NVDA, SP_SNAP)], {}, SP_NOW)
     b = build_live(now=SP_NOW, exact_rows=[], ladder_rows=[], basis=BASIS, episodes=[], annotations=[],
                    kpi_inputs={"stock_perps": {"episodes_7d": 3}}, attribution=[], caveats=[], collector_last=None,
                    stock_rows=[sp])
@@ -345,25 +335,8 @@ def test_old_live_json_without_new_fields_still_validates():  # live_v2.json: th
     assert b.pairs[0].sensitivity is None and isinstance(b.pairs[0].settles_at, datetime)
 
 
-def test_stock_perp_row_live_schwab_without_a_book():
-    [p] = stock_perp_rows([(CTX215, LABEL_NVDA, (SP_SNAP[0], []), QUOTE)], {}, SP_NOW)
-    assert p.live and p.verdict.label == "No asks on one side" and p.capacity_usd == 0
-    assert p.verdict.checks[2].name == "fees_depth" and p.verdict.checks[2].status == "fail"
-    assert p.verdict.checks[2].detail == "not walked: no perp book"
-
-
-def test_stock_perp_reference_is_aged_from_the_snapshot_tick():
-    # the collector inserts every few ticks: a tick 250 s behind the publisher, its quote 30 s older than the tick
-    tick = SP_NOW - timedelta(seconds=250)
-    quote = replace(QUOTE, quote_time=tick - timedelta(seconds=30))
-    [p] = stock_perp_rows([(CTX215, LABEL_NVDA, (tick, SP_BOOK), quote)], {}, SP_NOW)
-    assert p.live and p.reference["kind"] == "schwab" and p.verdict.checks[0].detail == "Schwab quote 30 s old"
-    [old] = stock_perp_rows([(CTX215, LABEL_NVDA, (SP_NOW - timedelta(seconds=400), SP_BOOK), quote)], {}, SP_NOW)
-    assert old.verdict.label == "Stale · a leg has no snapshot in 5 min" and not old.live
-
-
 def test_stock_perp_key_ignores_direction():  # a basis sign flip keeps the row's identity, sparks and history
-    long_p = stock_perp_rows([(replace(CTX215, mark=210.0), LABEL_NVDA, SP_SNAP, QUOTE)], {}, SP_NOW)[0]
-    [short_p] = stock_perp_rows([(CTX215, LABEL_NVDA, SP_SNAP, QUOTE)], {"xyz:NVDA~NVDA~stock_perp": [2.0] * 24}, SP_NOW)
+    long_p = stock_perp_rows([(replace(CTX215, mark=210.0), LABEL_NVDA, SP_SNAP)], {}, SP_NOW)[0]
+    [short_p] = stock_perp_rows([(CTX215, LABEL_NVDA, SP_SNAP)], {"xyz:NVDA~NVDA~stock_perp": [2.0] * 24}, SP_NOW)
     assert long_p.direction != short_p.direction and long_p.key == short_p.key == "xyz:NVDA~NVDA~stock_perp"
     assert short_p.spark == [2.0] * 24

@@ -98,11 +98,11 @@ def sp_inputs(**kw):
     h = datetime(2026, 10, 20, 14, tzinfo=UTC)
     base = {"hourly": [(h, 3.14159), (h + timedelta(hours=1), 12.4)], "names": 3, "snapshots": 4200,
             "window_start": h, "episodes": 1, "share_hours": 0.25,
-            "by_name": [{"symbol": "xyz:A", "name": "A", "max_net_bps": 2.0, "hours_ge_10": 1, "ref_kind": "schwab"},
-                        {"symbol": "xyz:B", "name": "B", "max_net_bps": 12.4, "hours_ge_10": 5, "ref_kind": "schwab"}],
-            "sensitivity": {"episodes_base": 1, "episodes_1h": 2, "episodes_7d": 0, "episodes_borrow_x10": 1, "window_days": 14},
+            "by_name": [{"symbol": "xyz:A", "name": "A", "max_net_bps": 2.0, "hours_ge_10": 1},
+                        {"symbol": "xyz:B", "name": "B", "max_net_bps": 12.4, "hours_ge_10": 5}],
+            "sensitivity": {"episodes_base": 1, "episodes_1h": 2, "episodes_7d": 0, "episodes_with_borrow": 1, "window_days": 14},
             "weekend_rows": [{"symbol": "xyz:B", "friday": date(2026, 10, 16), "p_fri": 10.0, "p_sat": 10.1,
-                              "p_sun": 10.2, "p_open_pre": 10.3, "p_open_reg": 10.4, "ref_kind": "schwab"}]}
+                              "p_sun": 10.2, "p_open_pre": 10.3, "p_open_reg": 10.4}]}
     return base | kw
 
 
@@ -112,7 +112,7 @@ def test_stock_perp_block_headline_and_series():
     assert "4,200 snapshots since 20 Oct" in b.headline
     assert b.hourly.values == [3.14, 12.4] and b.max_net_bps == 12.4 and b.share_hours_abs_ge_10bps == 0.25
     assert [r["symbol"] for r in b.by_name] == ["xyz:B", "xyz:A"]  # sorted by max_net_bps, best first
-    assert b.sensitivity == {"episodes_base": 1, "episodes_1h": 2, "episodes_7d": 0, "episodes_borrow_x10": 1, "window_days": 14}
+    assert b.sensitivity == {"episodes_base": 1, "episodes_1h": 2, "episodes_7d": 0, "episodes_with_borrow": 1, "window_days": 14}
     assert b.weekends["rows"][0]["friday"] == date(2026, 10, 16) and b.weekends["weekends"] == 1
     assert b.weekends["rows"][0]["contained_sun"] == pytest.approx(0.5)  # (10.2 - 10.0) / (10.4 - 10.0)
     empty = research.stock_perp_block(sp_inputs(hourly=[], names=0, snapshots=0, window_start=None, episodes=0,
@@ -123,11 +123,11 @@ def test_stock_perp_block_headline_and_series():
 
 
 def test_stock_perp_block_keeps_top_ten_names_and_last_eight_weekends_of_top_five():
-    names = [{"symbol": f"xyz:{i}", "name": str(i), "max_net_bps": float(i), "hours_ge_10": 0, "ref_kind": "schwab"}
+    names = [{"symbol": f"xyz:{i}", "name": str(i), "max_net_bps": float(i), "hours_ge_10": 0}
              for i in range(12)]
     fridays = [date(2026, 8, 7) + timedelta(days=7 * k) for k in range(10)]
     rows = [{"symbol": f"xyz:{i}", "friday": f, "p_fri": 1.0, "p_sat": 1.0, "p_sun": 1.0, "p_open_pre": None,
-             "p_open_reg": 1.0, "ref_kind": "schwab"} for i in range(12) for f in fridays]
+             "p_open_reg": 1.0} for i in range(12) for f in fridays]
     b = research.stock_perp_block(sp_inputs(by_name=names, weekend_rows=rows), NOW)
     assert [r["symbol"] for r in b.by_name] == [f"xyz:{i}" for i in range(11, 1, -1)]
     assert {r["symbol"] for r in b.weekends["rows"]} == {f"xyz:{i}" for i in range(7, 12)}

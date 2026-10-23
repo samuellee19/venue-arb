@@ -1339,17 +1339,15 @@
       }
     },
     {
-      "basis_bps": 25.8398,
+      "basis_bps": 28.1955,
       "books": null,
-      "capacity_contracts": 100.0,
-      "capacity_usd": 21330.0,
+      "capacity_contracts": 200.0,
+      "capacity_usd": 42640.0,
       "category": "stock_perps",
       "costs": {
-        "borrow_bps": 0.0,
         "funding_bps": -2.4,
         "perp_fee_bps": 1.8,
-        "perp_spread_bps": 4.686,
-        "stock_spread_bps": 4.6981
+        "perp_spread_bps": 4.686
       },
       "direction": "short_perp_long_stock",
       "fee_params": {
@@ -1361,7 +1359,7 @@
           "borrow_bps_yr": 50.0
         }
       },
-      "fees_cents": 0.065,
+      "fees_cents": 0.018,
       "funding_bps_h": 0.1,
       "hold_hours": 24,
       "key": "xyz:NVDA~NVDA~stock_perp",
@@ -1381,54 +1379,54 @@
           "market_id": "NVDA",
           "settlement_source": null,
           "side": "long",
-          "snapshot_at": "2026-10-20T15:29:06Z",
+          "snapshot_at": null,
           "title": "NVIDIA",
           "url": null,
           "venue": "nasdaq"
         }
       ],
       "live": true,
-      "net_bps": 12.3575,
-      "net_edge_bps": 12.3575,
-      "net_edge_cents": 0.123575,
-      "net_edge_roi": 0.00123575,
+      "net_bps": 14.711,
+      "net_edge_bps": 14.711,
+      "net_edge_cents": 0.14711,
+      "net_edge_roi": 0.0014711,
       "next_funding_at": "2026-10-20T16:00:00Z",
       "reference": {
-        "asof": "2026-10-20T15:29:06+00:00",
-        "kind": "schwab",
-        "symbol": "NVDA"
+        "asof": "2026-10-20T15:29:20+00:00",
+        "kind": "oracle",
+        "state": "external"
       },
       "sensitivity": {
-        "net_bps_1h": 10.0575,
-        "net_bps_7d": 26.7575,
-        "net_bps_borrow_x10": 12.3575
+        "net_bps_1h": 12.411,
+        "net_bps_7d": 29.111,
+        "net_bps_with_borrow": 14.711
       },
       "settles_at": null,
       "spark": [
-        0.122,
-        0.191,
-        null,
-        0.118,
-        0.097,
-        0.153,
-        0.172,
-        0.075,
-        0.111,
-        0.153,
-        0.081,
-        0.097,
-        0.132,
-        0.115,
-        0.106,
-        0.136,
-        0.158,
-        0.085,
-        0.101,
         0.146,
-        0.154,
-        0.115,
-        0.097,
-        0.11
+        0.22,
+        null,
+        0.141,
+        0.118,
+        0.179,
+        0.2,
+        0.094,
+        0.134,
+        0.18,
+        0.1,
+        0.118,
+        0.156,
+        0.138,
+        0.128,
+        0.161,
+        0.185,
+        0.105,
+        0.122,
+        0.172,
+        0.18,
+        0.138,
+        0.118,
+        0.132
       ],
       "title": "NVIDIA (NASDAQ)",
       "trade": "short xyz:NVDA / long NVDA",
@@ -1436,17 +1434,17 @@
       "verdict": {
         "checks": [
           {
-            "detail": "Schwab quote 14 s old",
+            "detail": "oracle live, 40 s old",
             "name": "reference",
             "status": "ok"
           },
           {
-            "detail": "net +12.4 bps after 2× taker, spread, 24 h funding and borrow",
+            "detail": "net +14.7 bps after 2× taker, perp spread and 24 h funding",
             "name": "fees_carry",
             "status": "ok"
           },
           {
-            "detail": "$21,330 fillable vs $100 minimum",
+            "detail": "$42,640 perp depth vs $100 minimum",
             "name": "fees_depth",
             "status": "ok"
           },
@@ -1456,21 +1454,19 @@
             "status": "partial"
           }
         ],
-        "label": "Executable edge · +12 bps · $21,330 at top of book"
+        "label": "Oracle basis · +15 bps before stock costs · $42,640 perp depth"
       }
     },
     {
-      "basis_bps": 1.9972,
+      "basis_bps": 0.7988,
       "books": null,
       "capacity_contracts": 0.0,
       "capacity_usd": 0.0,
       "category": "stock_perps",
       "costs": {
-        "borrow_bps": 0.0,
         "funding_bps": -2.4,
         "perp_fee_bps": 1.8,
-        "perp_spread_bps": 1.9968,
-        "stock_spread_bps": 3.9944
+        "perp_spread_bps": 1.9968
       },
       "direction": "short_perp_long_stock",
       "fee_params": {
@@ -1482,7 +1478,7 @@
           "borrow_bps_yr": 50.0
         }
       },
-      "fees_cents": 0.0579,
+      "fees_cents": 0.018,
       "funding_bps_h": 0.1,
       "hold_hours": 24,
       "key": "xyz:TSLA~TSLA~stock_perp",
@@ -1502,54 +1498,54 @@
           "market_id": "TSLA",
           "settlement_source": null,
           "side": "long",
-          "snapshot_at": "2026-10-20T15:29:06Z",
+          "snapshot_at": null,
           "title": "Tesla",
           "url": null,
           "venue": "nasdaq"
         }
       ],
       "live": true,
-      "net_bps": -5.3912,
-      "net_edge_bps": -5.3912,
-      "net_edge_cents": -0.053912,
-      "net_edge_roi": -0.00053912,
+      "net_bps": -2.595,
+      "net_edge_bps": -2.595,
+      "net_edge_cents": -0.02595,
+      "net_edge_roi": -0.0002595,
       "next_funding_at": "2026-10-20T16:00:00Z",
       "reference": {
-        "asof": "2026-10-20T15:29:06+00:00",
-        "kind": "schwab",
-        "symbol": "TSLA"
+        "asof": "2026-10-20T15:29:20+00:00",
+        "kind": "oracle",
+        "state": "external"
       },
       "sensitivity": {
-        "net_bps_1h": -7.6912,
-        "net_bps_7d": 9.0088,
-        "net_bps_borrow_x10": -5.3912
+        "net_bps_1h": -4.895,
+        "net_bps_7d": 11.805,
+        "net_bps_with_borrow": -2.595
       },
       "settles_at": null,
       "spark": [
         null,
-        -0.062,
-        -0.0,
-        -0.043,
-        -0.062,
-        0.002,
         -0.033,
-        -0.096,
-        -0.034,
-        -0.026,
-        -0.065,
-        -0.085,
+        0.02,
+        -0.017,
+        -0.033,
+        0.021,
+        -0.008,
         -0.062,
-        -0.09,
-        -0.066,
-        -0.076,
-        -0.055,
-        -0.078,
-        -0.056,
-        -0.06,
-        -0.052,
-        -0.07,
+        -0.009,
+        -0.002,
         -0.035,
-        -0.062
+        -0.053,
+        -0.032,
+        -0.057,
+        -0.036,
+        -0.044,
+        -0.027,
+        -0.046,
+        -0.027,
+        -0.031,
+        -0.024,
+        -0.039,
+        -0.01,
+        -0.033
       ],
       "title": "Tesla (NASDAQ)",
       "trade": "short xyz:TSLA / long TSLA",
@@ -1557,17 +1553,17 @@
       "verdict": {
         "checks": [
           {
-            "detail": "Schwab quote 14 s old",
+            "detail": "oracle live, 40 s old",
             "name": "reference",
             "status": "ok"
           },
           {
-            "detail": "net -5.4 bps after 2× taker, spread, 24 h funding and borrow",
+            "detail": "net -2.6 bps after 2× taker, perp spread and 24 h funding",
             "name": "fees_carry",
             "status": "fail"
           },
           {
-            "detail": "$0 fillable vs $100 minimum",
+            "detail": "$0 perp depth vs $100 minimum",
             "name": "fees_depth",
             "status": "fail"
           },
@@ -1577,7 +1573,7 @@
             "status": "partial"
           }
         ],
-        "label": "Basis · within costs · no edge"
+        "label": "Oracle basis · within perp costs"
       }
     },
     {
@@ -1587,11 +1583,9 @@
       "capacity_usd": 0.0,
       "category": "stock_perps",
       "costs": {
-        "borrow_bps": 0.0,
         "funding_bps": -2.4,
         "perp_fee_bps": 18.0,
-        "perp_spread_bps": 2.7778,
-        "stock_spread_bps": null
+        "perp_spread_bps": 2.7778
       },
       "direction": "short_perp_long_stock",
       "fee_params": {
@@ -1638,12 +1632,12 @@
       "reference": {
         "asof": "2026-10-20T15:29:20+00:00",
         "kind": "oracle",
-        "symbol": "xyz:SKHX"
+        "state": "internal"
       },
       "sensitivity": {
         "net_bps_1h": -12.3352,
         "net_bps_7d": 4.3648,
-        "net_bps_borrow_x10": -10.0352
+        "net_bps_with_borrow": -10.0352
       },
       "settles_at": null,
       "spark": [
@@ -1678,17 +1672,17 @@
       "verdict": {
         "checks": [
           {
-            "detail": "oracle only: stock market closed or no quote",
+            "detail": "oracle internal: market closed",
             "name": "reference",
             "status": "partial"
           },
           {
-            "detail": "net -10.0 bps after 2× taker, spread, 24 h funding and borrow",
+            "detail": "net -10.0 bps after 2× taker, perp spread and 24 h funding",
             "name": "fees_carry",
             "status": "fail"
           },
           {
-            "detail": "$0 fillable vs $100 minimum",
+            "detail": "$0 perp depth vs $100 minimum",
             "name": "fees_depth",
             "status": "fail"
           },
@@ -1698,7 +1692,7 @@
             "status": "partial"
           }
         ],
-        "label": "Reference closed · oracle only"
+        "label": "Oracle internal · market closed"
       }
     },
     {
@@ -1738,7 +1732,7 @@
           "market_id": "MSFT",
           "settlement_source": null,
           "side": "short",
-          "snapshot_at": "2026-10-20T15:17:46Z",
+          "snapshot_at": null,
           "title": "Microsoft",
           "url": null,
           "venue": "nasdaq"
@@ -1751,9 +1745,9 @@
       "net_edge_roi": null,
       "next_funding_at": "2026-10-20T16:00:00Z",
       "reference": {
-        "asof": "2026-10-20T15:17:46+00:00",
-        "kind": "schwab",
-        "symbol": "MSFT"
+        "asof": "2026-10-20T15:18:00+00:00",
+        "kind": "oracle",
+        "state": "external"
       },
       "sensitivity": null,
       "settles_at": null,
@@ -1789,7 +1783,7 @@
       "verdict": {
         "checks": [
           {
-            "detail": "Schwab quote 14 s old",
+            "detail": "oracle live, 720 s old",
             "name": "reference",
             "status": "ok"
           },
@@ -2045,21 +2039,18 @@
           "hours_ge_10": 3,
           "max_net_bps": 13.0,
           "name": "NVIDIA",
-          "ref_kind": "schwab",
           "symbol": "xyz:NVDA"
         },
         {
           "hours_ge_10": 0,
           "max_net_bps": 7.5,
           "name": "Tesla",
-          "ref_kind": "schwab",
           "symbol": "xyz:TSLA"
         },
         {
           "hours_ge_10": 0,
           "max_net_bps": 4.0,
           "name": "Apple",
-          "ref_kind": "schwab",
           "symbol": "xyz:AAPL"
         }
       ],
@@ -2221,7 +2212,7 @@
         "episodes_1h": 4,
         "episodes_7d": 0,
         "episodes_base": 2,
-        "episodes_borrow_x10": 2,
+        "episodes_with_borrow": 2,
         "window_days": 14
       },
       "share_hours_abs_ge_10bps": 0.12,
@@ -2242,7 +2233,7 @@
             "p_open_reg": 213.75,
             "p_sat": 214.38,
             "p_sun": 213.77,
-            "ref_kind": "schwab",
+            "ref_kind": "oracle_us",
             "symbol": "xyz:NVDA"
           },
           {
@@ -2253,7 +2244,7 @@
             "p_open_reg": 213.97,
             "p_sat": 214.49,
             "p_sun": 214.36,
-            "ref_kind": "schwab",
+            "ref_kind": "oracle_us",
             "symbol": "xyz:NVDA"
           },
           {
@@ -2264,7 +2255,7 @@
             "p_open_reg": 213.94,
             "p_sat": 214.47,
             "p_sun": 214.29,
-            "ref_kind": "schwab",
+            "ref_kind": "oracle_us",
             "symbol": "xyz:NVDA"
           },
           {
@@ -2275,7 +2266,7 @@
             "p_open_reg": 213.84,
             "p_sat": 214.42,
             "p_sun": 214.24,
-            "ref_kind": "schwab",
+            "ref_kind": "oracle_us",
             "symbol": "xyz:NVDA"
           },
           {
@@ -2286,7 +2277,7 @@
             "p_open_reg": 251.14,
             "p_sat": 250.57,
             "p_sun": 251.06,
-            "ref_kind": "schwab",
+            "ref_kind": "oracle_us",
             "symbol": "xyz:TSLA"
           },
           {
@@ -2297,7 +2288,7 @@
             "p_open_reg": 251.16,
             "p_sat": 250.58,
             "p_sun": 251.34,
-            "ref_kind": "schwab",
+            "ref_kind": "oracle_us",
             "symbol": "xyz:TSLA"
           },
           {
@@ -2308,7 +2299,7 @@
             "p_open_reg": 251.36,
             "p_sat": 250.68,
             "p_sun": 251.41,
-            "ref_kind": "schwab",
+            "ref_kind": "oracle_us",
             "symbol": "xyz:TSLA"
           },
           {
@@ -2319,7 +2310,7 @@
             "p_open_reg": 251.09,
             "p_sat": 250.54,
             "p_sun": 250.87,
-            "ref_kind": "schwab",
+            "ref_kind": "oracle_us",
             "symbol": "xyz:TSLA"
           },
           {
@@ -2330,7 +2321,7 @@
             "p_open_reg": 180.91,
             "p_sat": 180.46,
             "p_sun": 180.69,
-            "ref_kind": "schwab",
+            "ref_kind": "oracle_us",
             "symbol": "xyz:AAPL"
           },
           {
@@ -2341,7 +2332,7 @@
             "p_open_reg": 179.27,
             "p_sat": 179.63,
             "p_sun": 179.33,
-            "ref_kind": "schwab",
+            "ref_kind": "oracle_us",
             "symbol": "xyz:AAPL"
           },
           {
@@ -2352,7 +2343,7 @@
             "p_open_reg": 180.97,
             "p_sat": 180.49,
             "p_sun": 180.6,
-            "ref_kind": "schwab",
+            "ref_kind": "oracle_us",
             "symbol": "xyz:AAPL"
           },
           {
@@ -2363,7 +2354,7 @@
             "p_open_reg": 178.98,
             "p_sat": 179.49,
             "p_sun": 179.49,
-            "ref_kind": "schwab",
+            "ref_kind": "oracle_us",
             "symbol": "xyz:AAPL"
           }
         ],

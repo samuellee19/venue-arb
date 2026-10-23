@@ -4,8 +4,6 @@
           "open_interest": 1000000.0, "day_volume_usd": 5000000.0, "growth_mode": true, "max_leverage": 10},
   "label": {"perp": "xyz:NVDA", "ref_kind": "schwab", "ref_symbol": "NVDA", "exchange": "NASDAQ", "currency": "USD",
             "name": "NVIDIA"},
-  "quote": {"symbol": "NVDA", "bid": 212.80, "ask": 212.88, "bid_size": 300.0, "ask_size": 300.0, "last": 212.84,
-            "quote_time": "2026-10-22T14:59:46+00:00"},
   "book_ts": "2026-10-22T15:00:00+00:00",
   "book": [
     {"side": "bid", "level": 0, "price": 214.90, "size": 100.0},

@@ -39,7 +39,6 @@ from venue_arb.matching.adjudicate import PROMPT_VERSION
 from venue_arb.scoring import snapshots
 from venue_arb.sources import hyperliquid, kalshi
 from venue_arb.sources.hyperliquid import PerpCtx, PerpLevel
-from venue_arb.sources.schwab import Quote
 
 # qa and venue_arb.flows.* (the flows package imports obs and qa) are imported lazily: unit tests (and CI) run
 # without the platform checkout.
@@ -88,23 +87,23 @@ SELECT k, p, d, toStartOfHour(ts) AS h, avg(e) FROM (
   WHERE ts >= {start:DateTime64(3, 'UTC')} AND k_id NOT LIKE 'ZZTEST-%'
   UNION ALL
   SELECT toStartOfHour(ts) AS hts, symbol, '', 'stock_perp', max(net_bps) / 1e4 FROM venue_arb.stock_perp_edges FINAL
-  WHERE ts >= {start:DateTime64(3, 'UTC')} AND ref_kind = 'schwab' GROUP BY hts, symbol
+  WHERE ts >= {start:DateTime64(3, 'UTC')} AND mode = 'oracle' AND session = 'external' GROUP BY hts, symbol
 ) GROUP BY k, p, d, h
 """
 # the stock-perp tier: rows with p = '' take their reference symbol from labels (spark_series refs) and d = 'stock_perp'
-# (bundle.stock_key: one row a name, either direction); the hourly max of Schwab-referenced net_bps / 1e4 (an
-# oracle-only row carries no executable reading) reads, x100 like the pair rows, as net_bps / 100
+# (bundle.stock_key: one row a name, either direction); the hourly max of the oracle-mode net_bps / 1e4 over
+# external-session ticks reads, x100 like the pair rows, as net_bps / 100
 # both sources; pair-source rows are scoped in Python (scope_episodes) with note.SCOPE_SQL's rows, as the note does
 EPISODES_SQL = """
 SELECT source, kalshi_id, pm_id, direction, start_ts, end_ts, max_edge, median_capacity_usd, transfer_cost_usd
 FROM venue_arb.opportunities
-WHERE kalshi_id NOT LIKE 'ZZTEST-%' AND source <> 'stock_perp' AND coalesce(end_ts, now()) > now() - interval '7 days'
+WHERE kalshi_id NOT LIKE 'ZZTEST-%' AND source NOT IN ('stock_perp', 'stock_perp_oracle') AND coalesce(end_ts, now()) > now() - interval '7 days'
 ORDER BY start_ts
 """
 # the stock-perp tier's episodes (kalshi_id = perp symbol), counted apart from the pair tiers' (bps, not ¢)
 STOCK_PERP_EPISODES_SQL = """
 SELECT count(*) FROM venue_arb.opportunities
-WHERE source = 'stock_perp' AND coalesce(end_ts, now()) > now() - interval '7 days'
+WHERE source = 'stock_perp_oracle' AND coalesce(end_ts, now()) > now() - interval '7 days'
 """
 # the latest ladder_score run's denominator, from runs without a failed error-severity check (as note.ADMISSIBLE_SQL)
 LADDER_KPI_SQL = f"""
@@ -129,31 +128,30 @@ GROUP BY asset, basis_up, basis_down ORDER BY first_ts
 # history: an hour's scored rows, and the first ask level of each leg around them
 STOCK_PERP_HOUR_SQL = """
 SELECT ts, symbol, direction, basis_bps, net_bps, capacity_usd FROM venue_arb.stock_perp_edges FINAL
-WHERE ts >= {lo:DateTime64(3, 'UTC')} AND ts < {hi:DateTime64(3, 'UTC')}
+WHERE ts >= {lo:DateTime64(3, 'UTC')} AND ts < {hi:DateTime64(3, 'UTC')} AND mode = 'oracle' AND session = 'external'
 """
 # the Research tab's stock-perp block (stock_perp_inputs): aggregates in ClickHouse; EDGES is the trailing
 # STOCK_PERP_SENSITIVITY_DAYS in one query (8 columns per scored tick, kept as tuples), re-run through episodes.find
-# the headline, the by-name max and the sparks read Schwab-referenced rows only: an oracle-only row never carries an
-# executable reading (spec §5); hours_ge_10 (|basis|) counts every row
+# every research query reads the oracle mode over external-session ticks only (public output: nothing from the
+# executable mode); hours_ge_10 counts |basis| >= 10 bps hours
 SP_HOURLY_SQL = ("SELECT toStartOfHour(ts) AS h, max(net_bps) FROM venue_arb.stock_perp_edges FINAL "
-                 "WHERE ref_kind = 'schwab' GROUP BY h ORDER BY h")
+                 "WHERE mode = 'oracle' AND session = 'external' GROUP BY h ORDER BY h")
 # after FINAL one row per (symbol, ts) (direction is a function of the tick), so count() is the distinct snapshots
-SP_COUNTS_SQL = "SELECT uniqExact(symbol), count(), min(ts) FROM venue_arb.stock_perp_edges FINAL"
-# Schwab-referenced rows are the session hours (4 AM to 8 PM ET); per hour the share of rows over 10 bps, then averaged
+SP_COUNTS_SQL = ("SELECT uniqExact(symbol), count(), min(ts) FROM venue_arb.stock_perp_edges FINAL "
+                 "WHERE mode = 'oracle' AND session = 'external'")
+# per hour the share of rows over 10 bps, then averaged
 SP_SHARE_SQL = ("SELECT avg(s), count() FROM (SELECT toStartOfHour(ts) AS h, avg(abs(basis_bps) >= 10) AS s "
-                "FROM venue_arb.stock_perp_edges FINAL WHERE ref_kind = 'schwab' GROUP BY h)")
-SP_BY_NAME_SQL = ("SELECT symbol, maxOrNullIf(net_bps, ref_kind = 'schwab'), "
-                  "uniqExactIf(toStartOfHour(ts), abs(basis_bps) >= 10) "
-                  "FROM venue_arb.stock_perp_edges FINAL GROUP BY symbol")
+                "FROM venue_arb.stock_perp_edges FINAL WHERE mode = 'oracle' AND session = 'external' GROUP BY h)")
+SP_BY_NAME_SQL = ("SELECT symbol, max(net_bps), uniqExactIf(toStartOfHour(ts), abs(basis_bps) >= 10) "
+                  "FROM venue_arb.stock_perp_edges FINAL WHERE mode = 'oracle' AND session = 'external' GROUP BY symbol")
 SP_EDGES_SQL = ("SELECT ts, symbol, direction, net_bps, funding_bps, borrow_bps, capacity_contracts, capacity_usd "
                 f"FROM venue_arb.stock_perp_edges FINAL WHERE ts >= now() - INTERVAL {config.STOCK_PERP_SENSITIVITY_DAYS} DAY "
-                "ORDER BY symbol, ts")
-SP_EPISODES_ALL_SQL = "SELECT count(*) FROM venue_arb.opportunities WHERE source = 'stock_perp'"
+                "AND mode = 'oracle' AND session = 'external' ORDER BY symbol, ts")
+SP_EPISODES_ALL_SQL = "SELECT count(*) FROM venue_arb.opportunities WHERE source = 'stock_perp_oracle'"
 SP_WEEKENDS_SQL = ("SELECT symbol, friday, p_fri, p_sat, p_sun, p_open_pre, p_open_reg, ref_kind "
                    "FROM venue_arb.stock_perp_weekends ORDER BY friday")
 # the perps() reader: the last PERP_LOOKBACK_S of contexts and books (the newest tick per symbol is kept in Python,
-# its books are those at the same ts), and each symbol's latest Schwab quote (reference() checks its age against the
-# tick). Twice LIVE_MAX_AGE_S, so a stalled name stays in the bundle and its row reads Stale rather than vanishing.
+# its books are those at the same ts). Twice LIVE_MAX_AGE_S, so a stalled name stays in the bundle and its row reads Stale rather than vanishing.
 PERP_LOOKBACK_S = 2 * bundle.LIVE_MAX_AGE_S
 PERP_CTX_SQL = f"""
 SELECT ts, symbol, mark, oracle, mid, funding_h, premium, open_interest, day_volume_usd, growth_mode
@@ -162,12 +160,6 @@ FROM venue_arb.stock_perp_ctx WHERE ts > now64(3) - INTERVAL {PERP_LOOKBACK_S} S
 PERP_BOOKS_SQL = f"""
 SELECT ts, symbol, toString(side), level, price, size FROM venue_arb.stock_perp_books
 WHERE ts > now64(3) - INTERVAL {PERP_LOOKBACK_S} SECOND
-"""
-PERP_QUOTES_SQL = f"""
-SELECT symbol, argMax(ref_symbol, ts), argMax(bid, ts), argMax(ask, ts), argMax(bid_size, ts), argMax(ask_size, ts),
-       argMax(last, ts), argMax(quote_time, ts)
-FROM venue_arb.stock_perp_refs WHERE ref_kind = 'schwab' AND ts > now64(3) - INTERVAL {PERP_LOOKBACK_S} SECOND
-GROUP BY symbol
 """
 EDGES_HOUR_SQL = """
 SELECT ts, kalshi_id, pm_id, direction, best_edge, capacity_usd FROM venue_arb.edges FINAL
@@ -393,7 +385,7 @@ def scope_episodes(rows: list[dict], scope: dict) -> list[dict]:
     def ok(r):
         s = scope.get((r["kalshi_id"], r["pm_id"]))
         return s is not None and s["exact"] and not s["bad_review"]
-    return [r for r in rows if r["source"] != "stock_perp" and (r["source"] != "pair" or ok(r))]
+    return [r for r in rows if r["source"] not in ("stock_perp", "stock_perp_oracle") and (r["source"] != "pair" or ok(r))]
 
 
 def load_context(conn, ch, now: datetime) -> dict:
@@ -526,16 +518,16 @@ def tick(state: dict, readers: dict, now: datetime) -> LiveBundle:
 
 def sensitivity_episodes(rows) -> dict[str, int]:
     """Episodes re-found from edge tuples (ts, symbol, direction, net_bps, funding_bps, borrow_bps,
-    capacity_contracts, capacity_usd), ordered by symbol, at the base 24 h hold, a 1 h and a 168 h hold and borrow x10.
-    Funding and borrow scale linearly with the hold, so a row's net at hold h is net + (funding + borrow) * (1 - h /
-    hold); borrow x10 is net - 9 * borrow. Per (symbol, direction) as stock_perp_window.score_window: the other
+    capacity_contracts, capacity_usd), ordered by symbol, at the base 24 h hold, a 1 h and a 168 h hold and with borrow.
+    Funding scales linearly with the hold, so a row's net at hold h is net + funding * (1 - h / hold); an oracle
+    row's net excludes borrow (borrow_bps is the assumption), so "with borrow" is net - borrow. Per (symbol, direction) as stock_perp_window.score_window: the other
     direction's ticks are non-qualifying points. Counts only what `rows` holds (the trailing window)."""
     hold = config.STOCK_PERP_HOLD_H
     h_short, h_long = config.STOCK_PERP_HOLD_SENSITIVITY_H
     cases = {"episodes_base": lambda r: r[3],
-             "episodes_1h": lambda r: r[3] + (r[4] + r[5]) * (1 - h_short / hold),
-             "episodes_7d": lambda r: r[3] + (r[4] + r[5]) * (1 - h_long / hold),
-             "episodes_borrow_x10": lambda r: r[3] - 9 * r[5]}
+             "episodes_1h": lambda r: r[3] + r[4] * (1 - h_short / hold),
+             "episodes_7d": lambda r: r[3] + r[4] * (1 - h_long / hold),
+             "episodes_with_borrow": lambda r: r[3] - r[5]}
     out = dict.fromkeys(cases, 0)
     for symbol, g in groupby(rows, key=itemgetter(1)):
         g = list(g)  # one symbol at a time
@@ -554,10 +546,8 @@ def stock_perp_inputs(ch, conn, labels: dict) -> dict:
     """research.stock_perp_block's inputs from ClickHouse (`ch`) and Postgres (`conn`), `labels` = load_labels()."""
     names, snapshots, first = ch.query(SP_COUNTS_SQL).result_rows[0]
     share, share_hours = ch.query(SP_SHARE_SQL).result_rows[0]
-    by_name = [{"symbol": sym, "name": (lb := hyperliquid.label_or_none(sym, labels)).name, "max_net_bps": mx,
-                "hours_ge_10": int(hours), "ref_kind": lb.ref_kind}
-               for sym, mx, hours in ch.query(SP_BY_NAME_SQL).result_rows
-               if mx is not None]  # an oracle-only name has no executable max to rank
+    by_name = [{"symbol": sym, "name": hyperliquid.label_or_none(sym, labels).name, "max_net_bps": mx,
+                "hours_ge_10": int(hours)} for sym, mx, hours in ch.query(SP_BY_NAME_SQL).result_rows]
     return {"hourly": [(_utc(h), v) for h, v in ch.query(SP_HOURLY_SQL).result_rows], "names": int(names),
             "snapshots": int(snapshots), "window_start": _utc(first) if snapshots else None,
             "episodes": conn.execute(SP_EPISODES_ALL_SQL).fetchone()[0],
@@ -638,7 +628,7 @@ def default_readers(db) -> dict:
             return stock_perp_inputs(db.ch(), conn, hyperliquid.load_labels())
 
     def perps():
-        """Per perp: the newest context within PERP_LOOKBACK_S, its books at that ts, the latest Schwab quote."""
+        """Per perp: the newest context within PERP_LOOKBACK_S and its books at that ts."""
         ch = db.ch()
         ctxs = {}
         for ts, sym, mark, oracle, mid, fund, prem, oi, vol, growth in ch.query(PERP_CTX_SQL).result_rows:
@@ -646,10 +636,8 @@ def default_readers(db) -> dict:
         books: dict[tuple[str, datetime], list[PerpLevel]] = {}
         for ts, sym, side, level, price, size in ch.query(PERP_BOOKS_SQL).result_rows:
             books.setdefault((sym, _utc(ts)), []).append(PerpLevel(side, level, price, size))
-        quotes = {sym: Quote(ref, bid, ask, bs, asz, last, _utc(qt))
-                  for sym, ref, bid, ask, bs, asz, last, qt in ch.query(PERP_QUOTES_SQL).result_rows}
         labels = hyperliquid.load_labels()
-        return [(ctx, hyperliquid.label_or_none(sym, labels), (ts, books.get((sym, ts), [])), quotes.get(sym))
+        return [(ctx, hyperliquid.label_or_none(sym, labels), (ts, books.get((sym, ts), [])))
                 for sym, (ts, ctx) in sorted(ctxs.items())]
 
     return {"pairs": pairs, "ladders": ladders, "listings": listings, "perps": perps, "series_fee": kalshi.fetch_series,

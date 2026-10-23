@@ -67,8 +67,8 @@ def test_sample_stock_covers_three_states():
     sp = [p for p in b.pairs if p.kind == "stock_perp"]
     assert len(sp) == 4 and {p.kind for p in b.pairs} >= {"exact", "stock_perp"}
     labels = [p.verdict.label for p in sp]
-    assert any(lab.startswith("Executable edge · +") for lab in labels)
-    assert "Basis · within costs · no edge" in labels and "Reference closed · oracle only" in labels
+    assert any(lab.startswith("Oracle basis · +") for lab in labels)
+    assert "Oracle basis · within perp costs" in labels and "Oracle internal · market closed" in labels
     assert "Stale · a leg has no snapshot in 5 min" in labels
     [stale] = [p for p in sp if not p.live]
     assert stale.net_bps is None and stale.basis_bps is None and stale.sensitivity is None and stale.costs is None

@@ -39,7 +39,6 @@ from venue_arb.models import Level
 from venue_arb.publish import history_table
 from venue_arb.report import note, research
 from venue_arb.sources.hyperliquid import Label, PerpCtx, PerpLevel
-from venue_arb.sources.schwab import Quote
 
 NOW = datetime(2026, 10, 20, 15, 30, tzinfo=UTC)
 SEED = 20261020
@@ -228,26 +227,23 @@ def research_section():
 
 
 def stock_inputs():
-    """Four invented stock perps through stock_perp_rows: NVDA executable (mark 213.4 vs Schwab 212.8/212.9), TSLA
-    inside costs (book on the mark), SKHX oracle-only (no stock quote: Korean shares), MSFT stale (snapshot 12 min old)."""
+    """Four invented stock perps through stock_perp_rows (oracle mode): NVDA oracle basis (mark 213.4 vs oracle 212.8),
+    TSLA inside perp costs (book on the mark), SKHX oracle internal (Korean exchange closed), MSFT stale (snapshot
+    12 min old)."""
     def book(mid, step, size):
         return [PerpLevel(side, i, round(mid + sign * (step / 2 + i * step), 2), size)
                 for side, sign in (("bid", -1), ("ask", 1)) for i in range(3)]
     snap = NOW - timedelta(seconds=40)
-    q = snap - timedelta(seconds=14)  # quotes are aged from the snapshot's tick
-    nvda = PerpCtx("xyz:NVDA", 213.4, 213.3, 213.4, 0.00001, 0.0005, 1e6, 5e6, True, 10)
-    tsla = PerpCtx("xyz:TSLA", 250.4, 250.4, 250.4, 0.00001, 0.0001, 1e6, 4e6, True, 10)
+    nvda = PerpCtx("xyz:NVDA", 213.4, 212.8, 213.4, 0.00001, 0.0005, 1e6, 5e6, True, 10)
+    tsla = PerpCtx("xyz:TSLA", 250.4, 250.38, 250.4, 0.00001, 0.0001, 1e6, 4e6, True, 10)
     skhx = PerpCtx("xyz:SKHX", 180000.0, 179800.0, 180000.0, 0.00001, 0.0002, 5e5, 1e6, False, 5)
     msft = PerpCtx("xyz:MSFT", 420.0, 420.0, 420.0, 0.00001, 0.0001, 1e6, 3e6, True, 10)
     return [
-        (nvda, Label("xyz:NVDA", "schwab", "NVDA", "NASDAQ", "USD", "NVIDIA"), (snap, book(213.4, 0.2, 100.0)),
-         Quote("NVDA", 212.8, 212.9, 300.0, 300.0, 212.85, q)),
-        (tsla, Label("xyz:TSLA", "schwab", "TSLA", "NASDAQ", "USD", "Tesla"), (snap, book(250.4, 0.1, 100.0)),
-         Quote("TSLA", 250.3, 250.4, 400.0, 400.0, 250.35, q)),
-        (skhx, Label("xyz:SKHX", "none", None, "KRX", "KRW", "SK hynix"), (snap, book(180000.0, 100.0, 20.0)), None),
+        (nvda, Label("xyz:NVDA", "schwab", "NVDA", "NASDAQ", "USD", "NVIDIA"), (snap, book(213.4, 0.2, 100.0))),
+        (tsla, Label("xyz:TSLA", "schwab", "TSLA", "NASDAQ", "USD", "Tesla"), (snap, book(250.4, 0.1, 100.0))),
+        (skhx, Label("xyz:SKHX", "none", None, "KRX", "KRW", "SK hynix"), (snap, book(180000.0, 100.0, 20.0))),
         (msft, Label("xyz:MSFT", "schwab", "MSFT", "NASDAQ", "USD", "Microsoft"),  # collector behind: the stale row
-         (NOW - timedelta(minutes=12), book(420.0, 0.2, 100.0)), Quote("MSFT", 419.9, 420.1, 200.0, 200.0, 420.0,
-                                                          NOW - timedelta(minutes=12, seconds=14)))]
+         (NOW - timedelta(minutes=12), book(420.0, 0.2, 100.0)))]
 
 
 def stock_block():
@@ -263,13 +259,13 @@ def stock_block():
             move = round(base * rng.choice((-1, 1)) * (0.004 + 0.002 * rng.random()), 2)  # Monday's open vs Friday
             weekend.append({"symbol": sym, "friday": fri, "p_fri": base, "p_sat": round(base + move * 0.5, 2),
                             "p_sun": round(base + move * (0.4 + 0.8 * rng.random()), 2), "p_open_pre": base + move,
-                            "p_open_reg": round(base + move, 2), "ref_kind": "schwab"})
+                            "p_open_reg": round(base + move, 2), "ref_kind": "oracle_us"})
     return research.stock_perp_block({
         "hourly": hourly, "names": 3, "snapshots": 4320, "window_start": hours[0], "episodes": 2, "share_hours": 0.12,
-        "by_name": [{"symbol": "xyz:NVDA", "name": "NVIDIA", "max_net_bps": 13.0, "hours_ge_10": 3, "ref_kind": "schwab"},
-                    {"symbol": "xyz:TSLA", "name": "Tesla", "max_net_bps": 7.5, "hours_ge_10": 0, "ref_kind": "schwab"},
-                    {"symbol": "xyz:AAPL", "name": "Apple", "max_net_bps": 4.0, "hours_ge_10": 0, "ref_kind": "schwab"}],
-        "sensitivity": {"episodes_base": 2, "episodes_1h": 4, "episodes_7d": 0, "episodes_borrow_x10": 2,
+        "by_name": [{"symbol": "xyz:NVDA", "name": "NVIDIA", "max_net_bps": 13.0, "hours_ge_10": 3},
+                    {"symbol": "xyz:TSLA", "name": "Tesla", "max_net_bps": 7.5, "hours_ge_10": 0},
+                    {"symbol": "xyz:AAPL", "name": "Apple", "max_net_bps": 4.0, "hours_ge_10": 0}],
+        "sensitivity": {"episodes_base": 2, "episodes_1h": 4, "episodes_7d": 0, "episodes_with_borrow": 2,
                         "window_days": 14},
         "weekend_rows": weekend}, NOW)
 

@@ -19,7 +19,6 @@ from tests.test_bundle import (
     NOW,
     PAIR,
     PM_BOOK,
-    QUOTE,
     SERIES_FEE,
     SP_NOW,
     SP_SNAP,
@@ -392,7 +391,7 @@ def test_research_bytes_warn(tmp_path, monkeypatch):
 
 def _perps_readers(calls):
     rd = readers()
-    rd["perps"] = lambda: calls.append("perps") or [(CTX215, LABEL_NVDA, SP_SNAP, QUOTE)]
+    rd["perps"] = lambda: calls.append("perps") or [(CTX215, LABEL_NVDA, SP_SNAP)]
     return rd
 
 
@@ -421,8 +420,8 @@ def test_tick_survives_a_failing_perps_reader(monkeypatch):
 
 
 def test_episodes_sql_and_scope_exclude_stock_perp():
-    assert "source <> 'stock_perp'" in publish.EPISODES_SQL
-    assert "source = 'stock_perp'" in publish.STOCK_PERP_EPISODES_SQL and "7 days" in publish.STOCK_PERP_EPISODES_SQL
+    assert "source NOT IN ('stock_perp', 'stock_perp_oracle')" in publish.EPISODES_SQL
+    assert "source = 'stock_perp_oracle'" in publish.STOCK_PERP_EPISODES_SQL and "7 days" in publish.STOCK_PERP_EPISODES_SQL
     assert publish.scope_episodes([{"source": "stock_perp", "kalshi_id": "x", "pm_id": "y"}], {}) == []
 
 
@@ -433,7 +432,7 @@ def test_spark_series_maps_stock_perp_rows_to_the_bundle_key():
     assert s[0] == pytest.approx(0.8432)  # SPARKS_SQL emits net_bps / 1e4; x100 -> net_bps / 100 (¢ of the net)
     assert "stock_perp_edges" in publish.SPARKS_SQL and "max(net_bps)" in publish.SPARKS_SQL
     stock_leg = publish.SPARKS_SQL.split("stock_perp_edges")[1]
-    assert "ref_kind = 'schwab'" in stock_leg and "GROUP BY hts, symbol\n" in stock_leg  # one key a name, any side
+    assert "mode = 'oracle' AND session = 'external'" in stock_leg and "GROUP BY hts, symbol\n" in stock_leg  # one key a name, any side
     assert "'stock_perp'" in publish.SPARKS_SQL
 
 
@@ -507,15 +506,16 @@ def _sp_row(minute, net=20.0, funding=0.0, borrow=0.0, d="long_perp_short_stock"
 def test_sensitivity_episodes_rescore_hold_and_borrow():
     ticks = lambda **kw: [tuple(_sp_row(m, **kw).values()) for m in range(3)]
     w = {"window_days": config.STOCK_PERP_SENSITIVITY_DAYS}
-    # funding received (-20 bps over 24 h) is worth less over 1 h and more over 7 d; borrow x10 costs 9 x 2 = 18 bps
+    # funding received (-20 bps over 24 h) is worth less over 1 h and more over 7 d; borrow costs 2 bps off the net; funding scales with the hold alone
     got = publish.sensitivity_episodes(ticks(net=20.0, funding=-20.0, borrow=2.0))
-    assert got == {"episodes_base": 1, "episodes_1h": 0, "episodes_7d": 1, "episodes_borrow_x10": 0} | w
+    assert got == {"episodes_base": 1, "episodes_1h": 0, "episodes_7d": 1, "episodes_with_borrow": 1} | w
+    assert publish.sensitivity_episodes(ticks(net=11.0, borrow=2.0))["episodes_with_borrow"] == 0  # 9 bps < 10
     # a paid-funding run (+12) dies at 7 d; an interleaved other-direction tick splits a run (two runs of one < 2)
     assert publish.sensitivity_episodes(ticks(net=30.0, funding=12.0)) == {
-        "episodes_base": 1, "episodes_1h": 1, "episodes_7d": 0, "episodes_borrow_x10": 1} | w
+        "episodes_base": 1, "episodes_1h": 1, "episodes_7d": 0, "episodes_with_borrow": 1} | w
     split = [tuple(r.values()) for r in (_sp_row(0), _sp_row(1, d="short_perp_long_stock"), _sp_row(2))]
     assert publish.sensitivity_episodes(split) == dict.fromkeys(
-        ("episodes_base", "episodes_1h", "episodes_7d", "episodes_borrow_x10"), 0) | w
+        ("episodes_base", "episodes_1h", "episodes_7d", "episodes_with_borrow"), 0) | w
     # a thin stock leg never qualifies, whatever the carry; symbols are scored apart
     assert publish.sensitivity_episodes(ticks(cap=50.0))["episodes_1h"] == 0
     two = ticks(net=20.0) + [tuple(_sp_row(m, sym="xyz:TSLA").values()) for m in range(3)]
@@ -546,8 +546,7 @@ def test_stock_perp_inputs_assembles_the_block_inputs():
     out = publish.stock_perp_inputs(ch, conn, {"xyz:NVDA": Label("xyz:NVDA", "schwab", "NVDA", "NASDAQ", "USD", "NVIDIA")})
     assert out["names"] == 1 and out["snapshots"] == 3 and out["window_start"] == NOW and out["episodes"] == 7
     assert out["share_hours"] == 0.4 and out["hourly"] == [(NOW, 25.0)]
-    assert out["by_name"] == [{"symbol": "xyz:NVDA", "name": "NVIDIA", "max_net_bps": 25.0, "hours_ge_10": 2,
-                               "ref_kind": "schwab"}]
+    assert out["by_name"] == [{"symbol": "xyz:NVDA", "name": "NVIDIA", "max_net_bps": 25.0, "hours_ge_10": 2}]
     assert out["sensitivity"]["episodes_base"] == out["sensitivity"]["episodes_1h"] == 1 and out["weekend_rows"][0]["friday"] == date(2026, 10, 16)
     from venue_arb.report import research
 
@@ -556,28 +555,31 @@ def test_stock_perp_inputs_assembles_the_block_inputs():
 
 def test_perp_readers_look_back_twice_the_live_age():  # a stalled name stays in the bundle and reads Stale
     window = f"INTERVAL {2 * bundle.LIVE_MAX_AGE_S} SECOND"
-    assert all(window in sql for sql in (publish.PERP_CTX_SQL, publish.PERP_BOOKS_SQL, publish.PERP_QUOTES_SQL))
+    assert all(window in sql for sql in (publish.PERP_CTX_SQL, publish.PERP_BOOKS_SQL))
 
 
-def test_stock_research_sql_reads_executable_rows_and_counts_ticks():
-    assert "WHERE ref_kind = 'schwab'" in publish.SP_HOURLY_SQL
-    assert "maxOrNullIf(net_bps, ref_kind = 'schwab')" in publish.SP_BY_NAME_SQL
-    assert "uniqExactIf(toStartOfHour(ts), abs(basis_bps) >= 10)" in publish.SP_BY_NAME_SQL  # hours_ge_10: every row
+def test_stock_research_sql_counts_ticks_and_hours():
+    assert "max(net_bps)" in publish.SP_BY_NAME_SQL and "ref_kind" not in publish.SP_BY_NAME_SQL
+    assert "uniqExactIf(toStartOfHour(ts), abs(basis_bps) >= 10)" in publish.SP_BY_NAME_SQL
     assert "count()" in publish.SP_COUNTS_SQL and "uniqExact((symbol, ts))" not in publish.SP_COUNTS_SQL
 
 
-def test_stock_perp_inputs_drops_oracle_only_names_from_by_name():
-    rows = {publish.SP_COUNTS_SQL: [(2, 3, NOW)], publish.SP_SHARE_SQL: [(0.4, 2)], publish.SP_HOURLY_SQL: [],
-            publish.SP_BY_NAME_SQL: [("xyz:NVDA", 25.0, 2), ("xyz:SKHX", None, 5)], publish.SP_EDGES_SQL: []}
-    ch = SimpleNamespace(query=lambda sql: SimpleNamespace(result_rows=rows[sql]))
+def test_public_bundle_never_reads_refs(monkeypatch):
+    monkeypatch.setattr(config, "DASHBOARD_SHOW_STOCK_PERPS", True)
 
-    class Cur(SimpleNamespace):
-        def fetchone(self):
-            return (0,)
+    def boom(*a, **k):
+        raise AssertionError("a refs/quotes reader was called")
 
-        def fetchall(self):
-            return []
+    out = publish.tick({}, {**_perps_readers([]), "quotes": boom}, SP_NOW)
+    rows = [p for p in out.pairs if p.kind == "stock_perp"]
+    assert rows and all(p.reference["kind"] == "oracle" for p in rows)
+    assert "schwab" not in out.model_dump_json().lower()
 
-    conn = SimpleNamespace(execute=lambda sql: Cur(description=[]))
-    out = publish.stock_perp_inputs(ch, conn, {})
-    assert [r["symbol"] for r in out["by_name"]] == ["xyz:NVDA"]
+
+def test_research_sql_reads_oracle_mode_only():
+    for q in (publish.SP_HOURLY_SQL, publish.SP_COUNTS_SQL, publish.SP_SHARE_SQL, publish.SP_BY_NAME_SQL,
+              publish.SP_EDGES_SQL, publish.STOCK_PERP_HOUR_SQL):
+        assert "mode = 'oracle'" in q and "session = 'external'" in q
+    assert "stock_perp_refs" not in publish.PERP_CTX_SQL + publish.PERP_BOOKS_SQL
+    assert not hasattr(publish, "PERP_QUOTES_SQL") and "schwab" not in publish.SP_BY_NAME_SQL
+    assert "source = 'stock_perp_oracle'" in publish.SP_EPISODES_ALL_SQL
