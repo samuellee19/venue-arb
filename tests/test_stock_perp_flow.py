@@ -4,7 +4,7 @@ from pathlib import Path
 
 from venue_arb.flows import stock_perp_backfill as bf
 from venue_arb.sources.hyperliquid import Label
-from venue_arb.stock_perp_window import score_window, stock_perp_opportunity_row
+from venue_arb.stock_perp_window import ORACLE_PM_ID, score_window, stock_perp_opportunity_row
 
 T0 = datetime(2026, 10, 22, 14, 0, tzinfo=UTC)
 TICKS = [T0 + timedelta(seconds=60 * i) for i in range(4)]
@@ -162,3 +162,13 @@ def test_external_oracle_ticks_make_an_oracle_episode():
     _, eps, _ = window()
     assert [(src, e.direction, e.snapshots) for src, e in eps if src == "stock_perp_oracle"] == [
         ("stock_perp_oracle", "short_perp_long_stock", 4)]
+
+
+def test_executable_and_oracle_episodes_have_distinct_opportunity_keys():
+    _, eps, _ = window()
+    rows = {src: stock_perp_opportunity_row(e, src) for src, e in eps if e.kalshi_id == "xyz:NVDA"}
+    ex, orc = rows["stock_perp"], rows["stock_perp_oracle"]
+    assert ex["start_ts"] == orc["start_ts"] and orc["pm_id"] == ORACLE_PM_ID and ex["pm_id"] == "NVDA"
+    key = ("kalshi_id", "pm_id", "direction", "start_ts")
+    assert tuple(ex[k] for k in key) != tuple(orc[k] for k in key)
+    assert tuple(ex[k] for k in key[:3]) != tuple(orc[k] for k in key[:3])  # the no-overlap check joins on these

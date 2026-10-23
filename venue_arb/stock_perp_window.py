@@ -12,6 +12,8 @@ from venue_arb.fees import FEE_VERSION
 from venue_arb.sources.hyperliquid import Label, PerpCtx, PerpLevel, label_or_none
 from venue_arb.sources.schwab import Quote
 
+# opportunities is keyed (kalshi_id, pm_id, direction, start_ts): an oracle episode must not collide with an executable one
+ORACLE_PM_ID = "oracle"
 SOURCES = {"executable": "stock_perp", "oracle": "stock_perp_oracle"}
 
 
@@ -57,7 +59,7 @@ def score_window(ctx_rows: list[dict], book_rows: list[dict], ref_rows: list[dic
                     if r["direction"] == d and (mode == "executable" or r["session"] == "external")
                     else Edge(d, None, 0.0, 0.0, None)) for r in g]
             eps += [(source, e) for e in episodes.find(
-                pts, close_time, kalshi_id=symbol, pm_id=label_or_none(symbol, labels).ref_symbol or symbol,
+                pts, close_time, kalshi_id=symbol, pm_id=ORACLE_PM_ID if mode == "oracle" else label_or_none(symbol, labels).ref_symbol or symbol,
                 direction=d, min_edge=STOCK_PERP_MIN_NET_BPS / 1e4, annualize=stock_perps.annualize)]
     stats = {"symbols": len({c["symbol"] for c in ctx_rows}), "snapshots": snapshots, "edge_rows": len(rows),
              "rows_with_capacity": sum(r["capacity_contracts"] > 0 for r in rows), "episodes": len(eps),
