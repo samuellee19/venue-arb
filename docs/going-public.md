@@ -38,6 +38,7 @@ Before the repo's visibility changes (Sam's action, after every box is ticked). 
   should leave the public page: add `xyz:SYMBOL  # neutral reason` to `labels/stock_perps_excluded.txt`. The comment
   must not cite Schwab. Nothing is hidden automatically. The publisher re-reads the file and drops the name from every
   public path (live rows, sparklines, history Parquet, research block, episode counts); the private tables keep it.
+  Then, history hours already pushed keep the name until rewritten: with `DASHBOARD_SHOW_STOCK_PERPS` on, run `secrets uv run python -m venue_arb.publish history --hours 240` (the server keeps about 10 days of hour files; the run rewrites and pushes them); with the flag off the hour files hold no stock rows, so there is nothing to rewrite.
 - [ ] **`DASHBOARD_SHOW_STOCK_PERPS` stays `False`** until the first week of oracle-check reports is read and the
   rewritten `copy.METHOD["stock_perps"]` is reviewed on the rendered page.
 - [ ] **OPEN DECISION (Sam): Polymarket terms vs the live pair tier.** The Polymarket Terms of Use (effective

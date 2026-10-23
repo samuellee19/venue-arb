@@ -303,7 +303,7 @@ personal-use terms, Pyth display terms).
 - Exclusion is manual only: a name leaves the public page when someone adds it to `labels/stock_perps_excluded.txt`
   by hand with a neutral comment that does not cite Schwab. Nothing hides a name automatically. The file then means
   "hidden from every public path": the publisher re-reads it and filters the name out of the live rows, sparklines,
-  history Parquet, research block and episode counts. A name may be in both the labels CSV and the excluded file; its
+  history Parquet, research block and episode counts (history hours already pushed keep the name until rewritten: with `DASHBOARD_SHOW_STOCK_PERPS` on, run `secrets uv run python -m venue_arb.publish history --hours 240` (the server keeps about 10 days of hour files; the run rewrites and pushes them); with the flag off the hour files hold no stock rows, so there is nothing to rewrite.). A name may be in both the labels CSV and the excluded file; its
   rows stay in the private tables. The collector (`collect_perps.run_forever`) skips excluded names, so an excluded
   name's private rows stop growing from the next label reload; what was collected before stays.
 - Asian exchange holidays are not modelled in the session calendar (`venue_arb/sessions.py`); on such a day a name

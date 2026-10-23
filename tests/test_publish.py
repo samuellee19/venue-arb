@@ -667,3 +667,17 @@ def test_public_stock_perp_sql_reads_oracle_mode_and_never_refs():
             assert "stock_perp_refs" not in v, n
             if "stock_perp_edges" in v:
                 assert "mode = 'oracle'" in v, n
+
+
+def test_excluded_keeps_the_last_good_list_and_fails_closed_without_one(monkeypatch):
+    def unreadable():
+        raise FileNotFoundError("labels/stock_perps_excluded.txt")
+
+    monkeypatch.setattr(publish, "_last_excluded", None)
+    monkeypatch.setattr(publish.hyperliquid, "load_excluded", unreadable)
+    with pytest.raises(FileNotFoundError):
+        publish.excluded()  # nothing to fall back on: fail closed, never publish an excluded name
+    monkeypatch.setattr(publish.hyperliquid, "load_excluded", lambda: {"xyz:NVDA"})
+    assert publish.excluded() == ["xyz:NVDA"]
+    monkeypatch.setattr(publish.hyperliquid, "load_excluded", unreadable)
+    assert publish.excluded() == ["xyz:NVDA"]

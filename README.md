@@ -265,7 +265,8 @@ secrets uv run python -m venue_arb.flows.stock_perp_oracle_check
 
 No name is hidden automatically. After a week of reports, remove a name from the public page by hand in
 `labels/stock_perps_excluded.txt` with a neutral comment: the publisher re-reads the file and drops the name from the
-live rows, sparklines, history, research block and episode counts; its rows stay in the private tables. Asian exchange holidays are not in the session calendar, so
+live rows, sparklines, history, research block and episode counts; its rows stay in the private tables. The
+History hours already pushed keep the name until rewritten: with `DASHBOARD_SHOW_STOCK_PERPS` on, run `secrets uv run python -m venue_arb.publish history --hours 240` (the server keeps about 10 days of hour files; the run rewrites and pushes them); with the flag off the hour files hold no stock rows, so there is nothing to rewrite. Asian exchange holidays are not in the session calendar, so
 on such a day a name may read external against a stale oracle.
 
 ## Data terms and caveats

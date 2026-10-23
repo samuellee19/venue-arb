@@ -359,10 +359,22 @@ def history_size_mb(out_dir: Path, now: datetime) -> float:
     return sum(f.stat().st_size for f in (out_dir / "history").glob("pairs-*.parquet") if f.name > cutoff) / 1e6
 
 
+_last_excluded: list[str] | None = None
+
+
 def excluded() -> list[str]:
     """labels/stock_perps_excluded.txt, re-read on every call: these names are hidden from every public path (live rows,
-    sparks, history, research, episode counts); the collector and the private tables are unaffected."""
-    return sorted(hyperliquid.load_excluded())
+    sparks, history, research, episode counts). The collector skips them too, so their private rows stop growing; what
+    was collected before stays. An unreadable file keeps the last good list (a bad edit must not stall the publisher);
+    with none yet it raises, so a name is never published for want of the file."""
+    global _last_excluded
+    try:
+        _last_excluded = sorted(hyperliquid.load_excluded())
+    except (OSError, ValueError) as e:
+        if _last_excluded is None:
+            raise
+        log.error("excluded names unreadable error=%s, keeping the last good list", type(e).__name__)
+    return _last_excluded
 
 
 def stock_refs() -> dict[str, str]:
