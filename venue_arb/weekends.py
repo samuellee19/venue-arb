@@ -6,6 +6,7 @@ from datetime import date, datetime, time, timedelta
 from statistics import median
 from zoneinfo import ZoneInfo
 
+from venue_arb import sessions
 from venue_arb.sessions import _US  # the US-listed exchange set, not duplicated
 from venue_arb.sources.hyperliquid import Label
 
@@ -45,7 +46,8 @@ def first_between(points: list[tuple[datetime, float]], lo: datetime, hi: dateti
 def weekend_row(symbol: str, friday: date, marks: list[tuple[datetime, float]], refs: list[tuple[datetime, float]],
                 label: Label, tol: timedelta = timedelta(minutes=5)) -> dict:
     """One (symbol, friday) row. `marks`: (ts, perp mark) or (candle close time, close). `refs`: the venue's oracle
-    prints, never a Schwab quote. A sample with no mark inside the tolerance is None, never skipped."""
+    prints, never a Schwab quote; a US print counts only while the oracle is external, so a holiday Monday leaves the
+    opens None (the row stays unfinished). A sample with no mark inside the tolerance is None, never skipped."""
     row = {"symbol": symbol, "friday": friday, "p_open_pre": None, "p_open_reg": None, "ref_kind": label.ref_kind}
     for key, (_, t) in SAMPLES.items():
         row["p_" + key] = sample(marks, at(friday + timedelta(days=OFFSET[key]), t), tol)
@@ -54,6 +56,7 @@ def weekend_row(symbol: str, friday: date, marks: list[tuple[datetime, float]], 
         row["p_open_pre"] = first_between(refs, at(monday, OPEN_KRX, KST), at(monday, CLOSE_KRX, KST))
         row["ref_kind"] = "oracle_krx"
     elif label.exchange.strip().upper() in _US:
+        refs = [(ts, v) for ts, v in refs if sessions.external(label, ts)]  # a holiday Monday's oracle is the perp's own
         monday_open = at(monday, OPEN_REG)
         row["p_open_pre"] = first_between(refs, at(monday - timedelta(days=1), OPEN_PRE), monday_open)
         row["p_open_reg"] = first_between(refs, monday_open, at(monday, CLOSE_REG))

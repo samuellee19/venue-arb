@@ -159,3 +159,13 @@ def test_fall_back_weekend_resolves_to_the_right_utc_instants():
     assert wk.at(date(2026, 11, 1), wk.SAMPLES["sun"][1]).astimezone(UTC) == u(32, 23)
     assert wk.at(date(2026, 11, 1), wk.OPEN_PRE).astimezone(UTC) == u(33, 1, 5)
     assert wk.at(date(2026, 11, 2), wk.OPEN_REG).astimezone(UTC) == u(33, 14, 30)
+
+
+def test_holiday_monday_keeps_only_external_oracle_prints():
+    # Labor Day 2026-09-07: the oracle is internal all Monday (it follows the perp), so no regular open
+    fri = date(2026, 9, 4)
+    mon = fri + timedelta(3)
+    refs = [(et(mon, 9, 30), 216.0), (et(mon, 10, 0), 217.0)]
+    row = wk.weekend_row("xyz:NVDA", fri, MARKS, refs, LABEL_SCHWAB)
+    assert row["p_open_reg"] is None and row["p_open_pre"] is None and row["ref_kind"] == "oracle_us"
+    assert wk.contained(row) is None
