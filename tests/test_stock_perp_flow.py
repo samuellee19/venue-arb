@@ -99,6 +99,8 @@ def test_opportunity_row_is_not_us_executable():
 def test_serve_lists_stock_perp_deployment():
     text = Path("venue_arb/flows/serve.py").read_text()
     assert re.search(r'stock_perp_score\w*\.to_deployment\("stock_perp_score", cron="55 \* \* \* \*"', text)
+    # Kalshi opens the next hour's crypto strikes at :00; listing them at :01 keeps the hourly ladder gap short
+    assert 'to_deployment("catalog", cron="1 * * * *"' in text
 
 
 def test_candle_rows_join_funding_by_hour():

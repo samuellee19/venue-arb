@@ -11,7 +11,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from functools import partial
 
-from venue_arb import basis, http
+from venue_arb import basis, catalog, http
 from venue_arb.books import to_rows, watchlist
 from venue_arb.config import (
     BASIS_WINDOW_DAYS,
@@ -187,7 +187,7 @@ def run_forever(interval_s: int = SNAPSHOT_INTERVAL_S, flush_every: int = 5) -> 
     from qa import checks, db, sql, store
 
     obs.init(service="venue-arb")
-    fetchers, buf, watch, n = default_fetchers(), {v: [] for v in VENUES}, [], 0
+    fetchers, buf, watch, n, stamp = default_fetchers(), {v: [] for v in VENUES}, [], 0, None
     stats, cycles = {v: [0, 0, 0] for v in VENUES}, []
 
     def load(rows):
@@ -200,9 +200,10 @@ def run_forever(interval_s: int = SNAPSHOT_INTERVAL_S, flush_every: int = 5) -> 
     while True:
         started = time.monotonic()
         try:
-            if n % 10 == 0:
-                with db.pg() as conn:
-                    watch = load_watchlist(conn, db.ch)
+            with db.pg() as conn:  # every 10 ticks, and as soon as a catalog run lands (catalog.listings_stamp)
+                now_stamp = catalog.listings_stamp(conn)
+                if n % 10 == 0 or now_stamp != stamp:
+                    watch, stamp = load_watchlist(conn, db.ch), now_stamp
             n += 1
             tick(watch, fetchers, buf, stats)
             cycles.append(time.monotonic() - started)

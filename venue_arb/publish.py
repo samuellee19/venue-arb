@@ -27,7 +27,7 @@ from pathlib import Path
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from venue_arb import bundle, config, stock_perps
+from venue_arb import bundle, catalog, config, stock_perps
 from venue_arb.bundle import Annotation, Basis, Episode, LiveBundle, ResearchSummary, Snap, pair_key
 from venue_arb.config import BASIS_WINDOW_DAYS, PIPELINE_PREFIX
 from venue_arb.edges import Edge
@@ -494,11 +494,14 @@ def _listing_note(p, titles: dict, now: datetime) -> list[Annotation]:
 
 
 def tick(state: dict, readers: dict, now: datetime) -> LiveBundle:
-    """Latest books every call; refresh() every REFRESH_EVERY calls. A refresh that raises is retried next call; the
-    previous refresh's state serves meanwhile (its error type goes to state["refresh_errors"]). Without one, it raises."""
-    if state.get("since_refresh", REFRESH_EVERY) >= REFRESH_EVERY:
+    """Latest books every call; refresh() every REFRESH_EVERY calls, and as soon as the listings stamp moves (a catalog
+    run landed: the next hour's ladders). A refresh that raises is retried next call; the previous refresh's state
+    serves meanwhile (its error type goes to state["refresh_errors"]). Without one, it raises."""
+    stamp = readers.get("listings_stamp", lambda: None)()
+    moved = stamp is not None and stamp != state.get("listings_stamp")
+    if moved or state.get("since_refresh", REFRESH_EVERY) >= REFRESH_EVERY:
         try:
-            state |= refresh(readers, now) | {"since_refresh": 0}
+            state |= refresh(readers, now) | {"since_refresh": 0, "listings_stamp": stamp}
         except Exception as e:
             if "titles" not in state:
                 raise
@@ -638,6 +641,10 @@ def default_readers(db) -> dict:
         return (crypto_rule.ladders(rows),
                 bounds_by_asset(db.ch().query(BASIS_SQL, parameters={"end": now}).result_rows))
 
+    def listings_stamp():
+        with db.pg() as conn:
+            return catalog.listings_stamp(conn)
+
     def listings(ids):
         with db.pg() as conn:
             rows = _dicts(conn.execute(TITLES_SQL, {"k": [m for v, m in ids if v == "kalshi"],
@@ -671,7 +678,7 @@ def default_readers(db) -> dict:
     def perps():
         return read_perps(db.ch())
 
-    return {"pairs": pairs, "ladders": ladders, "listings": listings, "perps": perps, "series_fee": kalshi.fetch_series,
+    return {"pairs": pairs, "ladders": ladders, "listings": listings, "listings_stamp": listings_stamp, "perps": perps, "series_fee": kalshi.fetch_series,
             "books": books, "context": context, "research_inputs": research_inputs, "review_labels": review_labels,
             "stock_perp_inputs": stock_perp_research}
 

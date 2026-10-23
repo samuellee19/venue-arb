@@ -142,7 +142,7 @@ secrets uv run pytest -m integration    # needs the stack up
 
 On the OptiPlex, four long-running systemd user units: `venue-arb-collector` (order-book snapshots),
 `venue-arb-perps` (stock-perp snapshots; the weekly Schwab login restarts it),
-`venue-arb-publish` (dashboard bundle, below) and `venue-arb-flows` (`prefect.serve` of seven deployments, six hourly: `catalog` at :05, `match` at :20, `basis` at :35,
+`venue-arb-publish` (dashboard bundle, below) and `venue-arb-flows` (`prefect.serve` of seven deployments, six hourly: `catalog` at :01 (Kalshi opens the next hour's crypto strikes at :00), `match` at :20, `basis` at :35,
 `score` at :40, which scores the last 26 h of books, `ladder_score` at :50, which scores the last 3 h of same-instant
 ladder books, and `stock_perp_score` at :55, which scores the last 3 h of stock-perp books. The seventh,
 `stock_perp_weekend`, runs Mondays at 15:00 UTC. Overlapping windows re-score idempotently. Apply migrations (`db.migrate`) before restarting

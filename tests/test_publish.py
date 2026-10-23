@@ -681,3 +681,15 @@ def test_excluded_keeps_the_last_good_list_and_fails_closed_without_one(monkeypa
     assert publish.excluded() == ["xyz:NVDA"]
     monkeypatch.setattr(publish.hyperliquid, "load_excluded", unreadable)
     assert publish.excluded() == ["xyz:NVDA"]
+
+
+def test_a_catalog_run_refreshes_before_the_period_is_up():
+    calls, stamp = {}, ["run-1"]
+    r = readers(calls) | {"listings_stamp": lambda: stamp[0]}
+    state = {}
+    publish.tick(state, r, NOW)
+    publish.tick(state, r, NOW)
+    assert calls["pairs"] == 1  # same stamp, period not up: no refresh
+    stamp[0] = "run-2"  # the catalog landed: the next hour's ladders are listed
+    publish.tick(state, r, NOW)
+    assert calls["pairs"] == 2 and state["since_refresh"] == 1

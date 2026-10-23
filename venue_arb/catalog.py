@@ -43,6 +43,13 @@ def to_rows(listings: list[Listing], versions: dict[tuple[str, str], str], now: 
     ]
 
 
+def listings_stamp(conn):
+    """max(last_seen): the catalog flow upserts every listing in one transaction stamped with its run time, so this
+    changes once per run, after the commit. The collector and the publisher reload when it moves, so the hourly crypto
+    ladders that open at :00 reach the page minutes after the catalog lists them, not up to two reload periods later."""
+    return conn.execute("SELECT max(last_seen) FROM venue_arb.listings").fetchone()[0]
+
+
 def upsert(conn, rows: list[dict]) -> int:
     if rows:
         with conn.cursor() as cur:
