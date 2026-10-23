@@ -57,7 +57,7 @@ fi
   cd /srv/venue-arb/app
   uv python install 3.14
   [ -x .venv/bin/python ] || uv venv --python 3.14 .venv
-  uv pip install --exclude-newer 2026-10-05T00:00:00Z --python .venv/bin/python fastapi uvicorn duckdb pydantic
+  uv pip install --exclude-newer 2026-10-05T00:00:00Z --python .venv/bin/python fastapi uvicorn duckdb pydantic httpx  # httpx: venue_arb.bundle imports the Hyperliquid source
   PYTHONPATH=. .venv/bin/python -c "import venue_arb.edges, venue_arb.bundle, dashboard.api.app"
 ')
 
