@@ -2,7 +2,9 @@
 // headline, three cards with a chart each, and the method. Every number comes from the bundle; this only formats.
 import {$, esc, num, usd, cents, day, hm, pz, css, baseLayout, PLOT_CFG, REPO, NOT_COMPUTED} from "./common.js";
 
-const METHOD = [["matching", "Matching"], ["edge", "Edge"], ["crypto", "Crypto ladders"], ["not_shown", "What is not shown"]];
+const METHOD = [["matching", "Matching"], ["edge", "Edge"], ["crypto", "Crypto ladders"], ["not_shown", "What is not shown"],
+  ["stock_perps", "Stock perps"]];
+const MIN_BPS = 10;  // the stock-perp net floor (config.STOCK_PERP_MIN_NET_BPS), drawn as the dashed line
 const dash = (x, f) => x == null ? "—" : f(x);
 const count = (n, word) => `${num(n)} <span>${word}${n === 1 ? "" : "s"}</span>`;
 const at = iso => `${day(new Date(iso))} ${hm(new Date(iso))}`;
@@ -17,6 +19,19 @@ const span = (a, b) => {  // "Jun–Oct 2026"; the year once when both ends shar
 const card = (id, title, win, figure, qualifier, caption) => `<div class="card"><h3>${title}, ${win}</h3><div class="v">${figure}</div>`
   + `<p>${qualifier}</p><div class="rchart" id="${id}"></div><p class="cap">${caption}</p></div>`;
 
+// the two stock-perp cards: net spread by hour, and how much of Monday's move the Sunday perp already held
+function stockCards(s) {
+  const w = s.weekends, se = s.sensitivity;
+  return card("rc-sp", "Stock-perp spread", "net of costs", count(s.episodes, "episode"),
+    `max net ${dash(s.max_net_bps, x => num(x, 1))} bps; ${dash(s.share_hours_abs_ge_10bps, x => num(100 * x))}% of session hours over ${MIN_BPS} bps; `
+      + `${num(s.names)} names ${since(s.window_start)}`,
+    `max net bps per hour; dashed: ${MIN_BPS} bps. Episodes in the last ${num(se.window_days)} d: ${num(se.episodes_base)} at a 24 h hold, `
+      + `${num(se.episodes_1h)} at 1 h, ${num(se.episodes_7d)} at 7 d, ${num(se.episodes_borrow_x10)} with borrow ×10`)
+    + card("rc-wk", "Weekends", `${num(w.names)} names`, `${dash(w.hit_rate_sun, x => num(100 * x))}% <span>lean the right way</span>`,
+      [`${num(w.n_sun)} name-weekends`, "perp at Sunday 6 PM ET vs Monday's open", ...(w.enough ? [] : ["too few weekends to conclude"])].join("; "),
+      "share of Monday's move the Sunday perp already held, one dot per name; dashed: all of it");
+}
+
 export function renderResearch(bundle) {
   const el = $("tab-research"), r = bundle.research;
   for (const g of el.querySelectorAll(".js-plotly-plot")) Plotly.purge(g);  // drops each graph's resize handler
@@ -27,7 +42,7 @@ export function renderResearch(bundle) {
   const ladderQ = [count(r.episodes_ladder, "episode"), ...(r.ladder_checks == null ? ["no counted hours yet"]
     : [`${num(r.ladder_checks)} admissible checks`, ...basis])].join("; ");
   const rv = r.review;
-  el.innerHTML = `<div class="hero"><h2>${esc(question)}</h2><p>${answer.map(esc).join(" ")}</p>`
+  el.innerHTML = `<div class="hero"><h2>${esc(question)}</h2><p>${answer.map(esc).join(" ")}</p>${r.stock_perps ? `<p>${esc(r.stock_perps.headline)}</p>` : ""}`
     + `<p class="asof">as of ${at(r.computed_at)} — recomputed hourly from the same tables the Scanner reads — dated note: `
     + `<a href="${REPO}/blob/main/${esc(r.note_path)}">${esc(r.note_path)}</a></p></div>`
     + `<div class="cards">`
@@ -41,11 +56,23 @@ export function renderResearch(bundle) {
       "rows by net gap, ¢; 1¢ and above tinted")
     + card("rc-ladder", "Same-instant ladders", since(r.ladder_start), count(r.ladder_violations, "violation"), ladderQ,
       "admissible checks per counted hour; red marks: violations")
+    + (r.stock_perps ? stockCards(r.stock_perps) : "")
     + `</div><div class="method"><h3>How it's measured</h3>`
-    + METHOD.map(([k, h]) => `<h4>${h}</h4><p>${esc(r.method[k])}</p>`).join("")
+    + METHOD.filter(([k]) => r.method[k]).map(([k, h]) => `<h4>${h}</h4><p>${esc(r.method[k])}</p>`).join("")
     + `<p class="mut">${rv ? `Match review: precision ${num(rv.precision, 2)} on ${num(rv.labels)} labels (${day(new Date(rv.asof))})`
       : "no review sitting yet"}</p></div>`;
   if (window.Plotly) draw(r);
+}
+
+// contained share per weekend: (Sunday perp - Friday) / (Monday open - Friday), for moves of at least MIN_BPS
+function contained(rows) {
+  const out = [];
+  for (const x of rows) {
+    const open = x.p_open_reg ?? (x.ref_kind === "oracle_krx" ? x.p_open_pre : null);
+    if (x.p_sun == null || open == null || !(x.p_fri > 0) || Math.abs(open - x.p_fri) / x.p_fri * 1e4 < MIN_BPS) continue;
+    out.push({symbol: x.symbol, friday: x.friday, share: (x.p_sun - x.p_fri) / (open - x.p_fri)});
+  }
+  return out;
 }
 
 function draw(r) {
@@ -75,4 +102,19 @@ function draw(r) {
       text: hit.map(i => `${num(lh.violations[i])} violation${lh.violations[i] === 1 ? "" : "s"}`),
       marker: {color: neg, size: 10, symbol: "x"}, hovertemplate: "%{text}<extra></extra>"}],
   {...L, xaxis: date}, PLOT_CFG);
+
+  const sp = r.stock_perps;
+  if (!sp) return;
+  const hr = sp.hourly;
+  Plotly.react($("rc-sp"), [{type: "scatter", mode: "lines", x: ts(hr), y: hr.values, line: {color: k, width: 2},
+    hovertemplate: "%{x|%d %b %H:00}Z<br>max net %{y:.1f} bps<extra></extra>"}],
+  {...L, xaxis: date, yaxis: {...L.yaxis, ticksuffix: " bps"},
+    shapes: [{type: "line", xref: "paper", x0: 0, x1: 1, y0: MIN_BPS, y1: MIN_BPS, line: {color: neg, width: 1, dash: "dash"}}]}, PLOT_CFG);
+
+  const pts = contained(sp.weekends.rows);
+  Plotly.react($("rc-wk"), [{type: "scatter", mode: "markers", x: pts.map(x => x.friday), y: pts.map(x => 100 * x.share),
+    text: pts.map(x => x.symbol), marker: {color: k, size: 8, opacity: 0.8},
+    hovertemplate: "%{text}, weekend of %{x|%d %b}<br>%{y:.0f}% of Monday's move<extra></extra>"}],
+  {...L, xaxis: {...L.xaxis, type: "date", nticks: 4, tickangle: 0}, yaxis: {...L.yaxis, ticksuffix: "%"},
+    shapes: [{type: "line", xref: "paper", x0: 0, x1: 1, y0: 100, y1: 100, line: {color: mut, width: 1, dash: "dash"}}]}, PLOT_CFG);
 }

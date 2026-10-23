@@ -9,9 +9,12 @@ STATIC = Path(__file__).parent.parent / "dashboard" / "static"
 TEXT = ("index.html", "styles.css", *sorted(p.name for p in STATIC.glob("*.js") if p.name != "plotly-basic.min.js"))
 VERDICTS = ("Exact match · no edge", "Executable edge", "Not an arbitrage · basis exposure",
             "Spread · within basis bound · no edge", "No asks on one side", "Stale · a leg has no snapshot in 5 min",
-            "Not executable from the US")
+            "Not executable from the US", "Basis · within costs · no edge", "Reference closed · oracle only")
 BANNERS = ("No pair is executable from the US: Polymarket rejects US orders (docs/venues.md). Gaps shown for reference.",
            "last update {n} min ago", "no books in 5 min")
+STOCK_COPY = ("Not advice. Hyperliquid blocks US traders; the perp leg is shown for reference.",
+              ("{n} stock perps — basis in bps of notional, net of 2× perp taker fee, stock spread, 24 h funding and "
+               "borrow — reference and its age on every row"), "basis is quoted in bps", "oracle only", "perpetual")
 SCANNER_COPY = ("Example — what a row looks like when a pair clears the rule",
                 "per-leg quotes are not published (venue display terms)", "ROI = net edge ÷ all-in cost per contract",
                 "admissible ladder checks in the last scored hour", "violations", "no scored hour yet",
@@ -20,7 +23,7 @@ RESEARCH_COPY = ("How it's measured", '"Matching"', '"Edge"', '"Crypto ladders"'
                  "Match review: precision", "no review sitting yet",
                  "recomputed hourly from the same tables the Scanner reads", "NOT_COMPUTED")
 MIDDOT_OK = tuple(v for v in VERDICTS if "·" in v)  # mid-dots live only inside the verbatim verdict labels
-ALLOWED_URL = re.compile(r"https://(kalshi\.com|polymarket\.com|github\.com/samuellee19/venue-arb)(/|$)")
+ALLOWED_URL = re.compile(r"https://(kalshi\.com|polymarket\.com|app\.hyperliquid\.xyz|github\.com/samuellee19/venue-arb)(/|$)")
 URL = re.compile(r"https?://[^\s'\"`)]+")
 IMPORT = re.compile(r'^import\s[^;]*?\sfrom\s+"([^"]+)"', re.MULTILINE)
 
@@ -89,6 +92,42 @@ def test_js_carries_the_copy():
     js = _js()
     for text in VERDICTS + BANNERS + SCANNER_COPY:
         assert text in js, text
+
+
+def test_stock_copy_and_hyperliquid_url_allow_list():
+    common, js = _read("common.js"), _js()
+    for text in STOCK_COPY:
+        assert text in js, text
+    for const in ("NOT_ADVICE", "FOOT_STOCK"):
+        assert f"export const {const} = " in common, const
+    assert "app\\.hyperliquid\\.xyz" in common or "app.hyperliquid.xyz" in common  # safeUrl allows the perp page
+    assert ALLOWED_URL.match("https://app.hyperliquid.xyz/trade/xyz:NVDA")
+    assert not ALLOWED_URL.match("https://app.hyperliquid.xyz.evil.net/x")
+
+
+def test_scanner_has_stock_header_template():
+    js = _read("scanner.js")
+    assert 'S.cat === "stock_perps"' in js and "FOOT_STOCK" in js and "NOT_ADVICE" in js
+    for th in ("Name", "Trade", "Basis", "Net", "Funding", "Capacity", "Reference", "Verdict"):
+        assert f">{th}<" in js or f">{th}</button>" in js, th
+    for key in ("net_bps", "funding_bps_h", "basis_bps", "next_funding_at"):
+        assert key in js, key
+    assert "oracle only" in js and "perpetual" in js
+
+
+def test_research_has_stock_cards_copy():
+    js = _read("research.js")
+    for text in ("Stock-perp spread", "Weekends", "too few weekends to conclude", '["stock_perps", "Stock perps"]',
+                 "perp at Sunday 6 PM ET vs Monday's open", "share_hours_abs_ge_10bps", "hit_rate_sun", "n_sun"):
+        assert text in js, text
+    assert js.index('card("rc-ladder"') < js.index("stockCards(r.stock_perps)")  # the stock cards come after the ladder card
+    assert "r.stock_perps ?" in js  # and only when the bundle carries them
+
+
+def test_stock_rows_are_guarded_in_the_client():
+    assert "l.url ? " in _read("explorer.js") or "l.url?" in _read("explorer.js")  # a stock leg has no url
+    common = _read("common.js")
+    assert "STOCK_MIN_BPS = 10" in common and "p.net_bps >= STOCK_MIN_BPS" in common  # tone() keys on bps for stock rows
 
 
 def test_verdict_labels_verbatim_in_common():

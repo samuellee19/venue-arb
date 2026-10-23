@@ -1,0 +1,2222 @@
+{
+  "annotations": [
+    {
+      "at": "2026-10-20T16:00:00Z",
+      "key": null,
+      "kind": "settlement",
+      "label": "BTC ladder settles 16:00 UTC",
+      "until": null
+    },
+    {
+      "at": "2026-10-20T14:20:00Z",
+      "key": null,
+      "kind": "listing",
+      "label": "New listing: KXCPI-26NOV-T0.3 matched to its Polymarket twin",
+      "until": null
+    },
+    {
+      "at": "2026-10-20T13:00:00Z",
+      "key": null,
+      "kind": "basis_change",
+      "label": "BTC basis bound 178 to 182 (99.9th pct, 30 d)",
+      "until": null
+    },
+    {
+      "at": "2026-10-20T14:41:00Z",
+      "key": null,
+      "kind": "collector_gap",
+      "label": "Collector gap: 6 min",
+      "until": "2026-10-20T14:47:00Z"
+    },
+    {
+      "at": "2026-10-20T15:02:00Z",
+      "key": "KXCPI-26NOV-T0.3~0x4e1d028cf5b590152b1271abea39731ff4448ee059e0501be6f208c6f7f868dc~k_yes_pm_no",
+      "kind": "threshold",
+      "label": "Net edge crossed 1¢",
+      "until": null
+    }
+  ],
+  "attribution": [
+    "Order books: Kalshi public market-data API (kalshi.com)",
+    "Order books: Polymarket public CLOB API (polymarket.com)"
+  ],
+  "basis": {
+    "BTC": {
+      "asof": "2026-10-20T15:30:00Z",
+      "down": 152.0,
+      "up": 182.0,
+      "window_days": 30
+    }
+  },
+  "categories": {
+    "crypto_price": "Crypto",
+    "fed_macro": "Fed & macro",
+    "stock_perps": "Stock perps",
+    "weather": "Weather"
+  },
+  "caveats": [
+    "Synthetic sample: every price, size and time is invented."
+  ],
+  "collector_last_snapshot_at": "2026-10-20T15:29:20Z",
+  "computed_at": "2026-10-20T15:30:00Z",
+  "episodes": [
+    {
+      "end": null,
+      "key": "KXCPI-26NOV-T0.3~0x4e1d028cf5b590152b1271abea39731ff4448ee059e0501be6f208c6f7f868dc~k_yes_pm_no",
+      "max_edge_cents": 5.35,
+      "median_capacity_usd": 1129.0,
+      "start": "2026-10-20T15:02:00Z",
+      "transfer_cost_usd": 11.13
+    }
+  ],
+  "kpis": {
+    "admissible_checks": 1200,
+    "best_edge": {
+      "capacity_usd": 1129.0,
+      "key": "KXCPI-26NOV-T0.3~0x4e1d028cf5b590152b1271abea39731ff4448ee059e0501be6f208c6f7f868dc~k_yes_pm_no",
+      "net_edge_cents": 5.35
+    },
+    "checks_window": [
+      "2026-10-20T14:00:00Z",
+      "2026-10-20T15:00:00Z"
+    ],
+    "episodes_7d": 1,
+    "pairs_live": {
+      "exact": 2,
+      "ladder": 3,
+      "near_exact": 1
+    },
+    "screened_hours": 3100,
+    "screened_share_ge_1c": 0.004,
+    "stock_perps": {
+      "episodes_7d": 2,
+      "names_live": 3
+    },
+    "violations": 0
+  },
+  "pairs": [
+    {
+      "basis_bps": null,
+      "books": null,
+      "capacity_contracts": 0.0,
+      "capacity_usd": 0.0,
+      "category": "fed_macro",
+      "direction": "k_yes_pm_no",
+      "fee_params": {
+        "k": {
+          "fee_multiplier": 1,
+          "fee_type": "quadratic_with_maker_fees"
+        },
+        "pm": {
+          "fees_enabled": false,
+          "schedule": {
+            "exponent": 1,
+            "rate": 0.05,
+            "rebateRate": 0.25,
+            "takerOnly": true
+          }
+        }
+      },
+      "fees_cents": 1.7,
+      "funding_bps_h": null,
+      "hold_hours": null,
+      "key": "KXFED-26DEC-H0~0xd53cb49cc49e67c7e3f5193d8bce9410a6cd45c58130ca4ca1a0caad4156c69b~k_yes_pm_no",
+      "kind": "exact",
+      "ladder": null,
+      "legs": [
+        {
+          "market_id": "KXFED-26DEC-H0",
+          "settlement_source": "FOMC statement",
+          "side": "yes",
+          "snapshot_at": "2026-10-20T15:29:20Z",
+          "title": "Fed hikes in December 2026?",
+          "url": "https://kalshi.com/markets/kxfed/market/kxfed-26dec",
+          "venue": "kalshi"
+        },
+        {
+          "market_id": "0xd53cb49cc49e67c7e3f5193d8bce9410a6cd45c58130ca4ca1a0caad4156c69b",
+          "settlement_source": "https://www.federalreserve.gov",
+          "side": "no",
+          "snapshot_at": "2026-10-20T15:29:20Z",
+          "title": "Fed rate hike in December?",
+          "url": "https://polymarket.com/event/fed-decision-in-december",
+          "venue": "polymarket"
+        }
+      ],
+      "live": true,
+      "net_bps": null,
+      "net_edge_bps": -69.5134,
+      "net_edge_cents": -0.7,
+      "net_edge_roi": -0.006951340615690168,
+      "next_funding_at": null,
+      "reference": null,
+      "sensitivity": null,
+      "settles_at": "2026-12-09T19:00:00Z",
+      "spark": [
+        -0.62,
+        -1.19,
+        -0.61,
+        -0.89,
+        -0.15,
+        null,
+        -0.87,
+        -0.69,
+        -0.79,
+        -0.52,
+        -0.7,
+        -0.57,
+        -0.62,
+        -0.26,
+        -0.68,
+        -0.61,
+        -0.27,
+        -0.04,
+        -0.71,
+        -0.94,
+        -1.53,
+        -0.15,
+        -0.5,
+        -0.73
+      ],
+      "title": "Fed hikes in December 2026?",
+      "trade": null,
+      "us_executable": false,
+      "verdict": {
+        "checks": [
+          {
+            "detail": "same question on both venues",
+            "name": "exact_match",
+            "status": "ok"
+          },
+          {
+            "detail": "exact match: same settlement source",
+            "name": "basis_bound",
+            "status": "ok"
+          },
+          {
+            "detail": "net -0.7¢ on the first slice; fees 1.7¢",
+            "name": "fees_depth",
+            "status": "fail"
+          },
+          {
+            "detail": "anywhere: both legs open · US: Polymarket rejects US orders",
+            "name": "jurisdiction",
+            "status": "partial"
+          }
+        ],
+        "label": "Exact match · no edge"
+      }
+    },
+    {
+      "basis_bps": null,
+      "books": null,
+      "capacity_contracts": 0.0,
+      "capacity_usd": 0.0,
+      "category": "fed_macro",
+      "direction": "k_no_pm_yes",
+      "fee_params": {
+        "k": {
+          "fee_multiplier": 1,
+          "fee_type": "quadratic_with_maker_fees"
+        },
+        "pm": {
+          "fees_enabled": false,
+          "schedule": {
+            "exponent": 1,
+            "rate": 0.05,
+            "rebateRate": 0.25,
+            "takerOnly": true
+          }
+        }
+      },
+      "fees_cents": null,
+      "funding_bps_h": null,
+      "hold_hours": null,
+      "key": "KXFED-26DEC-H0~0xd53cb49cc49e67c7e3f5193d8bce9410a6cd45c58130ca4ca1a0caad4156c69b~k_no_pm_yes",
+      "kind": "exact",
+      "ladder": null,
+      "legs": [
+        {
+          "market_id": "KXFED-26DEC-H0",
+          "settlement_source": "FOMC statement",
+          "side": "no",
+          "snapshot_at": "2026-10-20T15:29:20Z",
+          "title": "Fed hikes in December 2026?",
+          "url": "https://kalshi.com/markets/kxfed/market/kxfed-26dec",
+          "venue": "kalshi"
+        },
+        {
+          "market_id": "0xd53cb49cc49e67c7e3f5193d8bce9410a6cd45c58130ca4ca1a0caad4156c69b",
+          "settlement_source": "https://www.federalreserve.gov",
+          "side": "yes",
+          "snapshot_at": "2026-10-20T15:29:20Z",
+          "title": "Fed rate hike in December?",
+          "url": "https://polymarket.com/event/fed-decision-in-december",
+          "venue": "polymarket"
+        }
+      ],
+      "live": true,
+      "net_bps": null,
+      "net_edge_bps": null,
+      "net_edge_cents": null,
+      "net_edge_roi": null,
+      "next_funding_at": null,
+      "reference": null,
+      "sensitivity": null,
+      "settles_at": "2026-12-09T19:00:00Z",
+      "spark": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "title": "Fed hikes in December 2026?",
+      "trade": null,
+      "us_executable": false,
+      "verdict": {
+        "checks": [
+          {
+            "detail": "same question on both venues",
+            "name": "exact_match",
+            "status": "ok"
+          },
+          {
+            "detail": "exact match: same settlement source",
+            "name": "basis_bound",
+            "status": "ok"
+          },
+          {
+            "detail": "not walked: no asks on one side",
+            "name": "fees_depth",
+            "status": "fail"
+          },
+          {
+            "detail": "anywhere: both legs open · US: Polymarket rejects US orders",
+            "name": "jurisdiction",
+            "status": "partial"
+          }
+        ],
+        "label": "No asks on one side"
+      }
+    },
+    {
+      "basis_bps": null,
+      "books": null,
+      "capacity_contracts": 1200.0,
+      "capacity_usd": 1129.0,
+      "category": "fed_macro",
+      "direction": "k_yes_pm_no",
+      "fee_params": {
+        "k": {
+          "fee_multiplier": 1,
+          "fee_type": "quadratic_with_maker_fees"
+        },
+        "pm": {
+          "fees_enabled": false,
+          "schedule": {
+            "exponent": 1,
+            "rate": 0.05,
+            "rebateRate": 0.25,
+            "takerOnly": true
+          }
+        }
+      },
+      "fees_cents": 1.65,
+      "funding_bps_h": null,
+      "hold_hours": null,
+      "key": "KXCPI-26NOV-T0.3~0x4e1d028cf5b590152b1271abea39731ff4448ee059e0501be6f208c6f7f868dc~k_yes_pm_no",
+      "kind": "exact",
+      "ladder": null,
+      "legs": [
+        {
+          "market_id": "KXCPI-26NOV-T0.3",
+          "settlement_source": "BLS CPI release",
+          "side": "yes",
+          "snapshot_at": "2026-10-20T15:29:20Z",
+          "title": "CPI above 0.3% in October?",
+          "url": "https://kalshi.com/markets/kxcpi/market/kxcpi-26nov",
+          "venue": "kalshi"
+        },
+        {
+          "market_id": "0x4e1d028cf5b590152b1271abea39731ff4448ee059e0501be6f208c6f7f868dc",
+          "settlement_source": "https://www.bls.gov",
+          "side": "no",
+          "snapshot_at": "2026-10-20T15:29:20Z",
+          "title": "October CPI MoM over 0.3%?",
+          "url": "https://polymarket.com/event/october-cpi-over-0-3",
+          "venue": "polymarket"
+        }
+      ],
+      "live": true,
+      "net_bps": null,
+      "net_edge_bps": 565.2404,
+      "net_edge_cents": 5.35,
+      "net_edge_roi": 0.05652403592181721,
+      "next_funding_at": null,
+      "reference": null,
+      "sensitivity": null,
+      "settles_at": "2026-11-13T13:30:00Z",
+      "spark": [
+        0.31,
+        0.11,
+        0.16,
+        0.23,
+        0.26,
+        null,
+        0.2,
+        0.14,
+        0.23,
+        0.11,
+        0.03,
+        0.29,
+        0.2,
+        0.22,
+        0.27,
+        0.21,
+        0.18,
+        0.06,
+        0.15,
+        0.18,
+        0.18,
+        0.23,
+        1.4,
+        5.35
+      ],
+      "title": "CPI above 0.3% in October?",
+      "trade": null,
+      "us_executable": false,
+      "verdict": {
+        "checks": [
+          {
+            "detail": "same question on both venues",
+            "name": "exact_match",
+            "status": "ok"
+          },
+          {
+            "detail": "exact match: same settlement source",
+            "name": "basis_bound",
+            "status": "ok"
+          },
+          {
+            "detail": "net +5.4¢ on the first slice; fees 1.7¢",
+            "name": "fees_depth",
+            "status": "ok"
+          },
+          {
+            "detail": "anywhere: both legs open · US: Polymarket rejects US orders",
+            "name": "jurisdiction",
+            "status": "partial"
+          }
+        ],
+        "label": "Executable edge · +5.4¢ · $1,129 before transfer · $1,118 after"
+      }
+    },
+    {
+      "basis_bps": null,
+      "books": null,
+      "capacity_contracts": 0.0,
+      "capacity_usd": 0.0,
+      "category": "fed_macro",
+      "direction": "k_no_pm_yes",
+      "fee_params": {
+        "k": {
+          "fee_multiplier": 1,
+          "fee_type": "quadratic_with_maker_fees"
+        },
+        "pm": {
+          "fees_enabled": false,
+          "schedule": {
+            "exponent": 1,
+            "rate": 0.05,
+            "rebateRate": 0.25,
+            "takerOnly": true
+          }
+        }
+      },
+      "fees_cents": 1.6133,
+      "funding_bps_h": null,
+      "hold_hours": null,
+      "key": "KXCPI-26NOV-T0.3~0x4e1d028cf5b590152b1271abea39731ff4448ee059e0501be6f208c6f7f868dc~k_no_pm_yes",
+      "kind": "exact",
+      "ladder": null,
+      "legs": [
+        {
+          "market_id": "KXCPI-26NOV-T0.3",
+          "settlement_source": "BLS CPI release",
+          "side": "no",
+          "snapshot_at": "2026-10-20T15:29:20Z",
+          "title": "CPI above 0.3% in October?",
+          "url": "https://kalshi.com/markets/kxcpi/market/kxcpi-26nov",
+          "venue": "kalshi"
+        },
+        {
+          "market_id": "0x4e1d028cf5b590152b1271abea39731ff4448ee059e0501be6f208c6f7f868dc",
+          "settlement_source": "https://www.bls.gov",
+          "side": "yes",
+          "snapshot_at": "2026-10-20T15:29:20Z",
+          "title": "October CPI MoM over 0.3%?",
+          "url": "https://polymarket.com/event/october-cpi-over-0-3",
+          "venue": "polymarket"
+        }
+      ],
+      "live": true,
+      "net_bps": null,
+      "net_edge_bps": -959.4986,
+      "net_edge_cents": -10.6133,
+      "net_edge_roi": -0.09594958291634009,
+      "next_funding_at": null,
+      "reference": null,
+      "sensitivity": null,
+      "settles_at": "2026-11-13T13:30:00Z",
+      "spark": [
+        -10.11,
+        -10.9,
+        -10.84,
+        null,
+        -10.55,
+        -10.96,
+        -10.59,
+        -10.58,
+        -10.44,
+        -11.03,
+        -10.68,
+        -10.17,
+        -10.78,
+        -10.95,
+        -10.56,
+        -10.28,
+        -10.53,
+        -10.2,
+        -10.67,
+        -10.11,
+        -10.76,
+        -10.59,
+        -10.28,
+        -10.42
+      ],
+      "title": "CPI above 0.3% in October?",
+      "trade": null,
+      "us_executable": false,
+      "verdict": {
+        "checks": [
+          {
+            "detail": "same question on both venues",
+            "name": "exact_match",
+            "status": "ok"
+          },
+          {
+            "detail": "exact match: same settlement source",
+            "name": "basis_bound",
+            "status": "ok"
+          },
+          {
+            "detail": "net -10.6¢ on the first slice; fees 1.6¢",
+            "name": "fees_depth",
+            "status": "fail"
+          },
+          {
+            "detail": "anywhere: both legs open · US: Polymarket rejects US orders",
+            "name": "jurisdiction",
+            "status": "partial"
+          }
+        ],
+        "label": "Exact match · no edge"
+      }
+    },
+    {
+      "basis_bps": null,
+      "books": null,
+      "capacity_contracts": 0.0,
+      "capacity_usd": 0.0,
+      "category": "weather",
+      "direction": "k_yes_pm_no",
+      "fee_params": {
+        "k": {
+          "fee_multiplier": 1,
+          "fee_type": "quadratic_with_maker_fees"
+        },
+        "pm": {
+          "fees_enabled": false,
+          "schedule": {
+            "exponent": 1,
+            "rate": 0.05,
+            "rebateRate": 0.25,
+            "takerOnly": true
+          }
+        }
+      },
+      "fees_cents": null,
+      "funding_bps_h": null,
+      "hold_hours": null,
+      "key": "KXHIGHNY-26OCT21-T70~0x0362d8e51ec808c2c03ae329dbc14bb66a2a21673c64c0254440946a35b06263~k_yes_pm_no",
+      "kind": "exact",
+      "ladder": null,
+      "legs": [
+        {
+          "market_id": "KXHIGHNY-26OCT21-T70",
+          "settlement_source": "NWS Central Park",
+          "side": "yes",
+          "snapshot_at": "2026-10-20T15:18:00Z",
+          "title": "NYC high above 70F on Oct 21?",
+          "url": "https://kalshi.com/markets/kxhighny/market/kxhighny-26oct21",
+          "venue": "kalshi"
+        },
+        {
+          "market_id": "0x0362d8e51ec808c2c03ae329dbc14bb66a2a21673c64c0254440946a35b06263",
+          "settlement_source": "NWS Central Park",
+          "side": "no",
+          "snapshot_at": "2026-10-20T15:29:20Z",
+          "title": "Will NYC hit 70F on October 21?",
+          "url": "https://polymarket.com/event/nyc-high-above-70-oct-21",
+          "venue": "polymarket"
+        }
+      ],
+      "live": false,
+      "net_bps": null,
+      "net_edge_bps": null,
+      "net_edge_cents": null,
+      "net_edge_roi": null,
+      "next_funding_at": null,
+      "reference": null,
+      "sensitivity": null,
+      "settles_at": "2026-10-21T23:00:00Z",
+      "spark": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "title": "NYC high above 70F on Oct 21?",
+      "trade": null,
+      "us_executable": false,
+      "verdict": {
+        "checks": [
+          {
+            "detail": "same question on both venues",
+            "name": "exact_match",
+            "status": "ok"
+          },
+          {
+            "detail": "exact match: same settlement source",
+            "name": "basis_bound",
+            "status": "ok"
+          },
+          {
+            "detail": "not walked: a leg is stale",
+            "name": "fees_depth",
+            "status": "fail"
+          },
+          {
+            "detail": "anywhere: both legs open · US: Polymarket rejects US orders",
+            "name": "jurisdiction",
+            "status": "partial"
+          }
+        ],
+        "label": "Stale · a leg has no snapshot in 5 min"
+      }
+    },
+    {
+      "basis_bps": null,
+      "books": null,
+      "capacity_contracts": 0.0,
+      "capacity_usd": 0.0,
+      "category": "weather",
+      "direction": "k_no_pm_yes",
+      "fee_params": {
+        "k": {
+          "fee_multiplier": 1,
+          "fee_type": "quadratic_with_maker_fees"
+        },
+        "pm": {
+          "fees_enabled": false,
+          "schedule": {
+            "exponent": 1,
+            "rate": 0.05,
+            "rebateRate": 0.25,
+            "takerOnly": true
+          }
+        }
+      },
+      "fees_cents": null,
+      "funding_bps_h": null,
+      "hold_hours": null,
+      "key": "KXHIGHNY-26OCT21-T70~0x0362d8e51ec808c2c03ae329dbc14bb66a2a21673c64c0254440946a35b06263~k_no_pm_yes",
+      "kind": "exact",
+      "ladder": null,
+      "legs": [
+        {
+          "market_id": "KXHIGHNY-26OCT21-T70",
+          "settlement_source": "NWS Central Park",
+          "side": "no",
+          "snapshot_at": "2026-10-20T15:18:00Z",
+          "title": "NYC high above 70F on Oct 21?",
+          "url": "https://kalshi.com/markets/kxhighny/market/kxhighny-26oct21",
+          "venue": "kalshi"
+        },
+        {
+          "market_id": "0x0362d8e51ec808c2c03ae329dbc14bb66a2a21673c64c0254440946a35b06263",
+          "settlement_source": "NWS Central Park",
+          "side": "yes",
+          "snapshot_at": "2026-10-20T15:29:20Z",
+          "title": "Will NYC hit 70F on October 21?",
+          "url": "https://polymarket.com/event/nyc-high-above-70-oct-21",
+          "venue": "polymarket"
+        }
+      ],
+      "live": false,
+      "net_bps": null,
+      "net_edge_bps": null,
+      "net_edge_cents": null,
+      "net_edge_roi": null,
+      "next_funding_at": null,
+      "reference": null,
+      "sensitivity": null,
+      "settles_at": "2026-10-21T23:00:00Z",
+      "spark": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "title": "NYC high above 70F on Oct 21?",
+      "trade": null,
+      "us_executable": false,
+      "verdict": {
+        "checks": [
+          {
+            "detail": "same question on both venues",
+            "name": "exact_match",
+            "status": "ok"
+          },
+          {
+            "detail": "exact match: same settlement source",
+            "name": "basis_bound",
+            "status": "ok"
+          },
+          {
+            "detail": "not walked: a leg is stale",
+            "name": "fees_depth",
+            "status": "fail"
+          },
+          {
+            "detail": "anywhere: both legs open · US: Polymarket rejects US orders",
+            "name": "jurisdiction",
+            "status": "partial"
+          }
+        ],
+        "label": "Stale · a leg has no snapshot in 5 min"
+      }
+    },
+    {
+      "basis_bps": null,
+      "books": null,
+      "capacity_contracts": 0.0,
+      "capacity_usd": 0.0,
+      "category": "crypto_price",
+      "direction": "k_yes_pm_no",
+      "fee_params": {
+        "k": {
+          "fee_multiplier": 1,
+          "fee_type": "quadratic"
+        },
+        "pm": {
+          "fees_enabled": true,
+          "schedule": {
+            "exponent": 1,
+            "rate": 0.07,
+            "rebateRate": 0.2,
+            "takerOnly": true
+          }
+        }
+      },
+      "fees_cents": 1.0304,
+      "funding_bps_h": null,
+      "hold_hours": null,
+      "key": "KXBTCD-26OCT2011-T85999.99~0x188be2dc41a51a99434bd3c92c448aa20849d30f27de27b33747423afd6d10d1~k_yes_pm_no",
+      "kind": "near_exact",
+      "ladder": "BTC~2026-10-20T16:00:00+00:00",
+      "legs": [
+        {
+          "market_id": "KXBTCD-26OCT2011-T85999.99",
+          "settlement_source": "CF Benchmarks BRTI",
+          "side": "yes",
+          "snapshot_at": "2026-10-20T15:29:20Z",
+          "title": "Bitcoin price on Oct 20, 2026?",
+          "url": "https://kalshi.com/markets/kxbtcd/market/kxbtcd-26oct2011",
+          "venue": "kalshi"
+        },
+        {
+          "market_id": "0x188be2dc41a51a99434bd3c92c448aa20849d30f27de27b33747423afd6d10d1",
+          "settlement_source": "Binance BTC/USDT 1m close",
+          "side": "no",
+          "snapshot_at": "2026-10-20T15:29:20Z",
+          "title": "Bitcoin above 86,000 on October 20, 12PM ET?",
+          "url": "https://polymarket.com/event/bitcoin-above-86000-on-october-20-12pm-et",
+          "venue": "polymarket"
+        }
+      ],
+      "live": true,
+      "net_bps": null,
+      "net_edge_bps": -294.1308,
+      "net_edge_cents": -3.0304,
+      "net_edge_roi": -0.029412678199832284,
+      "next_funding_at": null,
+      "reference": null,
+      "sensitivity": null,
+      "settles_at": "2026-10-20T16:00:00Z",
+      "spark": [
+        -2.74,
+        -3.09,
+        -2.98,
+        -2.71,
+        null,
+        -3.01,
+        -3.2,
+        -2.53,
+        -3.64,
+        -2.99,
+        -2.77,
+        -2.95,
+        -3.0,
+        -3.82,
+        -3.38,
+        -2.83,
+        -3.63,
+        -2.93,
+        -2.9,
+        -2.89,
+        -2.89,
+        -3.17,
+        -2.97,
+        -3.29
+      ],
+      "title": "BTC above $85,999.99 (Kalshi) / $86,000.00 (Polymarket)",
+      "trade": null,
+      "us_executable": false,
+      "verdict": {
+        "checks": [
+          {
+            "detail": "both legs settle at the same instant",
+            "name": "same_instant",
+            "status": "ok"
+          },
+          {
+            "detail": "needs PM − K ≥ $152 (99.9th pct, 30 d); gap $0",
+            "name": "basis_bound",
+            "status": "fail"
+          },
+          {
+            "detail": "net -3.0¢ on the first slice; fees 1.0¢",
+            "name": "fees_depth",
+            "status": "fail"
+          },
+          {
+            "detail": "anywhere: both legs open · US: Polymarket rejects US orders",
+            "name": "jurisdiction",
+            "status": "partial"
+          }
+        ],
+        "label": "Not an arbitrage · basis exposure"
+      }
+    },
+    {
+      "basis_bps": null,
+      "books": null,
+      "capacity_contracts": 0.0,
+      "capacity_usd": 0.0,
+      "category": "crypto_price",
+      "direction": "pm_yes_k_no",
+      "fee_params": {
+        "k": {
+          "fee_multiplier": 1,
+          "fee_type": "quadratic"
+        },
+        "pm": {
+          "fees_enabled": true,
+          "schedule": {
+            "exponent": 1,
+            "rate": 0.07,
+            "rebateRate": 0.2,
+            "takerOnly": true
+          }
+        }
+      },
+      "fees_cents": 1.0319,
+      "funding_bps_h": null,
+      "hold_hours": null,
+      "key": "KXBTCD-26OCT2011-T85999.99~0x188be2dc41a51a99434bd3c92c448aa20849d30f27de27b33747423afd6d10d1~pm_yes_k_no",
+      "kind": "near_exact",
+      "ladder": "BTC~2026-10-20T16:00:00+00:00",
+      "legs": [
+        {
+          "market_id": "KXBTCD-26OCT2011-T85999.99",
+          "settlement_source": "CF Benchmarks BRTI",
+          "side": "no",
+          "snapshot_at": "2026-10-20T15:29:20Z",
+          "title": "Bitcoin price on Oct 20, 2026?",
+          "url": "https://kalshi.com/markets/kxbtcd/market/kxbtcd-26oct2011",
+          "venue": "kalshi"
+        },
+        {
+          "market_id": "0x188be2dc41a51a99434bd3c92c448aa20849d30f27de27b33747423afd6d10d1",
+          "settlement_source": "Binance BTC/USDT 1m close",
+          "side": "yes",
+          "snapshot_at": "2026-10-20T15:29:20Z",
+          "title": "Bitcoin above 86,000 on October 20, 12PM ET?",
+          "url": "https://polymarket.com/event/bitcoin-above-86000-on-october-20-12pm-et",
+          "venue": "polymarket"
+        }
+      ],
+      "live": true,
+      "net_bps": null,
+      "net_edge_bps": -102.1328,
+      "net_edge_cents": -1.0319,
+      "net_edge_roi": -0.01021360580173193,
+      "next_funding_at": null,
+      "reference": null,
+      "sensitivity": null,
+      "settles_at": "2026-10-20T16:00:00Z",
+      "spark": [
+        -0.93,
+        -0.69,
+        null,
+        -1.17,
+        -1.19,
+        -0.96,
+        -1.08,
+        -0.91,
+        -1.15,
+        -0.61,
+        -0.67,
+        -0.47,
+        -1.47,
+        -0.94,
+        -1.37,
+        -0.53,
+        -1.06,
+        -1.37,
+        -1.04,
+        -1.16,
+        -1.08,
+        -0.74,
+        -1.04,
+        -1.11
+      ],
+      "title": "BTC above $85,999.99 (Kalshi) / $86,000.00 (Polymarket)",
+      "trade": null,
+      "us_executable": false,
+      "verdict": {
+        "checks": [
+          {
+            "detail": "both legs settle at the same instant",
+            "name": "same_instant",
+            "status": "ok"
+          },
+          {
+            "detail": "needs K − PM ≥ $182 (99.9th pct, 30 d); gap $0",
+            "name": "basis_bound",
+            "status": "fail"
+          },
+          {
+            "detail": "net -1.0¢ on the first slice; fees 1.0¢",
+            "name": "fees_depth",
+            "status": "fail"
+          },
+          {
+            "detail": "anywhere: both legs open · US: Polymarket rejects US orders",
+            "name": "jurisdiction",
+            "status": "partial"
+          }
+        ],
+        "label": "Not an arbitrage · basis exposure"
+      }
+    },
+    {
+      "basis_bps": null,
+      "books": null,
+      "capacity_contracts": 600.0,
+      "capacity_usd": 583.0,
+      "category": "crypto_price",
+      "direction": "k_yes_pm_no",
+      "fee_params": {
+        "k": {
+          "fee_multiplier": 1,
+          "fee_type": "quadratic"
+        },
+        "pm": {
+          "fees_enabled": true,
+          "schedule": {
+            "exponent": 1,
+            "rate": 0.07,
+            "rebateRate": 0.2,
+            "takerOnly": true
+          }
+        }
+      },
+      "fees_cents": 0.7248,
+      "funding_bps_h": null,
+      "hold_hours": null,
+      "key": "KXBTCD-26OCT2011-T85999.99~0xb373ca3b0beacb4e7ae0718fa90ed3e4f2022a7a2ece5d70652d14ebf5622def~k_yes_pm_no",
+      "kind": "ladder",
+      "ladder": "BTC~2026-10-20T16:00:00+00:00",
+      "legs": [
+        {
+          "market_id": "KXBTCD-26OCT2011-T85999.99",
+          "settlement_source": "CF Benchmarks BRTI",
+          "side": "yes",
+          "snapshot_at": "2026-10-20T15:29:20Z",
+          "title": "Bitcoin price on Oct 20, 2026?",
+          "url": "https://kalshi.com/markets/kxbtcd/market/kxbtcd-26oct2011",
+          "venue": "kalshi"
+        },
+        {
+          "market_id": "0xb373ca3b0beacb4e7ae0718fa90ed3e4f2022a7a2ece5d70652d14ebf5622def",
+          "settlement_source": "Binance BTC/USDT 1m close",
+          "side": "no",
+          "snapshot_at": "2026-10-20T15:29:20Z",
+          "title": "Bitcoin above 88,200 on October 20, 12PM ET?",
+          "url": "https://polymarket.com/event/bitcoin-above-88200-on-october-20-12pm-et",
+          "venue": "polymarket"
+        }
+      ],
+      "live": true,
+      "net_bps": null,
+      "net_edge_bps": 232.8171,
+      "net_edge_cents": 2.2752,
+      "net_edge_roi": 0.023281705360358885,
+      "next_funding_at": null,
+      "reference": null,
+      "sensitivity": null,
+      "settles_at": "2026-10-20T16:00:00Z",
+      "spark": [
+        2.78,
+        2.1,
+        2.51,
+        null,
+        2.12,
+        2.36,
+        2.56,
+        2.5,
+        2.23,
+        2.25,
+        2.33,
+        2.07,
+        2.54,
+        2.56,
+        2.01,
+        1.83,
+        2.38,
+        2.38,
+        2.8,
+        1.95,
+        2.96,
+        2.4,
+        2.46,
+        2.27
+      ],
+      "title": "BTC above $85,999.99 (Kalshi) / $88,200.00 (Polymarket)",
+      "trade": null,
+      "us_executable": false,
+      "verdict": {
+        "checks": [
+          {
+            "detail": "both legs settle at the same instant",
+            "name": "same_instant",
+            "status": "ok"
+          },
+          {
+            "detail": "needs PM − K ≥ $152 (99.9th pct, 30 d); gap $2,200",
+            "name": "basis_bound",
+            "status": "ok"
+          },
+          {
+            "detail": "net +2.3¢ on the first slice; fees 0.7¢",
+            "name": "fees_depth",
+            "status": "ok"
+          },
+          {
+            "detail": "anywhere: both legs open · US: Polymarket rejects US orders",
+            "name": "jurisdiction",
+            "status": "partial"
+          }
+        ],
+        "label": "Executable edge · +2.3¢ · $583 before transfer · $572 after"
+      }
+    },
+    {
+      "basis_bps": null,
+      "books": null,
+      "capacity_contracts": 0.0,
+      "capacity_usd": 0.0,
+      "category": "crypto_price",
+      "direction": "k_yes_pm_no",
+      "fee_params": {
+        "k": {
+          "fee_multiplier": 1,
+          "fee_type": "quadratic"
+        },
+        "pm": {
+          "fees_enabled": true,
+          "schedule": {
+            "exponent": 1,
+            "rate": 0.07,
+            "rebateRate": 0.2,
+            "takerOnly": true
+          }
+        }
+      },
+      "fees_cents": 0.5388,
+      "funding_bps_h": null,
+      "hold_hours": null,
+      "key": "KXBTCD-26OCT2011-T87999.99~0xb373ca3b0beacb4e7ae0718fa90ed3e4f2022a7a2ece5d70652d14ebf5622def~k_yes_pm_no",
+      "kind": "ladder",
+      "ladder": "BTC~2026-10-20T16:00:00+00:00",
+      "legs": [
+        {
+          "market_id": "KXBTCD-26OCT2011-T87999.99",
+          "settlement_source": "CF Benchmarks BRTI",
+          "side": "yes",
+          "snapshot_at": "2026-10-20T15:29:20Z",
+          "title": "Bitcoin price on Oct 20, 2026?",
+          "url": "https://kalshi.com/markets/kxbtcd/market/kxbtcd-26oct2011",
+          "venue": "kalshi"
+        },
+        {
+          "market_id": "0xb373ca3b0beacb4e7ae0718fa90ed3e4f2022a7a2ece5d70652d14ebf5622def",
+          "settlement_source": "Binance BTC/USDT 1m close",
+          "side": "no",
+          "snapshot_at": "2026-10-20T15:29:20Z",
+          "title": "Bitcoin above 88,200 on October 20, 12PM ET?",
+          "url": "https://polymarket.com/event/bitcoin-above-88200-on-october-20-12pm-et",
+          "venue": "polymarket"
+        }
+      ],
+      "live": true,
+      "net_bps": null,
+      "net_edge_bps": -53.5913,
+      "net_edge_cents": -0.5388,
+      "net_edge_roi": -0.00535912503431511,
+      "next_funding_at": null,
+      "reference": null,
+      "sensitivity": null,
+      "settles_at": "2026-10-20T16:00:00Z",
+      "spark": [
+        -0.51,
+        -0.64,
+        null,
+        -0.78,
+        0.19,
+        -0.68,
+        -0.2,
+        -0.25,
+        -0.04,
+        -0.74,
+        -0.69,
+        -0.28,
+        -0.2,
+        -0.96,
+        -0.37,
+        -0.79,
+        -0.22,
+        -0.5,
+        -0.47,
+        -0.4,
+        -0.33,
+        -0.09,
+        -0.81,
+        -0.25
+      ],
+      "title": "BTC above $87,999.99 (Kalshi) / $88,200.00 (Polymarket)",
+      "trade": null,
+      "us_executable": false,
+      "verdict": {
+        "checks": [
+          {
+            "detail": "both legs settle at the same instant",
+            "name": "same_instant",
+            "status": "ok"
+          },
+          {
+            "detail": "needs PM − K ≥ $152 (99.9th pct, 30 d); gap $200",
+            "name": "basis_bound",
+            "status": "ok"
+          },
+          {
+            "detail": "net -0.5¢ on the first slice; fees 0.5¢",
+            "name": "fees_depth",
+            "status": "fail"
+          },
+          {
+            "detail": "anywhere: both legs open · US: Polymarket rejects US orders",
+            "name": "jurisdiction",
+            "status": "partial"
+          }
+        ],
+        "label": "Spread · within basis bound · no edge"
+      }
+    },
+    {
+      "basis_bps": null,
+      "books": null,
+      "capacity_contracts": 0.0,
+      "capacity_usd": 0.0,
+      "category": "crypto_price",
+      "direction": "pm_yes_k_no",
+      "fee_params": {
+        "k": {
+          "fee_multiplier": 1,
+          "fee_type": "quadratic"
+        },
+        "pm": {
+          "fees_enabled": true,
+          "schedule": {
+            "exponent": 1,
+            "rate": 0.07,
+            "rebateRate": 0.2,
+            "takerOnly": true
+          }
+        }
+      },
+      "fees_cents": 0.9712,
+      "funding_bps_h": null,
+      "hold_hours": null,
+      "key": "KXBTCD-26OCT2011-T87999.99~0x188be2dc41a51a99434bd3c92c448aa20849d30f27de27b33747423afd6d10d1~pm_yes_k_no",
+      "kind": "ladder",
+      "ladder": "BTC~2026-10-20T16:00:00+00:00",
+      "legs": [
+        {
+          "market_id": "KXBTCD-26OCT2011-T87999.99",
+          "settlement_source": "CF Benchmarks BRTI",
+          "side": "no",
+          "snapshot_at": "2026-10-20T15:29:20Z",
+          "title": "Bitcoin price on Oct 20, 2026?",
+          "url": "https://kalshi.com/markets/kxbtcd/market/kxbtcd-26oct2011",
+          "venue": "kalshi"
+        },
+        {
+          "market_id": "0x188be2dc41a51a99434bd3c92c448aa20849d30f27de27b33747423afd6d10d1",
+          "settlement_source": "Binance BTC/USDT 1m close",
+          "side": "yes",
+          "snapshot_at": "2026-10-20T15:29:20Z",
+          "title": "Bitcoin above 86,000 on October 20, 12PM ET?",
+          "url": "https://polymarket.com/event/bitcoin-above-86000-on-october-20-12pm-et",
+          "venue": "polymarket"
+        }
+      ],
+      "live": true,
+      "net_bps": null,
+      "net_edge_bps": 2.8808,
+      "net_edge_cents": 0.0288,
+      "net_edge_roi": 0.0002880829678947537,
+      "next_funding_at": null,
+      "reference": null,
+      "sensitivity": null,
+      "settles_at": "2026-10-20T16:00:00Z",
+      "spark": [
+        null,
+        0.22,
+        0.14,
+        -0.32,
+        0.04,
+        -0.23,
+        0.01,
+        -0.2,
+        0.25,
+        0.15,
+        -0.02,
+        0.2,
+        0.33,
+        0.35,
+        -0.21,
+        0.22,
+        -0.23,
+        0.0,
+        -0.05,
+        0.31,
+        -0.08,
+        -0.48,
+        0.35,
+        -0.03
+      ],
+      "title": "BTC above $87,999.99 (Kalshi) / $86,000.00 (Polymarket)",
+      "trade": null,
+      "us_executable": false,
+      "verdict": {
+        "checks": [
+          {
+            "detail": "both legs settle at the same instant",
+            "name": "same_instant",
+            "status": "ok"
+          },
+          {
+            "detail": "needs K − PM ≥ $182 (99.9th pct, 30 d); gap $2,000",
+            "name": "basis_bound",
+            "status": "ok"
+          },
+          {
+            "detail": "net +0.0¢ on the first slice; fees 1.0¢",
+            "name": "fees_depth",
+            "status": "fail"
+          },
+          {
+            "detail": "anywhere: both legs open · US: Polymarket rejects US orders",
+            "name": "jurisdiction",
+            "status": "partial"
+          }
+        ],
+        "label": "Spread · within basis bound · no edge"
+      }
+    },
+    {
+      "basis_bps": 25.8398,
+      "books": null,
+      "capacity_contracts": 100.0,
+      "capacity_usd": 21330.0,
+      "category": "stock_perps",
+      "direction": "short_perp_long_stock",
+      "fee_params": {
+        "perp": {
+          "growth_mode": true,
+          "taker": 9e-05
+        },
+        "stock": {
+          "borrow_bps_yr": 50.0
+        }
+      },
+      "fees_cents": 0.065,
+      "funding_bps_h": 0.1,
+      "hold_hours": 24,
+      "key": "xyz:NVDA~NVDA~short_perp_long_stock",
+      "kind": "stock_perp",
+      "ladder": null,
+      "legs": [
+        {
+          "market_id": "xyz:NVDA",
+          "settlement_source": null,
+          "side": "short",
+          "snapshot_at": "2026-10-20T15:29:20Z",
+          "title": "xyz:NVDA",
+          "url": "https://app.hyperliquid.xyz/trade/xyz:NVDA",
+          "venue": "hyperliquid"
+        },
+        {
+          "market_id": "NVDA",
+          "settlement_source": null,
+          "side": "long",
+          "snapshot_at": "2026-10-20T15:29:46Z",
+          "title": "NVIDIA",
+          "url": null,
+          "venue": "nasdaq"
+        }
+      ],
+      "live": true,
+      "net_bps": 12.3575,
+      "net_edge_bps": 12.3575,
+      "net_edge_cents": 0.123575,
+      "net_edge_roi": 0.00123575,
+      "next_funding_at": "2026-10-20T16:00:00Z",
+      "reference": {
+        "asof": "2026-10-20T15:29:46+00:00",
+        "kind": "schwab",
+        "symbol": "NVDA"
+      },
+      "sensitivity": {
+        "net_bps_1h": 10.0575,
+        "net_bps_7d": 26.7575,
+        "net_bps_borrow_x10": 12.3575
+      },
+      "settles_at": null,
+      "spark": [
+        0.122,
+        0.191,
+        null,
+        0.118,
+        0.097,
+        0.153,
+        0.172,
+        0.075,
+        0.111,
+        0.153,
+        0.081,
+        0.097,
+        0.132,
+        0.115,
+        0.106,
+        0.136,
+        0.158,
+        0.085,
+        0.101,
+        0.146,
+        0.154,
+        0.115,
+        0.097,
+        0.11
+      ],
+      "title": "NVIDIA (NASDAQ)",
+      "trade": "short xyz:NVDA / long NVDA",
+      "us_executable": false,
+      "verdict": {
+        "checks": [
+          {
+            "detail": "Schwab quote 14 s old",
+            "name": "reference",
+            "status": "ok"
+          },
+          {
+            "detail": "net +12.4 bps after 2× taker, spread, 24 h funding and borrow",
+            "name": "fees_carry",
+            "status": "ok"
+          },
+          {
+            "detail": "$21,330 fillable vs $100 minimum",
+            "name": "fees_depth",
+            "status": "ok"
+          },
+          {
+            "detail": "anywhere: perp leg open · US: Hyperliquid blocks US traders",
+            "name": "jurisdiction",
+            "status": "partial"
+          }
+        ],
+        "label": "Executable edge · +12 bps · $21,330 at top of book"
+      }
+    },
+    {
+      "basis_bps": 1.9972,
+      "books": null,
+      "capacity_contracts": 0.0,
+      "capacity_usd": 0.0,
+      "category": "stock_perps",
+      "direction": "short_perp_long_stock",
+      "fee_params": {
+        "perp": {
+          "growth_mode": true,
+          "taker": 9e-05
+        },
+        "stock": {
+          "borrow_bps_yr": 50.0
+        }
+      },
+      "fees_cents": 0.0579,
+      "funding_bps_h": 0.1,
+      "hold_hours": 24,
+      "key": "xyz:TSLA~TSLA~short_perp_long_stock",
+      "kind": "stock_perp",
+      "ladder": null,
+      "legs": [
+        {
+          "market_id": "xyz:TSLA",
+          "settlement_source": null,
+          "side": "short",
+          "snapshot_at": "2026-10-20T15:29:20Z",
+          "title": "xyz:TSLA",
+          "url": "https://app.hyperliquid.xyz/trade/xyz:TSLA",
+          "venue": "hyperliquid"
+        },
+        {
+          "market_id": "TSLA",
+          "settlement_source": null,
+          "side": "long",
+          "snapshot_at": "2026-10-20T15:29:46Z",
+          "title": "Tesla",
+          "url": null,
+          "venue": "nasdaq"
+        }
+      ],
+      "live": true,
+      "net_bps": -5.3912,
+      "net_edge_bps": -5.3912,
+      "net_edge_cents": -0.053912,
+      "net_edge_roi": -0.00053912,
+      "next_funding_at": "2026-10-20T16:00:00Z",
+      "reference": {
+        "asof": "2026-10-20T15:29:46+00:00",
+        "kind": "schwab",
+        "symbol": "TSLA"
+      },
+      "sensitivity": {
+        "net_bps_1h": -7.6912,
+        "net_bps_7d": 9.0088,
+        "net_bps_borrow_x10": -5.3912
+      },
+      "settles_at": null,
+      "spark": [
+        null,
+        -0.062,
+        -0.0,
+        -0.043,
+        -0.062,
+        0.002,
+        -0.033,
+        -0.096,
+        -0.034,
+        -0.026,
+        -0.065,
+        -0.085,
+        -0.062,
+        -0.09,
+        -0.066,
+        -0.076,
+        -0.055,
+        -0.078,
+        -0.056,
+        -0.06,
+        -0.052,
+        -0.07,
+        -0.035,
+        -0.062
+      ],
+      "title": "Tesla (NASDAQ)",
+      "trade": "short xyz:TSLA / long TSLA",
+      "us_executable": false,
+      "verdict": {
+        "checks": [
+          {
+            "detail": "Schwab quote 14 s old",
+            "name": "reference",
+            "status": "ok"
+          },
+          {
+            "detail": "net -5.4 bps after 2× taker, spread, 24 h funding and borrow",
+            "name": "fees_carry",
+            "status": "fail"
+          },
+          {
+            "detail": "$0 fillable vs $100 minimum",
+            "name": "fees_depth",
+            "status": "fail"
+          },
+          {
+            "detail": "anywhere: perp leg open · US: Hyperliquid blocks US traders",
+            "name": "jurisdiction",
+            "status": "partial"
+          }
+        ],
+        "label": "Basis · within costs · no edge"
+      }
+    },
+    {
+      "basis_bps": 11.1235,
+      "books": null,
+      "capacity_contracts": 0.0,
+      "capacity_usd": 0.0,
+      "category": "stock_perps",
+      "direction": "short_perp_long_stock",
+      "fee_params": {
+        "perp": {
+          "growth_mode": false,
+          "taker": 0.0009
+        },
+        "stock": {
+          "borrow_bps_yr": 50.0
+        }
+      },
+      "fees_cents": 0.18,
+      "funding_bps_h": 0.1,
+      "hold_hours": 24,
+      "key": "xyz:SKHX~xyz:SKHX~short_perp_long_stock",
+      "kind": "stock_perp",
+      "ladder": null,
+      "legs": [
+        {
+          "market_id": "xyz:SKHX",
+          "settlement_source": null,
+          "side": "short",
+          "snapshot_at": "2026-10-20T15:29:20Z",
+          "title": "xyz:SKHX",
+          "url": "https://app.hyperliquid.xyz/trade/xyz:SKHX",
+          "venue": "hyperliquid"
+        },
+        {
+          "market_id": "xyz:SKHX",
+          "settlement_source": null,
+          "side": "long",
+          "snapshot_at": null,
+          "title": "SK hynix",
+          "url": null,
+          "venue": "krx"
+        }
+      ],
+      "live": true,
+      "net_bps": -10.0352,
+      "net_edge_bps": -10.0352,
+      "net_edge_cents": -0.100352,
+      "net_edge_roi": -0.00100352,
+      "next_funding_at": "2026-10-20T16:00:00Z",
+      "reference": {
+        "asof": "2026-10-20T15:30:00+00:00",
+        "kind": "oracle",
+        "symbol": "xyz:SKHX"
+      },
+      "sensitivity": {
+        "net_bps_1h": -12.3352,
+        "net_bps_7d": 4.3648,
+        "net_bps_borrow_x10": -10.0352
+      },
+      "settles_at": null,
+      "spark": [
+        -0.041,
+        -0.126,
+        -0.12,
+        null,
+        -0.08,
+        -0.103,
+        -0.091,
+        -0.105,
+        -0.105,
+        -0.102,
+        -0.096,
+        -0.048,
+        -0.118,
+        -0.126,
+        -0.045,
+        -0.106,
+        -0.066,
+        -0.091,
+        -0.127,
+        -0.079,
+        -0.173,
+        -0.145,
+        -0.113,
+        -0.116
+      ],
+      "title": "SK hynix (KRX)",
+      "trade": "short xyz:SKHX / long xyz:SKHX",
+      "us_executable": false,
+      "verdict": {
+        "checks": [
+          {
+            "detail": "oracle only: stock market closed or no quote",
+            "name": "reference",
+            "status": "partial"
+          },
+          {
+            "detail": "net -10.0 bps after 2× taker, spread, 24 h funding and borrow",
+            "name": "fees_carry",
+            "status": "fail"
+          },
+          {
+            "detail": "$0 fillable vs $100 minimum",
+            "name": "fees_depth",
+            "status": "fail"
+          },
+          {
+            "detail": "anywhere: perp leg open · US: Hyperliquid blocks US traders",
+            "name": "jurisdiction",
+            "status": "partial"
+          }
+        ],
+        "label": "Reference closed · oracle only"
+      }
+    }
+  ],
+  "research": {
+    "basis": {
+      "BTC": {
+        "asof": "2026-10-20T15:30:00Z",
+        "down": 152.0,
+        "up": 182.0,
+        "window_days": 30
+      }
+    },
+    "basis_q": 0.999,
+    "computed_at": "2026-10-20T15:30:00Z",
+    "episode_median_capacity_usd": 410.0,
+    "episode_median_minutes": 300.0,
+    "episodes_ladder": 0,
+    "episodes_pair": 1,
+    "episodes_us": 0,
+    "exec_hourly": {
+      "ts": [
+        "2026-10-18T16:00:00Z",
+        "2026-10-18T17:00:00Z",
+        "2026-10-18T18:00:00Z",
+        "2026-10-18T19:00:00Z",
+        "2026-10-18T20:00:00Z",
+        "2026-10-18T21:00:00Z",
+        "2026-10-18T22:00:00Z",
+        "2026-10-18T23:00:00Z",
+        "2026-10-19T00:00:00Z",
+        "2026-10-19T01:00:00Z",
+        "2026-10-19T02:00:00Z",
+        "2026-10-19T03:00:00Z",
+        "2026-10-19T04:00:00Z",
+        "2026-10-19T05:00:00Z",
+        "2026-10-19T06:00:00Z",
+        "2026-10-19T07:00:00Z",
+        "2026-10-19T08:00:00Z",
+        "2026-10-19T09:00:00Z",
+        "2026-10-19T10:00:00Z",
+        "2026-10-19T11:00:00Z",
+        "2026-10-19T12:00:00Z",
+        "2026-10-19T13:00:00Z",
+        "2026-10-19T14:00:00Z",
+        "2026-10-19T15:00:00Z",
+        "2026-10-19T16:00:00Z",
+        "2026-10-19T17:00:00Z",
+        "2026-10-19T18:00:00Z",
+        "2026-10-19T19:00:00Z",
+        "2026-10-19T20:00:00Z",
+        "2026-10-19T21:00:00Z",
+        "2026-10-19T22:00:00Z",
+        "2026-10-19T23:00:00Z",
+        "2026-10-20T00:00:00Z",
+        "2026-10-20T01:00:00Z",
+        "2026-10-20T02:00:00Z",
+        "2026-10-20T03:00:00Z",
+        "2026-10-20T04:00:00Z",
+        "2026-10-20T05:00:00Z",
+        "2026-10-20T06:00:00Z",
+        "2026-10-20T07:00:00Z",
+        "2026-10-20T08:00:00Z",
+        "2026-10-20T09:00:00Z",
+        "2026-10-20T10:00:00Z",
+        "2026-10-20T11:00:00Z",
+        "2026-10-20T12:00:00Z",
+        "2026-10-20T13:00:00Z",
+        "2026-10-20T14:00:00Z",
+        "2026-10-20T15:00:00Z"
+      ],
+      "values": [
+        -3.98,
+        -4.16,
+        -3.3,
+        -3.65,
+        -3.77,
+        -2.61,
+        -3.18,
+        -4.1,
+        -3.46,
+        -2.78,
+        -2.5,
+        -3.83,
+        -4.26,
+        -3.73,
+        -2.81,
+        -3.9,
+        -4.34,
+        -2.19,
+        -3.96,
+        -1.76,
+        -2.45,
+        -1.79,
+        -3.19,
+        -3.11,
+        -1.92,
+        -3.18,
+        -3.2,
+        -2.55,
+        -2.67,
+        -2.11,
+        -3.51,
+        -3.09,
+        -3.51,
+        -3.31,
+        -3.43,
+        -3.52,
+        -3.44,
+        -3.37,
+        -4.11,
+        -3.44,
+        -2.97,
+        -3.5,
+        2.27,
+        2.33,
+        2.33,
+        2.67,
+        2.26,
+        2.79
+      ]
+    },
+    "headline": [
+      "Is there cross-venue arbitrage between Kalshi and Polymarket?",
+      "Across 3 exact pairs and 144 order-book snapshots since 18 Oct, the largest net edge after fees was 2.8¢; 1 episode met the rule of at least 1¢ and $100 over two snapshots, and 0 of them could be executed from the US.",
+      "On same-instant crypto ladders, 1 of 1,877 admissible cross-strike checks had a net edge of at least 1¢."
+    ],
+    "ladder_checks": 1877,
+    "ladder_hourly": {
+      "checks": [
+        326,
+        337,
+        323,
+        291,
+        312,
+        288
+      ],
+      "ts": [
+        "2026-10-20T09:00:00Z",
+        "2026-10-20T10:00:00Z",
+        "2026-10-20T11:00:00Z",
+        "2026-10-20T12:00:00Z",
+        "2026-10-20T13:00:00Z",
+        "2026-10-20T14:00:00Z"
+      ],
+      "violations": [
+        0,
+        0,
+        1,
+        0,
+        0,
+        0
+      ]
+    },
+    "ladder_scored": 3754,
+    "ladder_start": "2026-10-20T09:00:00Z",
+    "ladder_violations": 1,
+    "max_net_edge_cents": 2.79,
+    "method": {
+      "crypto": "Both venues list Bitcoin and Ethereum price ladders, but they settle on different price indexes, so only ladders that settle at the same instant are compared. A Kalshi strike against a different Polymarket strike counts only when the gap between the two strikes is at least the 99.9th percentile of the difference between the two settlement indexes over the past 30 days. Then at least one leg pays out in every state, as long as the indexes stay within that measured range.",
+      "edge": "Prices come from our own snapshots of both venues' order books, taken every 60 seconds, not from last trades or midpoints. For each exact pair we buy Yes on one venue and No on the other, walking up both venues' lists of offers slice by slice and paying each venue's taker fee, so the edge is what is left per $1 contract after the cost of trading. An episode is a stretch where that net edge is at least 1¢, at least $100 can be filled, and both hold in at least 2 consecutive snapshots.",
+      "matching": "Candidate pairs are proposed within a category, by a deterministic rule for Fed rate brackets and by embedding similarity of the market text for everything else. Each candidate is then judged, Fed brackets by that fixed rule and every other pair by a language model, on whether both markets resolve on the same event, outcome, decision date and authority. Crypto price ladders are matched by a deterministic parser of the asset, strike and settlement instant, not by the language model. A sample of verdicts is checked by hand at review sittings; the precision shown with these figures covers every review of a current verdict.",
+      "not_shown": "The page does not show either venue's quotes or order books, only numbers derived from them, such as net edge, fees and fillable size. Kalshi's data terms do not permit public display of its prices without written permission, and Polymarket's terms could not be read, so quotes from both venues are withheld until that is settled. Kalshi's taker fee coefficient is secondhand and unverified, because its fee schedule could not be fetched, and Polymarket's fee rounding rule is unverified, so an edge could be off by up to about a cent per contract.",
+      "stock_perps": "A stock perp is a perpetual future on one US-listed (or Korean) share, traded on Hyperliquid's trade.xyz markets. The venue prices it against an oracle, an external feed that follows the stock 24 hours a day on weekdays (Blue Ocean's overnight session fills the hours the exchanges are shut) and, on weekends, the perp's own smoothed price. The basis is the perp's price against a reference price, in basis points (bps, hundredths of a percent); the reference is Schwab's consolidated quote from 4 AM to 8 PM New York time for US stocks, and the oracle at other times and for Asia-listed stocks. The net basis is what is left after a round trip held 24 hours: the perp's taker fee twice, the perp's half spread on exit (closing the perp leg crosses half of its bid-ask spread), the stock's full spread, and funding and borrow for the hold; the stock leg is capped at the size Schwab displays. The weekend test compares the perp's price at Friday 8 PM, Saturday noon and Sunday 6 PM New York time with Monday's stock open (the Korean open on Sunday evening for KRX names). Hyperliquid blocks US traders, so none of this can be executed from the US."
+    },
+    "note_path": "reports/research-note-v1.md",
+    "pairs_eligible": 3,
+    "pairs_reviewed": 3,
+    "review": {
+      "asof": "2026-10-19T15:30:00Z",
+      "labels": 31,
+      "precision": 1.0
+    },
+    "screened_end": "2026-10-20T15:00:00Z",
+    "screened_hist": {
+      "counts": [
+        5,
+        4,
+        8,
+        19,
+        22,
+        37,
+        43,
+        33,
+        46,
+        31,
+        19,
+        29,
+        2,
+        2,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "edges": [
+        -11.0,
+        -10.0,
+        -9.0,
+        -8.0,
+        -7.0,
+        -6.0,
+        -5.0,
+        -4.0,
+        -3.0,
+        -2.0,
+        -1.0,
+        0.0,
+        1.0,
+        2.0,
+        3.0,
+        4.0,
+        5.0,
+        6.0,
+        7.0,
+        8.0,
+        9.0,
+        10.0,
+        11.0
+      ]
+    },
+    "screened_rows": 300,
+    "screened_share_early": 1.0,
+    "screened_share_ge_1c": 0.013333333333333334,
+    "screened_start": "2026-10-16T12:00:00Z",
+    "snapshots": 144,
+    "stock_perps": {
+      "by_name": [
+        {
+          "hours_ge_10": 3,
+          "max_net_bps": 13.0,
+          "name": "NVIDIA",
+          "ref_kind": "schwab",
+          "symbol": "xyz:NVDA"
+        },
+        {
+          "hours_ge_10": 0,
+          "max_net_bps": 7.5,
+          "name": "Tesla",
+          "ref_kind": "schwab",
+          "symbol": "xyz:TSLA"
+        },
+        {
+          "hours_ge_10": 0,
+          "max_net_bps": 4.0,
+          "name": "Apple",
+          "ref_kind": "schwab",
+          "symbol": "xyz:AAPL"
+        }
+      ],
+      "episodes": 2,
+      "headline": "Across 3 stock perps and 4,320 snapshots since 17 Oct, the largest net basis after round-trip costs and a 24 h hold was 17.4 bps; 2 episodes met the rule of at least 10 bps and $100 over two snapshots.",
+      "hourly": {
+        "ts": [
+          "2026-10-17T16:00:00Z",
+          "2026-10-17T17:00:00Z",
+          "2026-10-17T18:00:00Z",
+          "2026-10-17T19:00:00Z",
+          "2026-10-17T20:00:00Z",
+          "2026-10-17T21:00:00Z",
+          "2026-10-17T22:00:00Z",
+          "2026-10-17T23:00:00Z",
+          "2026-10-18T00:00:00Z",
+          "2026-10-18T01:00:00Z",
+          "2026-10-18T02:00:00Z",
+          "2026-10-18T03:00:00Z",
+          "2026-10-18T04:00:00Z",
+          "2026-10-18T05:00:00Z",
+          "2026-10-18T06:00:00Z",
+          "2026-10-18T07:00:00Z",
+          "2026-10-18T08:00:00Z",
+          "2026-10-18T09:00:00Z",
+          "2026-10-18T10:00:00Z",
+          "2026-10-18T11:00:00Z",
+          "2026-10-18T12:00:00Z",
+          "2026-10-18T13:00:00Z",
+          "2026-10-18T14:00:00Z",
+          "2026-10-18T15:00:00Z",
+          "2026-10-18T16:00:00Z",
+          "2026-10-18T17:00:00Z",
+          "2026-10-18T18:00:00Z",
+          "2026-10-18T19:00:00Z",
+          "2026-10-18T20:00:00Z",
+          "2026-10-18T21:00:00Z",
+          "2026-10-18T22:00:00Z",
+          "2026-10-18T23:00:00Z",
+          "2026-10-19T00:00:00Z",
+          "2026-10-19T01:00:00Z",
+          "2026-10-19T02:00:00Z",
+          "2026-10-19T03:00:00Z",
+          "2026-10-19T04:00:00Z",
+          "2026-10-19T05:00:00Z",
+          "2026-10-19T06:00:00Z",
+          "2026-10-19T07:00:00Z",
+          "2026-10-19T08:00:00Z",
+          "2026-10-19T09:00:00Z",
+          "2026-10-19T10:00:00Z",
+          "2026-10-19T11:00:00Z",
+          "2026-10-19T12:00:00Z",
+          "2026-10-19T13:00:00Z",
+          "2026-10-19T14:00:00Z",
+          "2026-10-19T15:00:00Z",
+          "2026-10-19T16:00:00Z",
+          "2026-10-19T17:00:00Z",
+          "2026-10-19T18:00:00Z",
+          "2026-10-19T19:00:00Z",
+          "2026-10-19T20:00:00Z",
+          "2026-10-19T21:00:00Z",
+          "2026-10-19T22:00:00Z",
+          "2026-10-19T23:00:00Z",
+          "2026-10-20T00:00:00Z",
+          "2026-10-20T01:00:00Z",
+          "2026-10-20T02:00:00Z",
+          "2026-10-20T03:00:00Z",
+          "2026-10-20T04:00:00Z",
+          "2026-10-20T05:00:00Z",
+          "2026-10-20T06:00:00Z",
+          "2026-10-20T07:00:00Z",
+          "2026-10-20T08:00:00Z",
+          "2026-10-20T09:00:00Z",
+          "2026-10-20T10:00:00Z",
+          "2026-10-20T11:00:00Z",
+          "2026-10-20T12:00:00Z",
+          "2026-10-20T13:00:00Z",
+          "2026-10-20T14:00:00Z",
+          "2026-10-20T15:00:00Z"
+        ],
+        "values": [
+          1.75,
+          -0.76,
+          4.77,
+          3.0,
+          5.29,
+          1.41,
+          11.47,
+          4.14,
+          5.8,
+          5.96,
+          1.76,
+          9.81,
+          2.96,
+          2.41,
+          4.79,
+          6.14,
+          7.99,
+          7.55,
+          5.98,
+          4.06,
+          6.34,
+          6.86,
+          11.1,
+          6.66,
+          6.64,
+          7.55,
+          8.44,
+          1.39,
+          -0.79,
+          3.61,
+          6.07,
+          5.41,
+          0.89,
+          1.25,
+          7.75,
+          6.34,
+          4.12,
+          2.78,
+          9.5,
+          -3.22,
+          4.36,
+          5.33,
+          5.61,
+          4.79,
+          3.57,
+          3.99,
+          6.51,
+          5.28,
+          8.57,
+          3.82,
+          17.41,
+          15.23,
+          13.21,
+          0.19,
+          4.71,
+          -1.32,
+          4.41,
+          3.98,
+          1.07,
+          4.36,
+          10.19,
+          5.12,
+          2.38,
+          8.54,
+          3.56,
+          -1.9,
+          3.06,
+          -3.84,
+          -3.56,
+          5.53,
+          10.29,
+          9.9
+        ]
+      },
+      "max_net_bps": 17.41,
+      "names": 3,
+      "sensitivity": {
+        "episodes_1h": 4,
+        "episodes_7d": 0,
+        "episodes_base": 2,
+        "episodes_borrow_x10": 2,
+        "window_days": 14
+      },
+      "share_hours_abs_ge_10bps": 0.12,
+      "snapshots": 4320,
+      "weekends": {
+        "contained_sun_median": 0.7782034479282196,
+        "enough": false,
+        "hit_rate_sat": 1.0,
+        "hit_rate_sun": 1.0,
+        "n_sun": 12,
+        "names": 3,
+        "rows": [
+          {
+            "friday": "2026-10-02",
+            "p_fri": 215.0,
+            "p_open_pre": 213.75,
+            "p_open_reg": 213.75,
+            "p_sat": 214.38,
+            "p_sun": 213.77,
+            "ref_kind": "schwab",
+            "symbol": "xyz:NVDA"
+          },
+          {
+            "friday": "2026-10-09",
+            "p_fri": 215.0,
+            "p_open_pre": 213.97,
+            "p_open_reg": 213.97,
+            "p_sat": 214.49,
+            "p_sun": 214.36,
+            "ref_kind": "schwab",
+            "symbol": "xyz:NVDA"
+          },
+          {
+            "friday": "2026-10-16",
+            "p_fri": 215.0,
+            "p_open_pre": 213.94,
+            "p_open_reg": 213.94,
+            "p_sat": 214.47,
+            "p_sun": 214.29,
+            "ref_kind": "schwab",
+            "symbol": "xyz:NVDA"
+          },
+          {
+            "friday": "2026-10-23",
+            "p_fri": 215.0,
+            "p_open_pre": 213.84,
+            "p_open_reg": 213.84,
+            "p_sat": 214.42,
+            "p_sun": 214.24,
+            "ref_kind": "schwab",
+            "symbol": "xyz:NVDA"
+          },
+          {
+            "friday": "2026-10-02",
+            "p_fri": 250.0,
+            "p_open_pre": 251.14,
+            "p_open_reg": 251.14,
+            "p_sat": 250.57,
+            "p_sun": 251.06,
+            "ref_kind": "schwab",
+            "symbol": "xyz:TSLA"
+          },
+          {
+            "friday": "2026-10-09",
+            "p_fri": 250.0,
+            "p_open_pre": 251.16,
+            "p_open_reg": 251.16,
+            "p_sat": 250.58,
+            "p_sun": 251.34,
+            "ref_kind": "schwab",
+            "symbol": "xyz:TSLA"
+          },
+          {
+            "friday": "2026-10-16",
+            "p_fri": 250.0,
+            "p_open_pre": 251.36,
+            "p_open_reg": 251.36,
+            "p_sat": 250.68,
+            "p_sun": 251.41,
+            "ref_kind": "schwab",
+            "symbol": "xyz:TSLA"
+          },
+          {
+            "friday": "2026-10-23",
+            "p_fri": 250.0,
+            "p_open_pre": 251.09,
+            "p_open_reg": 251.09,
+            "p_sat": 250.54,
+            "p_sun": 250.87,
+            "ref_kind": "schwab",
+            "symbol": "xyz:TSLA"
+          },
+          {
+            "friday": "2026-10-02",
+            "p_fri": 180.0,
+            "p_open_pre": 180.91,
+            "p_open_reg": 180.91,
+            "p_sat": 180.46,
+            "p_sun": 180.69,
+            "ref_kind": "schwab",
+            "symbol": "xyz:AAPL"
+          },
+          {
+            "friday": "2026-10-09",
+            "p_fri": 180.0,
+            "p_open_pre": 179.27,
+            "p_open_reg": 179.27,
+            "p_sat": 179.63,
+            "p_sun": 179.33,
+            "ref_kind": "schwab",
+            "symbol": "xyz:AAPL"
+          },
+          {
+            "friday": "2026-10-16",
+            "p_fri": 180.0,
+            "p_open_pre": 180.97,
+            "p_open_reg": 180.97,
+            "p_sat": 180.49,
+            "p_sun": 180.6,
+            "ref_kind": "schwab",
+            "symbol": "xyz:AAPL"
+          },
+          {
+            "friday": "2026-10-23",
+            "p_fri": 180.0,
+            "p_open_pre": 178.98,
+            "p_open_reg": 178.98,
+            "p_sat": 179.49,
+            "p_sun": 179.49,
+            "ref_kind": "schwab",
+            "symbol": "xyz:AAPL"
+          }
+        ],
+        "weekends": 12
+      },
+      "window_start": "2026-10-17T16:00:00Z"
+    },
+    "window_start": "2026-10-18T16:00:00Z"
+  },
+  "show_books": false
+}

@@ -55,3 +55,29 @@ def test_sample_has_research():
     assert r.exec_hourly.ts and r.screened_hist.counts and r.ladder_hourly.ts
     assert r.review == {"precision": 1.0, "labels": 31, "asof": "2026-10-19T15:30:00Z"}
     assert {p.category for p in b.pairs} <= set(b.categories)
+
+
+def _stock():
+    return LiveBundle.model_validate_json((SAMPLE / "live-stock.json").read_text(encoding="utf-8"))
+
+
+def test_sample_stock_covers_three_states():
+    b = _stock()
+    sp = [p for p in b.pairs if p.kind == "stock_perp"]
+    assert len(sp) == 3 and {p.kind for p in b.pairs} >= {"exact", "stock_perp"}
+    labels = [p.verdict.label for p in sp]
+    assert any(lab.startswith("Executable edge · +") for lab in labels)
+    assert "Basis · within costs · no edge" in labels and "Reference closed · oracle only" in labels
+    assert all(p.category == "stock_perps" and p.settles_at is None and p.legs[1].url is None for p in sp)
+    assert "stock_perps" in b.categories and b.kpis.stock_perps is not None
+    assert b.research.stock_perps is not None and b.research.stock_perps.hourly.ts
+    assert set(b.research.method) >= {"matching", "edge", "crypto", "not_shown", "stock_perps"}
+    assert _bundle().kpis.stock_perps is None and _bundle().research.stock_perps is None  # flag-off sample unchanged
+
+
+def test_sample_stock_is_reproducible(tmp_path):
+    spec = importlib.util.spec_from_file_location("make_sample", SAMPLE / "make_sample.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    mod.build_stock(tmp_path)
+    assert (tmp_path / "live-stock.json").read_bytes() == (SAMPLE / "live-stock.json").read_bytes()

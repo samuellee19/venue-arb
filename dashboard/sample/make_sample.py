@@ -1,31 +1,45 @@
-"""Synthetic dashboard sample: live.json + two history hours, built through bundle.* and publish.history_table.
+"""Synthetic dashboard sample: live.json + two history hours, built through bundle.* and publish.history_table, and
+live-stock.json (the same bundle with the stock-perp tier on: three invented stock-perp rows and a research block).
 
     uv run python dashboard/sample/make_sample.py
 
 Tickers have real shapes; every price, size and time is invented (seeded, fixed `now`), so the repo carries no real
 quotes. Uses config.DASHBOARD_SHOW_BOOKS as it is: while False, live.json has books null and the history Parquet has
-null quotes. Rerun after flipping the flag. Output is deterministic (sorted-key JSON, zstd Parquet).
+null quotes. Rerun after flipping the flag. live-stock.json forces config.DASHBOARD_SHOW_STOCK_PERPS True for its
+own build only; live.json stays flag-off. Output is deterministic (sorted-key JSON, zstd Parquet).
 """
 import hashlib
 import json
 import random
 import sys
 from dataclasses import replace
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))  # run as a script, venue_arb is not installed
 
 import pyarrow.parquet as pq
 
-from venue_arb.bundle import Annotation, Basis, Episode, build_live, exact_pair_rows, ladder_pair_rows
+from venue_arb import config
+from venue_arb.bundle import (
+    Annotation,
+    Basis,
+    Episode,
+    build_live,
+    exact_pair_rows,
+    ladder_pair_rows,
+    stock_perp_rows,
+)
 from venue_arb.exact import ExactPair
 from venue_arb.fees import transfer_cost
 from venue_arb.matching.crypto_rule import Strike
 from venue_arb.models import Level
 from venue_arb.publish import history_table
 from venue_arb.report import note, research
+from venue_arb.sources.hyperliquid import Label, PerpCtx, PerpLevel
+from venue_arb.sources.schwab import Quote
 
 NOW = datetime(2026, 10, 20, 15, 30, tzinfo=UTC)
 SEED = 20261020
@@ -213,13 +227,73 @@ def research_section():
                                  computed_at=NOW)
 
 
-def build(out: Path) -> None:
-    rng = random.Random(SEED)
+def stock_inputs():
+    """Three invented stock perps through stock_perp_rows: NVDA executable (mark 213.4 vs Schwab 212.8/212.9), TSLA
+    inside costs (book on the mark), SKHX oracle-only (no stock quote: Korean shares)."""
+    def book(mid, step, size):
+        return [PerpLevel(side, i, round(mid + sign * (step / 2 + i * step), 2), size)
+                for side, sign in (("bid", -1), ("ask", 1)) for i in range(3)]
+    snap = NOW - timedelta(seconds=40)
+    q = NOW - timedelta(seconds=14)
+    nvda = PerpCtx("xyz:NVDA", 213.4, 213.3, 213.4, 0.00001, 0.0005, 1e6, 5e6, True, 10)
+    tsla = PerpCtx("xyz:TSLA", 250.4, 250.4, 250.4, 0.00001, 0.0001, 1e6, 4e6, True, 10)
+    skhx = PerpCtx("xyz:SKHX", 180000.0, 179800.0, 180000.0, 0.00001, 0.0002, 5e5, 1e6, False, 5)
+    return [
+        (nvda, Label("xyz:NVDA", "schwab", "NVDA", "NASDAQ", "USD", "NVIDIA"), (snap, book(213.4, 0.2, 100.0)),
+         Quote("NVDA", 212.8, 212.9, 300.0, 300.0, 212.85, q)),
+        (tsla, Label("xyz:TSLA", "schwab", "TSLA", "NASDAQ", "USD", "Tesla"), (snap, book(250.4, 0.1, 100.0)),
+         Quote("TSLA", 250.3, 250.4, 400.0, 400.0, 250.35, q)),
+        (skhx, Label("xyz:SKHX", "none", None, "KRX", "KRW", "SK hynix"), (snap, book(180000.0, 100.0, 20.0)), None)]
+
+
+def stock_block():
+    """Invented stock_perp_inputs -> research.stock_perp_block: 72 hourly maxima, three names, four weekends each."""
+    rng = random.Random(SEED + 2)  # its own stream, like the research section's
+    end = NOW.replace(minute=0)
+    hours = [end - timedelta(hours=h) for h in range(71, -1, -1)]
+    hourly = [(h, round(max(-5.0, rng.gauss(4, 4)) + (9 if i in (50, 51, 52) else 0), 2)) for i, h in enumerate(hours)]
+    weekend = []
+    for sym, base in (("xyz:NVDA", 215.0), ("xyz:TSLA", 250.0), ("xyz:AAPL", 180.0)):
+        for w in range(4):
+            fri = date(2026, 10, 2) + timedelta(days=7 * w)
+            move = round(base * rng.choice((-1, 1)) * (0.004 + 0.002 * rng.random()), 2)  # Monday's open vs Friday
+            weekend.append({"symbol": sym, "friday": fri, "p_fri": base, "p_sat": round(base + move * 0.5, 2),
+                            "p_sun": round(base + move * (0.4 + 0.8 * rng.random()), 2), "p_open_pre": base + move,
+                            "p_open_reg": round(base + move, 2), "ref_kind": "schwab"})
+    return research.stock_perp_block({
+        "hourly": hourly, "names": 3, "snapshots": 4320, "window_start": hours[0], "episodes": 2, "share_hours": 0.12,
+        "by_name": [{"symbol": "xyz:NVDA", "name": "NVIDIA", "max_net_bps": 13.0, "hours_ge_10": 3, "ref_kind": "schwab"},
+                    {"symbol": "xyz:TSLA", "name": "Tesla", "max_net_bps": 7.5, "hours_ge_10": 0, "ref_kind": "schwab"},
+                    {"symbol": "xyz:AAPL", "name": "Apple", "max_net_bps": 4.0, "hours_ge_10": 0, "ref_kind": "schwab"}],
+        "sensitivity": {"episodes_base": 2, "episodes_1h": 4, "episodes_7d": 0, "episodes_borrow_x10": 2,
+                        "window_days": 14},
+        "weekend_rows": weekend}, NOW)
+
+
+def stock_sparks(rng, rows):  # hourly net in ¢ of net (bps / 100), like the pair rows' sparks
+    out = {}
+    for r in rows:
+        if r.net_edge_cents is not None:
+            pts = [round(r.net_edge_cents + rng.gauss(0, abs(r.net_edge_cents) * .15 + .02), 3) for _ in range(24)]
+            pts[rng.randrange(0, 6)] = None
+            out[r.key] = pts
+    return out
+
+
+def make_bundle(rng, stock: bool = False):
     sparks = make_sparks(rng, [r for rows in live_rows({}) for r in rows])
     ex, lad = live_rows(sparks)
     top = next(r for r in ex if r.key == EXEC_KEY)
     cap = top.capacity_usd
-    bundle = build_live(
+    stock_rows = research_s = None
+    if stock:
+        perps = stock_inputs()
+        bare = stock_perp_rows(perps, {}, NOW)
+        stock_rows = stock_perp_rows(perps, stock_sparks(random.Random(SEED + 3), bare), NOW)
+    research_s = research_section()
+    if stock:
+        research_s = research_s.model_copy(update={"stock_perps": stock_block()})
+    return build_live(
         now=NOW, exact_rows=ex, ladder_rows=lad, basis=BASIS,
         episodes=[Episode(key=EXEC_KEY, start=BUMP_FROM, end=None, max_edge_cents=top.net_edge_cents,
                           median_capacity_usd=cap, transfer_cost_usd=round(transfer_cost(cap), 2))],
@@ -233,23 +307,40 @@ def build(out: Path) -> None:
                        until=datetime(2026, 10, 20, 14, 47, tzinfo=UTC), key=None, label="Collector gap: 6 min"),
             Annotation(kind="threshold", at=BUMP_FROM, until=None, key=EXEC_KEY, label="Net edge crossed 1¢")],
         kpi_inputs={"checks_window": [HOURS[0], HOURS[1]], "admissible_checks": 1200, "violations": 0,
-                    "screened_share_ge_1c": 0.004, "screened_hours": 3100},
+                    "screened_share_ge_1c": 0.004, "screened_hours": 3100, "stock_perps": {"episodes_7d": 2}},
         attribution=["Order books: Kalshi public market-data API (kalshi.com)",
                      "Order books: Polymarket public CLOB API (polymarket.com)"],
         caveats=["Synthetic sample: every price, size and time is invented."], collector_last=NOW - timedelta(seconds=40),
-        research=research_section())
-    sides = {(p.kalshi_id, p.pm_id): p.yes_maps_to for p in PAIRS}
-    (out / "history").mkdir(parents=True, exist_ok=True)
-    (out / "live.json").write_text(
+        research=research_s, stock_rows=stock_rows)
+
+
+def write_live(out: Path, name: str, bundle) -> None:
+    (out / name).write_text(
         json.dumps(json.loads(bundle.model_dump_json()), sort_keys=True, indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8")
+
+
+def build(out: Path) -> None:
+    rng = random.Random(SEED)
+    bundle = make_bundle(rng)
+    sides = {(p.kalshi_id, p.pm_id): p.yes_maps_to for p in PAIRS}
+    (out / "history").mkdir(parents=True, exist_ok=True)
+    write_live(out, "live.json", bundle)
     for hour in HOURS:
         tbl = history_table(*history_rows(rng, hour, bundle.pairs), sides)
         pq.write_table(tbl, out / "history" / f"pairs-{hour:%Y%m%d%H}.parquet", compression="zstd")
 
 
+def build_stock(out: Path) -> None:
+    """live-stock.json: the stock-perp tier on. The config flag is forced for this build only."""
+    out.mkdir(parents=True, exist_ok=True)
+    with mock.patch.object(config, "DASHBOARD_SHOW_STOCK_PERPS", True):
+        write_live(out, "live-stock.json", make_bundle(random.Random(SEED), stock=True))
+
+
 def main() -> None:
     build(ROOT / "dashboard" / "sample")
+    build_stock(ROOT / "dashboard" / "sample")
 
 
 if __name__ == "__main__":
