@@ -33,7 +33,11 @@ def _utc(ts: datetime) -> datetime:
 
 
 def report(rows: list[dict], day) -> str:
-    lines = [f"# Oracle vs Schwab, {day}", "", f"Last {DAYS} ET days, US names, external sessions, worst p95 first. Private.", "",
+    lines = [f"# Oracle vs Schwab, {day}", "",
+             (f"Last {DAYS} ET days, worst p95 first. Private. Coverage: US-listed names only, external-session ticks "
+              "with a fresh two-sided Schwab quote at the same tick, so in practice about 04:00-20:00 ET; the overnight "
+              "external hours (20:00-04:00 ET) are not validated. The newest day is partial and is rewritten by the "
+              "next run."), "",
              "| day | symbol | n | median bps | p95 bps | share >10 bps | Monday open gap bps |", "|---|---|---|---|---|---|---|"]
     for r in sorted(rows, key=lambda r: -r["p95_abs_bps"]):
         gap = "" if r["open_gap_bps"] is None else f"{r['open_gap_bps']:.1f}"

@@ -13,7 +13,7 @@ from venue_arb.sources.hyperliquid import Label
 _ET = ZoneInfo("America/New_York")
 _US = {"NASDAQ", "NYSE", "NYSE ARCA", "CBOE BZX"}
 
-# NYSE full-day closures, as observed.
+# NYSE full-day closures, as observed. Covers 2026-2027 only: extend past 2027 or every later holiday reads external.
 US_HOLIDAYS = frozenset(
     date(*d)
     for d in [
@@ -31,6 +31,9 @@ _ASIA = {
     "HKEX": ("Asia/Hong_Kong", [(time(9, 30), time(12, 0)), (time(13, 0), time(16, 0))]),
     "SSE": ("Asia/Shanghai", [(time(9, 30), time(11, 30)), (time(13, 0), time(14, 57))]),
     "SZSE": ("Asia/Shanghai", [(time(9, 30), time(11, 30)), (time(13, 0), time(14, 57))]),
+    # NSE: an assumption, not from the trade.xyz index (which does not list it): the regular session 09:15-15:30 IST,
+    # no pre-open or closing session; docs/venues.md "Oracle and sessions"
+    "NSE": ("Asia/Kolkata", [(time(9, 15), time(15, 30))]),
 }
 
 

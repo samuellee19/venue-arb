@@ -72,7 +72,9 @@ def test_sample_stock_covers_four_states():
     assert "Stale · a leg has no snapshot in 5 min" in labels
     [stale] = [p for p in sp if not p.live]
     assert stale.net_bps is None and stale.basis_bps is None and stale.sensitivity is None and stale.costs is None
-    assert all(p.costs for p in sp if p.live) and all(date.fromisoformat(w["friday"]) < date(2026, 10, 20) and date.fromisoformat(w["friday"]).weekday() == 4
+    [internal] = [p for p in sp if p.reference["state"] == "internal"]  # fresh but unscored, like the stale row
+    assert internal.live and internal.net_bps is None and internal.costs is None and internal.capacity_usd == 0
+    assert all(p.costs for p in sp if p.live and p is not internal) and all(date.fromisoformat(w["friday"]) < date(2026, 10, 20) and date.fromisoformat(w["friday"]).weekday() == 4
                                                       for w in b.research.stock_perps.weekends["rows"])
     assert all(p.category == "stock_perps" and p.settles_at is None and p.legs[1].url is None for p in sp)
     assert all(p.key == f"{p.legs[0].market_id}~{p.legs[1].market_id}~stock_perp" for p in sp)  # no direction in the key

@@ -1577,16 +1577,12 @@
       }
     },
     {
-      "basis_bps": 11.1235,
+      "basis_bps": null,
       "books": null,
       "capacity_contracts": 0.0,
       "capacity_usd": 0.0,
       "category": "stock_perps",
-      "costs": {
-        "funding_bps": -2.4,
-        "perp_fee_bps": 18.0,
-        "perp_spread_bps": 2.7778
-      },
+      "costs": null,
       "direction": "short_perp_long_stock",
       "fee_params": {
         "perp": {
@@ -1597,7 +1593,7 @@
           "borrow_bps_yr": 50.0
         }
       },
-      "fees_cents": 0.18,
+      "fees_cents": null,
       "funding_bps_h": 0.1,
       "hold_hours": 24,
       "key": "xyz:SKHX~xyz:SKHX~stock_perp",
@@ -1624,47 +1620,43 @@
         }
       ],
       "live": true,
-      "net_bps": -10.0352,
-      "net_edge_bps": -10.0352,
-      "net_edge_cents": -0.100352,
-      "net_edge_roi": -0.00100352,
+      "net_bps": null,
+      "net_edge_bps": null,
+      "net_edge_cents": null,
+      "net_edge_roi": null,
       "next_funding_at": "2026-10-20T16:00:00Z",
       "reference": {
         "asof": "2026-10-20T15:29:20+00:00",
         "kind": "oracle",
         "state": "internal"
       },
-      "sensitivity": {
-        "net_bps_1h": -12.3352,
-        "net_bps_7d": 4.3648,
-        "net_bps_with_borrow": -10.0352
-      },
+      "sensitivity": null,
       "settles_at": null,
       "spark": [
-        -0.041,
-        -0.126,
-        -0.12,
         null,
-        -0.08,
-        -0.103,
-        -0.091,
-        -0.105,
-        -0.105,
-        -0.102,
-        -0.096,
-        -0.048,
-        -0.118,
-        -0.126,
-        -0.045,
-        -0.106,
-        -0.066,
-        -0.091,
-        -0.127,
-        -0.079,
-        -0.173,
-        -0.145,
-        -0.113,
-        -0.116
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
       ],
       "title": "SK hynix (KRX)",
       "trade": "short xyz:SKHX / long xyz:SKHX",
@@ -1677,14 +1669,14 @@
             "status": "partial"
           },
           {
-            "detail": "net -10.0 bps after 2× taker, perp spread and 24 h funding",
+            "detail": "not scored: oracle internal",
             "name": "fees_carry",
-            "status": "fail"
+            "status": "partial"
           },
           {
-            "detail": "$0 perp depth vs $100 minimum",
+            "detail": "not scored: oracle internal",
             "name": "fees_depth",
-            "status": "fail"
+            "status": "partial"
           },
           {
             "detail": "anywhere: perp leg open · US: Hyperliquid blocks US traders",
@@ -2055,7 +2047,7 @@
         }
       ],
       "episodes": 2,
-      "headline": "Across 3 stock perps and 4,320 snapshots since 17 Oct, the largest net basis after round-trip costs and a 24 h hold was 17.4 bps; 2 episodes met the rule of at least 10 bps and $100 over two snapshots.",
+      "headline": "Across 3 stock perps and 4,320 snapshots since 17 Oct, the largest net basis before stock-leg costs, with perp fees and 24 h funding, was 17.4 bps; 2 episodes met the rule of at least 10 bps and $100 over two snapshots.",
       "hourly": {
         "ts": [
           "2026-10-17T16:00:00Z",

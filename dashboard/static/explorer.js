@@ -226,7 +226,7 @@ function costStock(p) {
     + r(`Funding over ${p.hold_hours} h`, cost(c.funding_bps))
     + r("Net, before stock-leg costs", `<span class="${tone(p.net_edge_cents, p)}">${bps(p.net_bps)}</span>`, "t")
     + r("Net at 1 h / 7 d / with borrow", `${bps(s.net_bps_1h)} / ${bps(s.net_bps_7d)} / ${bps(s.net_bps_with_borrow)}`)
-    + r("Perp depth at top of book", usd(p.capacity_usd))
+    + r("Perp depth while net ≥ 10 bps", usd(p.capacity_usd))
     + `<div class="note">The stock leg is not modelled on this page.</div>`;
 }
 

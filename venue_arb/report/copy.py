@@ -58,6 +58,6 @@ HEADLINE: dict[str, str] = {
     "ladders_none": ("On same-instant crypto ladders there are no counted hours yet, so no admissible checks to "
                      "report."),
     "ladder_episodes": " On ladders, {episodes} met the same episode rule.",  # appended when there are any
-    "stock_perps": ("Across {names} and {snapshots} since {since}, the largest net basis after round-trip costs and a "
-                    "24 h hold was {max_net}; {episodes} met the rule of at least 10 bps and $100 over two snapshots."),
+    "stock_perps": ("Across {names} and {snapshots} since {since}, the largest net basis before stock-leg costs, with "
+                    "perp fees and 24 h funding, was {max_net}; {episodes} met the rule of at least 10 bps and $100 over two snapshots."),
 }

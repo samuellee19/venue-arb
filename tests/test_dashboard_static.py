@@ -195,3 +195,12 @@ def test_client_reads_only_the_oracle_keys():
     for old in ("stock_spread_bps", "borrow_bps", "borrow_x10", "reference.symbol", "borrow ×10"):
         assert old not in js, old
     assert "episodes_with_borrow" in _read("research.js") and "net_bps_with_borrow" in _read("explorer.js")
+
+
+def test_stock_perp_copy_says_before_stock_leg_costs():
+    from venue_arb.report import copy
+
+    head = copy.HEADLINE["stock_perps"]
+    assert "before stock-leg costs, with perp fees and 24 h funding" in head and "round-trip" not in head
+    assert '"Stock-perp spread", "before stock-leg costs"' in _read("research.js") and "net of costs" not in _read("research.js")
+    assert '"Perp depth while net ≥ 10 bps"' in _read("explorer.js") and "top of book" not in _read("explorer.js")

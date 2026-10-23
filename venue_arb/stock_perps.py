@@ -150,7 +150,7 @@ def score(ctx: PerpCtx, book: list[PerpLevel], ref: Reference, *, mode: Mode = "
 
 def gross_to_net(edge: StockPerpEdge, hold_h: float) -> float:
     """Net bps had the position been held hold_h: funding and borrow scale with the hold; the fill, the perp fee,
-    the perp exit spread and the stock spread (all inside net_bps) do not."""
+    the perp exit spread and the stock spread (all inside net_bps) do not. Borrow is excluded in oracle mode."""
     if edge.hold_h <= 0:
         raise ValueError("edge.hold_h must be positive")
     borrow = 0.0 if edge.mode == "oracle" else edge.borrow_bps  # borrow is not in an oracle-mode net

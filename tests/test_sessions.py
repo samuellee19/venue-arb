@@ -73,5 +73,15 @@ def test_other_asian_exchanges():
 
 
 def test_unknown_exchange_is_internal():
-    assert not s.external(Label("xyz:JIO", "none", "", "NSE", "INR", "Jio"), utc(2026, 10, 21, 6, 0))
+    assert not s.external(Label("xyz:X", "none", "", "LSE", "GBP", "X"), utc(2026, 10, 21, 10, 0))
     assert not s.external(Label("xyz:Q", "none", "", "", "", "Q"), utc(2026, 10, 21, 15, 0))
+
+
+def test_nse_window_is_the_assumed_regular_session():
+    sessions = s
+    nse = Label("xyz:RELIANCE", "none", "RELIANCE", "NSE", "INR", "Reliance Industries")
+    ist = ZoneInfo("Asia/Kolkata")
+    at = lambda d, h, m: datetime(2026, 10, d, h, m, tzinfo=ist)
+    assert not sessions.external(nse, at(23, 9, 14)) and sessions.external(nse, at(23, 9, 15))
+    assert sessions.external(nse, at(23, 15, 29)) and not sessions.external(nse, at(23, 15, 30))
+    assert not sessions.external(nse, at(24, 11, 0))  # Saturday

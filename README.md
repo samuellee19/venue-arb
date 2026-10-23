@@ -22,12 +22,14 @@ and a plain-words reason.
   the same instant): a model-free tier. A cross-strike spread pays in every state only if the two settlement
   indices (CF Benchmarks BRTI and the Binance candle close) stay within a measured basis bound, so each spread is
   checked against a bound taken from 30 days of hourly differences.
-- **Stock perpetuals** (a separate tier: Hyperliquid's trade.xyz perps against the stocks they track). Basis is the
-  perp's mark minus a reference, in bps, with the reference and its age on every row. The reference is Schwab's bid/ask
-  mid while that quote is fresh (at most 120 s old), else the venue's oracle, which is labelled "oracle only" and
-  carries no executable verdict. The executable tier nets a 24-hour round trip: two taker fees, the perp's exit
-  half-spread, the full stock spread, funding and borrow. An episode needs net ≥ 10 bps, at least $100 fillable and two
-  consecutive snapshots. The weekend tier is a forecast test, not an arbitrage: how much of Monday's move the weekend
+- **Stock perpetuals** (a separate tier: Hyperliquid's trade.xyz perps against the stocks they track). The public view
+  uses Hyperliquid data only: basis is the perp's mark against the trade.xyz venue oracle, in bps, with the oracle's
+  age on every row. Its net takes off the perp-side costs of a 24-hour hold (two taker fees, the perp's exit
+  half-spread and funding), before any stock-leg cost; borrow is shown as a sensitivity only. Outside a name's external
+  session the oracle follows the perp, so those rows read "Oracle internal · market closed" and are not scored. An
+  episode needs net ≥ 10 bps, at least $100 of perp depth and two consecutive snapshots. A private two-leg tier,
+  never published, scores the same perps against live stock quotes (stock spread and borrow included), and a private
+  daily check measures how far the oracle sits from those quotes (below). The weekend tier is a forecast test, not an arbitrage: how much of Monday's move the weekend
   perp had already made. Details: `docs/venues.md` (Hyperliquid), the design
   `docs/superpowers/specs/2026-10-22-venue-arb-stock-perp-basis-design.md`.
 - **The honest denominator.** Every admissible check is counted, scored or not, so a count of opportunities always
@@ -260,7 +262,8 @@ secrets uv run python -m venue_arb.flows.stock_perp_oracle_check
 ```
 
 No name is hidden automatically. After a week of reports, remove a name from the public page by hand in
-`labels/stock_perps_excluded.txt` with a neutral comment. Asian exchange holidays are not in the session calendar, so
+`labels/stock_perps_excluded.txt` with a neutral comment: the publisher re-reads the file and drops the name from the
+live rows, sparklines, history, research block and episode counts; its rows stay in the private tables. Asian exchange holidays are not in the session calendar, so
 on such a day a name may read external against a stale oracle.
 
 ## Data terms and caveats

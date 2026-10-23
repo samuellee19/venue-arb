@@ -25,7 +25,7 @@ def score_window(ctx_rows: list[dict], book_rows: list[dict], ref_rows: list[dic
     `executable` (that reference) and `oracle` (perp only), each stamped with the oracle's session. Episodes: one run
     per (symbol, mode, direction), as (source, episode); a tick scored in the other direction is a non-qualifying
     point there, so it ends the run. Oracle episodes come only from external-session ticks: an internal tick (the
-    oracle follows the perp) is a non-qualifying point."""
+    oracle follows the perp) is a non-qualifying point. Oracle episodes use pm_id = 'oracle' (ORACLE_PM_ID)."""
     books: dict[tuple[str, datetime], list[PerpLevel]] = defaultdict(list)
     for b in book_rows:
         books[b["symbol"], b["ts"]].append(PerpLevel(b["side"], b["level"], b["price"], b["size"]))

@@ -154,7 +154,7 @@ class StockPerpResearch(_M):
     snapshots: int  # distinct (symbol, ts) scored
     window_start: datetime | None  # first scored tick
     episodes: int
-    max_net_bps: float | None  # largest net basis after round-trip costs and the 24 h hold
+    max_net_bps: float | None  # largest oracle-mode net basis before stock-leg costs (perp fees, spread, 24 h funding)
     share_hours_abs_ge_10bps: float | None  # of external-session hours, the share with |basis| >= 10 bps
     hourly: ResearchSeries  # max net_bps per hour, whole history
     by_name: list[dict]  # {"symbol", "name", "max_net_bps", "hours_ge_10"}, top 10 by max_net_bps
@@ -400,7 +400,10 @@ def stock_perp_verdict(edge: StockPerpEdge, state: str, live: bool, now: datetim
     checks = [Check(name="reference", status="ok" if live and not internal else "partial",
                     detail="oracle internal: market closed" if internal
                     else f"oracle live, {age:.0f} s old" if live else f"oracle {age:.0f} s old")]
-    if live:
+    if live and internal:
+        checks += [Check(name="fees_carry", status="partial", detail="not scored: oracle internal"),
+                   Check(name="fees_depth", status="partial", detail="not scored: oracle internal")]
+    elif live:
         net = edge.net_bps
         checks.append(Check(name="fees_carry", status="ok" if net >= config.STOCK_PERP_MIN_NET_BPS else "fail",
                             detail=f"net {net:+.1f} bps after 2× taker, perp spread and {edge.hold_h:g} h funding"))
@@ -429,7 +432,7 @@ def stock_perp_verdict(edge: StockPerpEdge, state: str, live: bool, now: datetim
 def stock_perp_rows(perps: list[tuple[PerpCtx, Label, SnapPerp]], sparks: dict, now: datetime) -> list[Pair]:
     """One row per perp name, scored in the oracle mode (Hyperliquid data only). net_edge_cents is net_bps / 100
     (bps of notional read as ¢ per $100), so the Explorer's ¢ axis and sparkline share a unit with the pair rows. Past
-    LIVE_MAX_AGE_S the row is unscored (Stale, nets None). The oracle is aged from the snapshot's tick `ts`, not
+    LIVE_MAX_AGE_S (Stale) or while the oracle is internal the row is unscored (nets None, capacity 0). The oracle is aged from the snapshot's tick `ts`, not
     `now` (the collector inserts every few ticks, so a stored tick is minutes old)."""
     rows = []
     for ctx, label, (ts, levels) in perps:
@@ -440,7 +443,8 @@ def stock_perp_rows(perps: list[tuple[PerpCtx, Label, SnapPerp]], sparks: dict, 
         short_perp = edge.direction == "short_perp_long_stock"
         perp_side, stock_side = ("short", "long") if short_perp else ("long", "short")
         key = stock_key(sym, stock)
-        net = round(edge.net_bps, 4) if live else None
+        scored = live and state != "internal"  # an internal oracle follows the perp: published unscored, like stale
+        net = round(edge.net_bps, 4) if scored else None
         taker = HYPERLIQUID_TAKER["growth" if ctx.growth_mode else "standard"]
         hold = edge.hold_h
         rows.append(Pair(
@@ -454,20 +458,20 @@ def stock_perp_rows(perps: list[tuple[PerpCtx, Label, SnapPerp]], sparks: dict, 
             net_edge_cents=None if net is None else net / 100, net_edge_bps=net,
             net_edge_roi=None if net is None else net / 1e4,
             fees_cents=None if net is None else round(edge.perp_fee_bps / 100, 4),
-            capacity_contracts=edge.capacity_contracts if live else 0.0,
-            capacity_usd=edge.capacity_usd if live else 0.0, books=None,
+            capacity_contracts=edge.capacity_contracts if scored else 0.0,
+            capacity_usd=edge.capacity_usd if scored else 0.0, books=None,
             verdict=stock_perp_verdict(edge, state, live, now, has_book=bool(levels), asof=ts), us_executable=False,
             fee_params={"perp": {"taker": taker, "growth_mode": ctx.growth_mode},
                         "stock": {"borrow_bps_yr": config.STOCK_PERP_BORROW_BPS_YR}},
             spark=sparks.get(key, [None] * SPARK_HOURS),
-            basis_bps=round(edge.basis_bps, 4) if live else None, net_bps=net, funding_bps_h=ctx.funding_h * 1e4,
+            basis_bps=round(edge.basis_bps, 4) if scored else None, net_bps=net, funding_bps_h=ctx.funding_h * 1e4,
             next_funding_at=now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1),
             reference={"kind": "oracle", "state": state, "asof": ts.isoformat()},
             trade=f"{perp_side} {sym} / {stock_side} {stock}", hold_hours=int(hold),
-            costs=None if not live else {
+            costs=None if not scored else {
                 "perp_fee_bps": round(edge.perp_fee_bps, 4), "perp_spread_bps": round(edge.perp_spread_bps, 4),
                 "funding_bps": round(edge.funding_bps, 4)},
-            sensitivity=None if not live else {
+            sensitivity=None if not scored else {
                 "net_bps_1h": round(stock_perps.gross_to_net(edge, 1), 4),
                 "net_bps_7d": round(stock_perps.gross_to_net(edge, 168), 4),
                 "net_bps_with_borrow": round(edge.net_bps - edge.borrow_bps, 4)}))

@@ -341,3 +341,14 @@ def test_stock_perp_key_ignores_direction():  # a basis sign flip keeps the row'
     [short_p] = stock_perp_rows([(CTX215, LABEL_NVDA, SP_SNAP)], {"xyz:NVDA~NVDA~stock_perp": [2.0] * 24}, SP_NOW)
     assert long_p.direction != short_p.direction and long_p.key == short_p.key == "xyz:NVDA~NVDA~stock_perp"
     assert short_p.spark == [2.0] * 24
+
+
+def test_stock_perp_row_internal_is_not_scored():  # fresh but the oracle follows the perp: published like a stale row
+    [p] = stock_perp_rows([(CTXB, LABEL_NVDA, (SAT, SP_BOOK))], {}, SAT)
+    assert p.live and p.verdict.label == "Oracle internal · market closed"
+    carry, depth = p.verdict.checks[1:3]
+    assert (carry.status, carry.detail) == ("partial", "not scored: oracle internal")
+    assert (depth.status, depth.detail) == ("partial", "not scored: oracle internal")
+    assert p.net_bps is None and p.basis_bps is None and p.net_edge_cents is None and p.net_edge_bps is None
+    assert p.net_edge_roi is None and p.fees_cents is None and p.capacity_usd == 0 and p.capacity_contracts == 0
+    assert p.costs is None and p.sensitivity is None

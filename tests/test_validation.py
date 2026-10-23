@@ -77,3 +77,13 @@ def test_monday_open_gap_first_usable_tick_within_five_minutes():
     late = datetime(2026, 10, 19, 13, 35, tzinfo=UTC)  # 09:35: too late
     (r,) = run([tick(0, orc=100.1, t0=late)])
     assert r["open_gap_bps"] is None
+
+
+def test_oracle_check_report_states_its_coverage():  # the flow imports the platform stack, so read its source
+    import re
+
+    text = re.sub(r'"\s*\n\s*"', "", Path("venue_arb/flows/stock_perp_oracle_check.py").read_text())  # join literals
+    for phrase in ("US-listed names only", "fresh two-sided Schwab quote", "about 04:00-20:00 ET",
+                   "overnight external hours (20:00-04:00 ET) are not validated",
+                   "newest day is partial and is rewritten by the next run"):
+        assert phrase in text, phrase

@@ -160,7 +160,8 @@ Read-only: the collector calls the public info endpoint and no order, account or
 - Counts on 2026-10-22: 138 perps on the `xyz` dex; 105 equities or equity ETFs in scope, the rows of
   `labels/stock_perps.csv` (86 with a Schwab reference, 19 oracle-only). `catalog` drops delisted perps
   (`isDelisted`). `labels/stock_perps_excluded.txt`
-  lists 32 pre-IPO, index, FX, commodity and spot-index perps. A perp in neither file is named by the collector's
+  lists 32 pre-IPO, index, FX, commodity and spot-index perps, plus any name hidden by hand from the public page (a
+  labelled name may also be excluded). A perp in neither file is named by the collector's
   `unlabelled_perps` warn.
 
 ### Fees (2026-10-22)
@@ -177,6 +178,9 @@ Observed on 2026-10-22:
 - For US names the oracle is derived externally from Sunday 8:05 PM to Friday 8:00 PM ET: pre-market, market,
   post-market, and overnight through Blue Ocean ATS. For Asia-listed names it is derived externally during their home
   sessions.
+- NSE (Jio Platforms, Reliance Industries): the trade.xyz index read on 2026-10-22 gives no NSE window. The code
+  assumes NSE's regular session, Monday to Friday 09:15-15:30 Asia/Kolkata (`venue_arb/sessions.py`); this is an
+  assumption, not an observation. Before this, NSE names read internal at all times.
 - Outside those windows the external price freezes, and the oracle advances as an exponentially weighted average of
   the perp's own impact price with a 30-minute time constant.
 - Funding settles hourly against the oracle.
@@ -296,6 +300,10 @@ personal-use terms, Pyth display terms).
 - Oracle-mode episodes in `stock_perp_window` carry `pm_id = 'oracle'` (`ORACLE_PM_ID`) and `source =
   'stock_perp_oracle'`; the private two-leg tier keeps `source = 'stock_perp'`.
 - Exclusion is manual only: a name leaves the public page when someone adds it to `labels/stock_perps_excluded.txt`
-  by hand with a neutral comment that does not cite Schwab. Nothing hides a name automatically.
+  by hand with a neutral comment that does not cite Schwab. Nothing hides a name automatically. The file then means
+  "hidden from every public path": the publisher re-reads it and filters the name out of the live rows, sparklines,
+  history Parquet, research block and episode counts. A name may be in both the labels CSV and the excluded file; its
+  rows stay in the private tables. The collector (`collect_perps.run_forever`) skips excluded names, so an excluded
+  name's private rows stop growing from the next label reload; what was collected before stays.
 - Asian exchange holidays are not modelled in the session calendar (`venue_arb/sessions.py`); on such a day a name
   can read as external against a stale oracle.

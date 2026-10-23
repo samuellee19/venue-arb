@@ -22,7 +22,7 @@ const card = (id, title, win, figure, qualifier, caption) => `<div class="card">
 // the two stock-perp cards: net spread by hour, and how much of Monday's move the Sunday perp already held
 function stockCards(s) {
   const w = s.weekends, se = s.sensitivity;
-  return card("rc-sp", "Stock-perp spread", "net of costs", count(s.episodes, "episode"),
+  return card("rc-sp", "Stock-perp spread", "before stock-leg costs", count(s.episodes, "episode"),
     `max net ${dash(s.max_net_bps, x => num(x, 1))} bps; ${dash(s.share_hours_abs_ge_10bps, x => num(100 * x))}% of session hours over ${MIN_BPS} bps; `
       + `${num(s.names)} names ${since(s.window_start)}`,
     `max net bps per hour; dashed: ${MIN_BPS} bps. Episodes in the last ${num(se.window_days)} d: ${num(se.episodes_base)} at a 24 h hold, `
