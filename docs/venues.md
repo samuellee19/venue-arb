@@ -156,17 +156,17 @@ Read-only: the collector calls the public info endpoint and no order, account or
   mark, oracle, mid, funding, premium, open interest, volume, growth mode, leverage, delisted flag); `l2Book` per perp
   (the top `BOOK_DEPTH` = 10 levels a side); `candleSnapshot` at `1h` and `fundingHistory`, both for the backfill.
   The code does not call `perpDexs` or `meta`: the universe comes back inside `metaAndAssetCtxs`.
-- Rate budget: 1,200 weight per minute per IP; `l2Book` costs weight 2 (official docs, observed 2026-10-22). A 60 s sweep of 104 books is about 208 weight, plus the context call.
-- Counts on 2026-10-22: 138 perps on the `xyz` dex; 104 equities or equity ETFs in scope. `catalog` drops delisted
-  perps (`isDelisted`). `labels/stock_perps.csv` on this branch has 105 rows (86 with a Schwab reference, 19
-  oracle-only), so it is one row off the 104 count and that gap is not reconciled yet. `labels/stock_perps_excluded.txt`
+- Rate budget: 1,200 weight per minute per IP; `l2Book` costs weight 2 (official docs, observed 2026-10-22). A 60 s sweep of 105 books is about 210 weight, plus the context call.
+- Counts on 2026-10-22: 138 perps on the `xyz` dex; 105 equities or equity ETFs in scope, the rows of
+  `labels/stock_perps.csv` (86 with a Schwab reference, 19 oracle-only). `catalog` drops delisted perps
+  (`isDelisted`). `labels/stock_perps_excluded.txt`
   lists 32 pre-IPO, index, FX, commodity and spot-index perps. A perp in neither file is named by the collector's
   `unlabelled_perps` warn.
 
 ### Fees (2026-10-22)
 - Taker fee 0.09% (9 bp) for standard names, 0.009% (0.9 bp) for names in growth mode. The rates are constants in
   `venue_arb/fees.py` (`HYPERLIQUID_TAKER`); the code does not read them from the venue. Growth mode is read per perp
-  from `meta` (`growthMode == "enabled"`).
+  from the `metaAndAssetCtxs` universe (`growthMode == "enabled"`).
 - Every edge row is stamped with `FEE_VERSION = "2026-10-22"`, the date of these entries. A schedule change needs a new
   entry here, new constants and a new `FEE_VERSION`.
 - The cost rule charges two taker fees per round trip: 18 bp on a standard name, under 2 bp in growth mode, before
@@ -205,18 +205,22 @@ verdict (spec §5).
 - Stock reference for the stock-perp tier. The Trader API app has the **Market Data product only**; no account or order
   endpoint is called. Code: `venue_arb/sources/schwab.py`.
 - Endpoints (`https://api.schwabapi.com`): `GET /marketdata/v1/quotes?symbols=A,B&fields=quote` (batched 100 symbols per
-  call; invalid symbols come back under an `errors` key without failing the call, and are skipped) and
+  call; invalid symbols come back under an `errors` key without failing the call, and are skipped: unverified, as
+  recalled) and
   `GET /marketdata/v1/pricehistory?symbol=&periodType=month&frequencyType=daily&frequency=1&startDate=ms&endDate=ms`
   (unverified, as recalled and not checked against Schwab's docs or a live call: daily candles are stamped at local midnight, so the UTC date of `datetime` is the session). Quote fields used:
   `bidPrice`, `askPrice`, `bidSize`, `askSize`, `lastPrice`, `quoteTime` (ms since epoch, UTC).
-- Rate limit: 120 calls per minute (`CALLS_PER_MIN`); one batched quote per snapshot is far under it.
+- Rate limit: 120 calls per minute (`CALLS_PER_MIN`; unverified, as recalled); one batched quote per snapshot is far
+  under it.
 - Unverified (as recalled, not observed): after the 8 PM ET close the API keeps returning the last quote with an old `quoteTime`. Consumers must check the quote's age regardless.
 - **Bid/ask size unit is uncertain.** Schwab reports `bidSize`/`askSize` as shares for most symbols but may report round
   lots (x100) for some. The raw value is recorded; the executable tier treats it as shares, which can only understate
   capacity if the unit is lots.
 - Token lifetimes: access token 30 minutes (`expires_in` 1800, the client refreshes 60 s early); refresh token 7 days
-  (`REFRESH_TTL`), after which the data endpoints answer HTTP 401 and the client raises `SchwabAuthError`. The token
-  endpoint takes HTTP Basic auth `client_id:secret` and a form body.
+  (`REFRESH_TTL`). After expiry (unverified, as recalled) the data endpoints answer HTTP 401 and the token endpoint
+  most likely HTTP 400 `refresh_token_authentication_error` (per schwab-py); the client raises `SchwabAuthError` on a
+  401 from any endpoint and on any 4xx from the token endpoint, naming the path only. The token endpoint takes HTTP
+  Basic auth `client_id:secret` and a form body (unverified, as recalled).
 - Secrets live in Bitwarden: `SCHWAB_CLIENT_ID`, `SCHWAB_CLIENT_SECRET`, `SCHWAB_REFRESH_TOKEN`, and
   `SCHWAB_REFRESH_ISSUED_AT` (ISO 8601 UTC; the expiry is that plus 7 days). Never a token file in the repo.
 - **Weekly login runbook** (every 7 days, or on `SchwabAuthError`):

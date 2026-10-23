@@ -56,7 +56,7 @@ day" is a claim they can weigh, and the live page is one people could use in pra
 
 ## 3. Scope
 
-**Names.** Every equity and equity-ETF perp on trade.xyz: 104 of the 138 listed on 2026-10-22, read from the venue
+**Names.** Every equity and equity-ETF perp on trade.xyz: 105 of the 138 listed on 2026-10-22, read from the venue
 (`perpDexs` / `meta` with `dex = "xyz"`) at catalog time, not hard-coded. Classification is by a small tracked table
 `labels/stock_perps.csv` (perp symbol, reference kind, reference symbol, home exchange, currency) **(Claude's call)**;
 a new perp with no row is collected (mark, oracle, funding, book) but has no reference until the row is added, and
@@ -156,8 +156,8 @@ collector has run. Screened and executable tiers are labelled apart, as elsewher
 ## 6. What changes behind the page
 
 - **Catalog.** `venue_arb/sources/hyperliquid.py`: `meta` and `metaAndAssetCtxs` for `dex = "xyz"`, `l2Book` per
-  name, `fundingHistory`, `candleSnapshot`. Public, no key. Weight budget 1,200/min per IP; a 60 s sweep of 104
-  books costs ~208.
+  name, `fundingHistory`, `candleSnapshot`. Public, no key. Weight budget 1,200/min per IP; a 60 s sweep of 105
+  books costs ~210.
 - **References.** `venue_arb/sources/schwab.py`: OAuth (access token 30 min, refresh token 7 days, no programmatic
   renewal of the refresh token), `quotes` batched (one call for all US names each tick; 120 calls/min cap),
   `pricehistory` for the backfill. `venue_arb/sources/pyth.py`: Hermes `latest` for the Asian equity feeds, their
@@ -185,7 +185,7 @@ collector has run. Screened and executable tiers are labelled apart, as elsewher
   after the US open writes one row per name per weekend.
 - **Bundle.** `Pair` gains the fields the Scanner needs (`funding_bps_h`, `next_funding_at`, `reference`,
   `reference_age_s`, `basis_bps`, legs described); `ResearchSummary` gains the two cards' figures; `copy.METHOD`
-  gains a `stock_perps` paragraph. `LIVE_BYTES_BUDGET` is revisited (104 names × spark; see the open `live_bytes`
+  gains a `stock_perps` paragraph. `LIVE_BYTES_BUDGET` is revisited (105 names × spark; see the open `live_bytes`
   warn).
 - **Terms.** `docs/venues.md` gains Hyperliquid, trade.xyz, Pyth and Schwab entries: data-display terms (Hyperliquid's
   terms page is a JavaScript shell and the site returns 403 to fetches; Pyth's off-chain display terms unread; Schwab

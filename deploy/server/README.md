@@ -73,9 +73,12 @@ For a code-only change, `sudo systemctl restart venue-arb-web` is enough.
 - `venue-arb-web` (no shell, no home) runs uvicorn under `NoNewPrivileges`, `ProtectSystem=strict`, `ProtectHome` and
   `PrivateTmp`, with the app and bundle read-only; `/srv/venue-arb/app` and its venv are root's.
 
-## Stock perps (no server change)
+## Stock perps (server code first, no config change)
 
-The stock-perp tier adds no server code or unit. The hourly history Parquet gains two float columns, `basis_bps` and
+Update the server code (the Update section above) before the OptiPlex publisher restarts on the stock-perp commit:
+every bundle then carries the new stock-perp keys, null while `DASHBOARD_SHOW_STOCK_PERPS` is off, and
+`dashboard/api/store.py` validates `live.json` with `extra="forbid"`, so old server code rejects the new bundles and
+the page freezes. No server config, unit, cron or user changes. The hourly history Parquet gains two float columns, `basis_bps` and
 `net_bps` (`HISTORY_SCHEMA` in `venue_arb/publish.py`). They are null on the pair rows, and on every row while
 `DASHBOARD_SHOW_STOCK_PERPS` is off. `dashboard/api/store.py` already selects both and reads with
 `union_by_name=true`, so an hour file written before the columns existed still reads (as null). The prune cron and the

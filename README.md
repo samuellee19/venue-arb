@@ -174,14 +174,23 @@ cd ~/platform && docker compose exec postgres psql -U postgres -d app -c \
 
 ### Stock perps
 
-First deploy, once Sam has approved the merge of `p6-stock-perps` into `main`, on the OptiPlex:
+First deploy, once Sam has approved the merge of `p6-stock-perps` into `main`:
+
+0. **Update the VM first** (`deploy/server/README.md`, Update section), then pull and restart on the OptiPlex. Every
+   bundle now carries the stock-perp keys (null while `DASHBOARD_SHOW_STOCK_PERPS` is off), and the server validates
+   `live.json` with `extra="forbid"` (`dashboard/api/store.py`): an un-updated VM rejects the new bundles and the page
+   freezes on the last one it accepted.
+
+On the OptiPlex:
 
 1. Fast-forward `main`, then `uv sync`.
 2. `secrets uv run python -m db.migrate`: ClickHouse `008` creates `stock_perp_books`, `_ctx`, `_refs`, `_candles` and
    `_edges`; Postgres `007` creates `stock_perp_weekends`.
-3. `cp deploy/*.service ~/.config/systemd/user/ && systemctl --user daemon-reload &&
-   systemctl --user enable --now venue-arb-perps`. The unit's `Environment=` block must match the collector's
-   (`tests/test_deploy.py` checks it).
+3. `cp deploy/venue-arb-perps.service ~/.config/systemd/user/`, then replace its `Environment=` block with the one in
+   the box's installed collector unit (`~/.config/systemd/user/venue-arb-collector.service`): the installed unit
+   carries the real publish destination, the committed one a `SERVER_IP` placeholder. `tests/test_deploy.py` only
+   checks that the committed units agree with each other, not the installed ones. Then
+   `systemctl --user daemon-reload && systemctl --user enable --now venue-arb-perps`.
 4. Sam runs the Schwab login once, from the runbook in the Schwab section below. It restarts `venue-arb-perps` itself.
 5. `secrets uv run python -m venue_arb.flows.stock_perp_backfill`. It exits 1 if any symbol failed, and names it.
 6. `systemctl --user restart venue-arb-flows`. `serve` registers `stock_perp_score` and `stock_perp_weekend`, and a
