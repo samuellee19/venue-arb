@@ -27,3 +27,13 @@ Before the repo's visibility changes (Sam's action, after every box is ticked). 
 - [ ] **Repo links the page.** Replace the `https://<server>` placeholder under "Live dashboard" in `README.md` with the deployed URL, and check that it opens.
 - [ ] **Backlog (2026-10-22): decimate `exec_hourly` to daily past 60 days** (research section passes 150 KB around
   early Feb 2027; `research_bytes` warns).
+- [ ] **Hyperliquid / trade.xyz terms (Sam).** Read `https://app.hyperliquid.xyz/terms` in a browser: the page is a
+  JavaScript shell, and `hyperliquid.xyz` returns 403 to fetches. Decide whether derived stock-perp figures may be
+  shown. Two points for the read are in `docs/venues.md` (Hyperliquid, Terms): a published `basis_bps` plus the
+  public mark recovers the Schwab mid, and `fees_cents` embeds the Schwab spread.
+- [ ] **Schwab Market Data terms (Sam).** Read the developer-portal terms on display of derived values, with the same
+  two points (`docs/venues.md`, Schwab Market Data, "Display terms").
+- [ ] **`DASHBOARD_SHOW_STOCK_PERPS` stays `False`** until both reads above are done. The collector, scoring and bundle
+  fields run regardless; only the Scanner chip and the Research cards are hidden.
+- [ ] **Pyth: nothing to read yet.** No client is built (`docs/venues.md`, Pyth Network). Its display terms become a
+  checklist item only if a paid key is approved.

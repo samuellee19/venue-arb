@@ -22,6 +22,14 @@ and a plain-words reason.
   the same instant): a model-free tier. A cross-strike spread pays in every state only if the two settlement
   indices (CF Benchmarks BRTI and the Binance candle close) stay within a measured basis bound, so each spread is
   checked against a bound taken from 30 days of hourly differences.
+- **Stock perpetuals** (a separate tier: Hyperliquid's trade.xyz perps against the stocks they track). Basis is the
+  perp's mark minus a reference, in bps, with the reference and its age on every row. The reference is Schwab's bid/ask
+  mid while that quote is fresh (at most 120 s old), else the venue's oracle, which is labelled "oracle only" and
+  carries no executable verdict. The executable tier nets a 24-hour round trip: two taker fees, the perp's exit
+  half-spread, the full stock spread, funding and borrow. An episode needs net ≥ 10 bps, at least $100 fillable and two
+  consecutive snapshots. The weekend tier is a forecast test, not an arbitrage: how much of Monday's move the weekend
+  perp had already made. Details: `docs/venues.md` (Hyperliquid), the design
+  `docs/superpowers/specs/2026-10-22-venue-arb-stock-perp-basis-design.md`.
 - **The honest denominator.** Every admissible check is counted, scored or not, so a count of opportunities always
   has the number of looks it came from. The screened (hourly history) and executable (our own books) tiers are
   never combined, and screened rows are never called arbitrage.
@@ -42,6 +50,7 @@ note is re-run once about four weeks of snapshots exist.
   not a negative result. The measured basis is already informative: BRTI sits below Binance at the settle by about
   6 bps on average (BTC -$48.06, ETH -$1.52), so same-strike pairs are not arbitrage. The 0.999 bounds are BTC
   +$182 / -$152 and ETH +$6 / -$7 per settle.
+- **Stock perps.** No results yet: the tier is not deployed at this commit.
 - **Limits.** 15 of 15 pairs human-reviewed; match review precision 1.00 on 31 labels (20 Oct 2026); the Kalshi fee coefficient is unverified (below); nothing here
   generalizes beyond Fed decisions yet.
 
@@ -51,7 +60,8 @@ note is re-run once about four weeks of snapshots exist.
 tabs: **Scanner** (one row per matched pair, sortable, by category), **Explorer** (one pair's edge history, verdict
 and cost) and **Research** (the research note's headline numbers, recomputed hourly). While the venues' data terms
 are unresolved the page does not show quotes: it shows edges, capacities and episodes, and the per-leg book boxes
-collapse to one derived cost panel.
+collapse to one derived cost panel. The stock-perp category is built but hidden (`DASHBOARD_SHOW_STOCK_PERPS = False`)
+until the terms reads in `docs/going-public.md` are done.
 
 ## Architecture
 
@@ -92,6 +102,9 @@ secrets uv run python -m venue_arb.flows.match        # candidates + LLM adjudic
 secrets uv run python -m venue_arb.flows.review_cli   # hand review of adjudicated matches
 secrets uv run python -m venue_arb.flows.score        # exact pairs: executable edges (ClickHouse) + opportunity episodes (Postgres)
 secrets uv run python -m venue_arb.flows.ladder_score # same-instant crypto ladders: spreads -> venue_arb.ladder_edges + episodes (source 'ladder')
+secrets uv run python -m venue_arb.flows.stock_perp_score    # stock-perp tier: collector books + Schwab quotes -> venue_arb.stock_perp_edges, episodes (source 'stock_perp'); hourly at :55
+secrets uv run python -m venue_arb.flows.stock_perp_weekend  # weekend tier: one row per name per weekend -> venue_arb.stock_perp_weekends (Mondays 15:00 UTC in serve)
+secrets uv run python -m venue_arb.flows.stock_perp_backfill # once at deploy, safe to re-run: 60 days of hourly candles and funding, daily Schwab opens
 secrets uv run python -m venue_arb.flows.screened     # screened tier: hourly history gaps -> venue_arb.screened_v2 (by hand)
 secrets uv run python -m venue_arb.report.note  # research note v1 -> reports/research-note-v1.md + PNGs (re-run after ~4 weeks of snapshots for v1-final)
 secrets uv run python -m venue_arb.collect            # order-book snapshot collector (runs forever)
@@ -127,9 +140,10 @@ secrets uv run pytest -m integration    # needs the stack up
 
 On the OptiPlex, four long-running systemd user units: `venue-arb-collector` (order-book snapshots),
 `venue-arb-perps` (stock-perp snapshots; the weekly Schwab login restarts it),
-`venue-arb-publish` (dashboard bundle, below) and `venue-arb-flows` (`prefect.serve` of five hourly deployments: `catalog` at :05, `match` at :20, `basis` at :35,
-`score` at :40, which scores the last 26 h of books, and `ladder_score` at :50, which scores the last 3 h of same-instant
-ladder books; overlapping windows re-score idempotently). Apply migrations (`db.migrate`) before restarting
+`venue-arb-publish` (dashboard bundle, below) and `venue-arb-flows` (`prefect.serve` of seven deployments, six hourly: `catalog` at :05, `match` at :20, `basis` at :35,
+`score` at :40, which scores the last 26 h of books, `ladder_score` at :50, which scores the last 3 h of same-instant
+ladder books, and `stock_perp_score` at :55, which scores the last 3 h of stock-perp books. The seventh,
+`stock_perp_weekend`, runs Mondays at 15:00 UTC. Overlapping windows re-score idempotently. Apply migrations (`db.migrate`) before restarting
 `venue-arb-flows` after a pull: `score` reads `opportunities.source` (pg/006). Schedules, retries and run
 history are in the Prefect UI (Deployments); to pause one, use its toggle there or
 `prefect deployment pause '<flow>/<name>'`, undo with `prefect deployment resume '<flow>/<name>'` (e.g.
@@ -157,6 +171,33 @@ systemctl --user show venue-arb-collector venue-arb-perps venue-arb-flows venue-
 cd ~/platform && docker compose exec postgres psql -U postgres -d app -c \
   "SELECT usename, count(*) FROM pg_stat_activity WHERE datname = 'app' GROUP BY 1"   # expect venue_arb, not postgres
 ```
+
+### Stock perps
+
+First deploy, once Sam has approved the merge of `p6-stock-perps` into `main`, on the OptiPlex:
+
+1. Fast-forward `main`, then `uv sync`.
+2. `secrets uv run python -m db.migrate`: ClickHouse `008` creates `stock_perp_books`, `_ctx`, `_refs`, `_candles` and
+   `_edges`; Postgres `007` creates `stock_perp_weekends`.
+3. `cp deploy/*.service ~/.config/systemd/user/ && systemctl --user daemon-reload &&
+   systemctl --user enable --now venue-arb-perps`. The unit's `Environment=` block must match the collector's
+   (`tests/test_deploy.py` checks it).
+4. Sam runs the Schwab login once, from the runbook in the Schwab section below. It restarts `venue-arb-perps` itself.
+5. `secrets uv run python -m venue_arb.flows.stock_perp_backfill`. It exits 1 if any symbol failed, and names it.
+6. `systemctl --user restart venue-arb-flows`. `serve` registers `stock_perp_score` and `stock_perp_weekend`, and a
+   restart unpauses every deployment.
+7. Run `secrets uv run python -m venue_arb.flows.stock_perp_score` and `... stock_perp_weekend` once by hand. Check
+   their results in `qa.check_results` (Postgres) for the pipelines `venue_arb_stock_perp_score` and
+   `venue_arb_stock_perp_weekend`.
+8. Leave `DASHBOARD_SHOW_STOCK_PERPS = False` in `venue_arb/config.py`. The collector, scoring and bundle fields run
+   regardless.
+
+Turning the category on, only after both terms reads in `docs/going-public.md`:
+
+1. Deploy the VM first (`deploy/server/README.md`, Update). The server validates the bundle against the new models.
+2. One-line commit setting `DASHBOARD_SHOW_STOCK_PERPS = True`, then `systemctl --user restart venue-arb-publish`.
+3. Sam reviews `copy.METHOD["stock_perps"]` and `copy.HEADLINE["stock_perps"]` on the rendered page. Wording fixes go in
+   `venue_arb/report/copy.py` only.
 
 ### Dashboard publisher
 
@@ -196,4 +237,6 @@ and terms are in the "Schwab Market Data" section of `docs/venues.md`.
 Quotes are not displayed publicly: `DASHBOARD_SHOW_BOOKS = False`, because Kalshi's data terms forbid public
 display without written authorization and Polymarket's terms could not be read. Kalshi's taker fee coefficient
 (0.07) is secondhand and unverified, as are the jurisdictions each venue admits; both are recorded with sources in
-`docs/venues.md`, and the going-public checklist is `docs/going-public.md`.
+`docs/venues.md`, and the going-public checklist is `docs/going-public.md`. The stock-perp figures are held back for the same reason:
+Hyperliquid's terms are unread (`docs/venues.md`), and a published `basis_bps` with the perp's public mark discloses the
+Schwab quote.

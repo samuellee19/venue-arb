@@ -72,3 +72,11 @@ For a code-only change, `sudo systemctl restart venue-arb-web` is enough.
   root-owned (755/644: sshd reads them as the user) so the user cannot rewrite them. It owns only `/srv/venue-arb/bundle` (0755; files arrive 0644).
 - `venue-arb-web` (no shell, no home) runs uvicorn under `NoNewPrivileges`, `ProtectSystem=strict`, `ProtectHome` and
   `PrivateTmp`, with the app and bundle read-only; `/srv/venue-arb/app` and its venv are root's.
+
+## Stock perps (no server change)
+
+The stock-perp tier adds no server code or unit. The hourly history Parquet gains two float columns, `basis_bps` and
+`net_bps` (`HISTORY_SCHEMA` in `venue_arb/publish.py`). They are null on the pair rows, and on every row while
+`DASHBOARD_SHOW_STOCK_PERPS` is off. `dashboard/api/store.py` already selects both and reads with
+`union_by_name=true`, so an hour file written before the columns existed still reads (as null). The prune cron and the
+push user are unchanged.

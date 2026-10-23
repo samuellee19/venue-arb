@@ -210,6 +210,16 @@ collector has run. Screened and executable tiers are labelled apart, as elsewher
 - Run the Schwab login once at deploy and weekly after (one minute; the collector warns a day ahead).
 - Review the `stock_perps` method paragraph once rendered.
 
+**Update 2026-10-22 (docs, Task 11).**
+- The terms reads (Hyperliquid, Schwab) are on the going-public checklist (`docs/going-public.md`). Both reads take the
+  two derived-value points from the code review: a published `basis_bps` with the perp's public mark discloses the
+  Schwab mid, and `fees_cents` embeds the Schwab spread.
+- Pyth: no client is built (§3 amendment). Sam decides whether a paid Pyth key is worth funding; until then the
+  Asia-listed names stay oracle-only.
+- Deploy: the runbook is in `README.md` (Operations, "Stock perps"). Sam's steps are the Schwab login (once, then
+  weekly), the terms reads before `DASHBOARD_SHOW_STOCK_PERPS` is turned on, and the review of
+  `copy.METHOD["stock_perps"]` and `copy.HEADLINE["stock_perps"]` once rendered.
+
 ## 9. Left to the builder
 
 - Table schemas, the exact ClickHouse partitioning and TTL for the three new tables, and the book depth stored.

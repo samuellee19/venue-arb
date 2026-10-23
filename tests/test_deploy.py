@@ -39,3 +39,9 @@ def test_server_unit_has_no_db_env():
     assert env["BUNDLE_DIR"] == "/srv/venue-arb/bundle"
     assert not [k for k in env if k.startswith(("PG", "CLICKHOUSE_", "BWS_", "PREFECT_"))]
     assert "User=venue-arb-web" in text and "ProtectSystem=strict" in text  # not the rsync push user
+
+
+def test_readme_mentions_perps_unit_and_login():
+    text = (ROOT / "README.md").read_text()
+    assert "venue-arb-perps" in text
+    assert "python -m venue_arb.sources.schwab login" in text

@@ -142,6 +142,63 @@ did not settle when fetched is marked "unverified". Re-check before relying on a
   `tests/fixtures/pm_events_p1.json`) opened "How many Fed rate cuts in 2026?" with the address unchanged.
 - Code (`bundle.market_url`): `https://polymarket.com/event/{slug}` from `listings.raw["event"]["slug"]`.
 
+## Hyperliquid (trade.xyz stock perps)
+
+Stock perpetuals on Hyperliquid's `xyz` builder dex (the trade.xyz listings), measured against the stocks they track.
+Read-only: the collector calls the public info endpoint and no order, account or position endpoint. Code:
+`venue_arb/sources/hyperliquid.py`, `venue_arb/stock_perps.py`, `venue_arb/collect_perps.py`.
+
+### Info endpoint and rate budget (2026-10-22)
+- `POST https://api.hyperliquid.xyz/info` with a JSON body whose `type` names the request. Public, no key.
+  `post_json` waits `delay` before a call (0.1 s by default; the collector passes 0 and bounds the rate with its
+  worker count), retries HTTP 429 and 5xx with backoff, and names only the request type in its errors.
+- Requests the code makes: `metaAndAssetCtxs` with `dex = "xyz"` (the universe and each perp's context in one call:
+  mark, oracle, mid, funding, premium, open interest, volume, growth mode, leverage, delisted flag); `l2Book` per perp
+  (the top `BOOK_DEPTH` = 10 levels a side); `candleSnapshot` at `1h` and `fundingHistory`, both for the backfill.
+  The code does not call `perpDexs` or `meta`: the universe comes back inside `metaAndAssetCtxs`.
+- Rate budget: 1,200 weight per minute per IP; `l2Book` costs weight 2 (official docs, observed 2026-10-22). A 60 s sweep of 104 books is about 208 weight, plus the context call.
+- Counts on 2026-10-22: 138 perps on the `xyz` dex; 104 equities or equity ETFs in scope. `catalog` drops delisted
+  perps (`isDelisted`). `labels/stock_perps.csv` on this branch has 105 rows (86 with a Schwab reference, 19
+  oracle-only), so it is one row off the 104 count and that gap is not reconciled yet. `labels/stock_perps_excluded.txt`
+  lists 32 pre-IPO, index, FX, commodity and spot-index perps. A perp in neither file is named by the collector's
+  `unlabelled_perps` warn.
+
+### Fees (2026-10-22)
+- Taker fee 0.09% (9 bp) for standard names, 0.009% (0.9 bp) for names in growth mode. The rates are constants in
+  `venue_arb/fees.py` (`HYPERLIQUID_TAKER`); the code does not read them from the venue. Growth mode is read per perp
+  from `meta` (`growthMode == "enabled"`).
+- Every edge row is stamped with `FEE_VERSION = "2026-10-22"`, the date of these entries. A schedule change needs a new
+  entry here, new constants and a new `FEE_VERSION`.
+- The cost rule charges two taker fees per round trip: 18 bp on a standard name, under 2 bp in growth mode, before
+  spreads, funding and borrow (`costs_bps` in `venue_arb/stock_perps.py`).
+
+### Oracle and sessions (2026-10-22)
+Observed on 2026-10-22:
+- For US names the oracle is derived externally from Sunday 8:05 PM to Friday 8:00 PM ET: pre-market, market,
+  post-market, and overnight through Blue Ocean ATS. For Asia-listed names it is derived externally during their home
+  sessions.
+- Outside those windows the external price freezes, and the oracle advances as an exponentially weighted average of
+  the perp's own impact price with a 30-minute time constant.
+- Funding settles hourly against the oracle.
+
+What this means in the code: on weekends, and for Asia-listed names outside their home hours, the oracle is not an
+outside price. `reference()` uses the Schwab quote only while it is two-sided, uncrossed and at most 120 s old
+(`REF_MAX_AGE_S`); otherwise the row's reference is the oracle, labelled "oracle only", and it carries no executable
+verdict (spec §5).
+
+### Access (2026-10-22)
+- Hyperliquid blocks US traders. Read access is public. The dashboard's US cut states the perp leg as zero (spec §4).
+
+### Terms (unread: Sam to read)
+- `https://app.hyperliquid.xyz/terms` is a JavaScript shell, so the text does not appear in a fetch.
+  `hyperliquid.xyz` returns HTTP 403 to fetches. The data-display terms are therefore unread.
+  `DASHBOARD_SHOW_STOCK_PERPS = False` until Sam reads them in a browser (`docs/going-public.md`).
+- Two points for that read, from the code reviews:
+  1. A published `basis_bps` plus the venue's public mark recovers the Schwab mid, since the reference is
+     `mark / (1 + basis_bps / 1e4)`. The Schwab quote is never shown raw, but a derived figure discloses it.
+  2. `fees_cents` on a stock-perp row is `(perp_fee_bps + stock_spread_bps) / 100` (`venue_arb/bundle.py`), so it
+     embeds the Schwab spread.
+
 ## Schwab Market Data
 
 ### Schwab Market Data (2026-10-22)
@@ -174,3 +231,23 @@ did not settle when fetched is marked "unverified". Re-check before relying on a
 - Personal-use terms (unverified: recalled from the design spec, Schwab's terms not read): Schwab Market Data is understood to be licensed for personal use, so quotes are never shown raw on the demo (same
   rule as `DASHBOARD_SHOW_BOOKS`). Whether displaying derived values (basis, verdicts) is allowed: **Sam to read** the
   Schwab developer portal terms before turning on `DASHBOARD_SHOW_STOCK_PERPS`.
+
+### Display terms for stock-perp figures (2026-10-22)
+- The developer app is for personal use (spec §6). Schwab is approved for Market Data (Production, "Ready For Use",
+  2026-10-20, per the spec).
+- The developer-portal terms on display of derived values are unread. **Sam to read** them before
+  `DASHBOARD_SHOW_STOCK_PERPS` is turned on. The two points under Hyperliquid apply here too: a published `basis_bps`
+  with the perp's public mark discloses the Schwab mid, and `fees_cents` embeds the Schwab spread.
+- When the refresh token lapses, the collector's stock leg stops (the first failed call is logged; `schwab_auth` is
+  recorded at the next QA flush, every five ticks) and rows fall back to the oracle. `schwab_token_expires` warns 24 h before expiry.
+
+## Pyth Network
+
+### Hermes access (2026-10-22)
+- Pyth's Hermes price endpoint (`v2/updates/price/latest`) has required a paid API key since the Pyth Core upgrade of
+  2026-08-26. Only a free trial is available, and the call answers HTTP 401 without a key (spec §3 amendment).
+- No Pyth client is built. The Asia-listed names are oracle-only, and the US names have no second opinion. The
+  spec leaves room for a client behind `PYTH_API_KEY` later; none exists in the repo. Paid data needs Sam's approval
+  (spec §7), so nothing here calls Pyth.
+- JIO and RELIANCE have no Pyth equity feed in any case (spec §3).
+- Pyth's off-chain display terms are unread. They matter only once a client exists.
