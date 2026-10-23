@@ -57,7 +57,10 @@ def test_monday_open_gap():
 
 
 def test_drift_warn_threshold():
-    rows = [{"symbol": "a", "p95_abs_bps": 10.0}, {"symbol": "b", "p95_abs_bps": 4}, {"symbol": "b", "p95_abs_bps": 10.5}]
+    d = date(2026, 10, 21)
+    rows = [{"day": d, "symbol": "a", "p95_abs_bps": 10.0}, {"day": d, "symbol": "b", "p95_abs_bps": 4},
+            {"day": d - timedelta(days=1), "symbol": "b", "p95_abs_bps": 10.5},
+            {"day": d - timedelta(days=5), "symbol": "c", "p95_abs_bps": 50}]  # outside the 5-day window
     (res,) = v.drift_results(checks, rows)
     assert res.name == "oracle_drift" and res.severity == "warn" and "b" in res.detail and not res.passed
 
@@ -65,3 +68,12 @@ def test_drift_warn_threshold():
 def test_publisher_never_reads_the_check_table():
     for f in ("publish.py", "bundle.py"):
         assert "oracle_check" not in Path("venue_arb", f).read_text()
+
+
+def test_monday_open_gap_first_usable_tick_within_five_minutes():
+    mon = datetime(2026, 10, 19, 13, 32, tzinfo=UTC)  # 09:32 EDT
+    (r,) = run([tick(0, orc=100.1, t0=mon), tick(1, orc=105, t0=mon)])
+    assert abs(r["open_gap_bps"] - 10) < 1e-6
+    late = datetime(2026, 10, 19, 13, 35, tzinfo=UTC)  # 09:35: too late
+    (r,) = run([tick(0, orc=100.1, t0=late)])
+    assert r["open_gap_bps"] is None
