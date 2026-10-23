@@ -194,7 +194,8 @@ On the OptiPlex:
    checks that the committed units agree with each other, not the installed ones. Then
    `systemctl --user daemon-reload && systemctl --user enable --now venue-arb-perps`.
 4. Sam runs the Schwab login once, from the runbook in the Schwab section below. It restarts `venue-arb-perps` itself.
-5. `secrets uv run python -m venue_arb.flows.stock_perp_backfill`. It exits 1 if any symbol failed, and names it.
+5. `secrets uv run python -m venue_arb.flows.stock_perp_backfill`. It exits 1 if any symbol failed, and names it. Run it
+   with the collector quiet if you can: both share Hyperliquid's per-IP request budget, and a starved fetch fails.
 6. `systemctl --user restart venue-arb-flows`. `serve` registers `stock_perp_score` and `stock_perp_weekend`, and a
    restart unpauses every deployment.
 7. Run `secrets uv run python -m venue_arb.flows.stock_perp_score` and `... stock_perp_weekend` once by hand. Check
@@ -241,7 +242,8 @@ Snapshots land in ClickHouse `venue_arb.book_levels_v2` (daily partitions, 90-da
 
 Stock reference quotes come from Schwab Market Data (Market Data product only) and are private: they feed the full
 two-leg stock-perp tier and the oracle check below, never the public page or any pushed file. The refresh
-token expires every 7 days; re-issue it with `python -m venue_arb.sources.schwab login`. The runbook, token lifetimes
+token expires every 7 days; re-issue it with `secrets uv run python -m venue_arb.sources.schwab login` and a write-capable Bitwarden token in
+`BWS_WRITE_TOKEN`. The runbook, token lifetimes
 and the terms record are in `docs/venues.md`.
 
 ### Public oracle view and private validation

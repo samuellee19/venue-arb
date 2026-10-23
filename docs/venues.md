@@ -225,9 +225,10 @@ verdict (spec §5).
 - Secrets live in Bitwarden: `SCHWAB_CLIENT_ID`, `SCHWAB_CLIENT_SECRET`, `SCHWAB_REFRESH_TOKEN`, and
   `SCHWAB_REFRESH_ISSUED_AT` (ISO 8601 UTC; the expiry is that plus 7 days). Never a token file in the repo.
 - **Weekly login runbook** (every 7 days, or on `SchwabAuthError`):
-  1. From a shell with a write-capable `BWS_ACCESS_TOKEN` (the `secrets` wrapper's token is read-only) and
-     `BWS_PROJECT_ID`, `SCHWAB_CLIENT_ID`, `SCHWAB_CLIENT_SECRET` in the environment:
-     `python -m venue_arb.sources.schwab login`.
+  1. In `~/projects/venue-arb` on the OptiPlex, put a write-capable Bitwarden access token in `BWS_WRITE_TOKEN`
+     (`read -rs BWS_WRITE_TOKEN && export BWS_WRITE_TOKEN`; the `secrets` wrapper's own token is read-only and it
+     strips `BWS_ACCESS_TOKEN`), then `secrets uv run python -m venue_arb.sources.schwab login`. Without the token it
+     stops before the browser step.
   2. Open the printed authorize URL, sign in, approve. The browser lands on `https://127.0.0.1/?code=...&session=...`
      and shows a connection error; that is expected. Paste the full URL back at the prompt (the code is URL-encoded in
      the URL and the CLI decodes it before the exchange).

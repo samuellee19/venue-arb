@@ -119,3 +119,19 @@ def test_login_cli_edits_existing_secret_and_restarts(monkeypatch, capsys):
     assert ["bws", "secret", "edit", "id-1", "--value", "SECRETVALUE"] in ran
     assert ["systemctl", "--user", "restart", "venue-arb-perps"] in ran
     assert "SECRETVALUE" not in capsys.readouterr().out
+
+
+def test_login_cli_needs_a_write_token_before_the_browser_step(monkeypatch, capsys):
+    ran = []
+    monkeypatch.setattr(schwab.subprocess, "run", lambda cmd, **k: ran.append(cmd))
+    rc = schwab.main(["login"], stdin=io.StringIO(""), env={"SCHWAB_CLIENT_ID": "id", "SCHWAB_CLIENT_SECRET": "s", "BWS_PROJECT_ID": "p"})
+    out = capsys.readouterr()
+    assert rc == 1 and ran == [] and "Open:" not in out.out and "BWS_WRITE_TOKEN" in out.err
+
+
+def test_login_cli_hands_bws_the_write_token(monkeypatch):
+    envs = []
+    monkeypatch.setattr(schwab, "exchange_code", lambda *a, **k: {"refresh_token": "r"})
+    monkeypatch.setattr(schwab.subprocess, "run", lambda cmd, **k: envs.append(k.get("env")) or SimpleNamespace(returncode=0, stdout="[]"))
+    rc = schwab.main(["login", "--no-restart"], stdin=io.StringIO("https://127.0.0.1/?code=c\n"), env={"SCHWAB_CLIENT_ID": "id", "SCHWAB_CLIENT_SECRET": "s", "BWS_PROJECT_ID": "p", "BWS_WRITE_TOKEN": "w"})
+    assert rc == 0 and envs and all(e["BWS_ACCESS_TOKEN"] == "w" for e in envs)

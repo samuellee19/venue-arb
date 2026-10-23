@@ -136,6 +136,13 @@ def main(argv=None, stdin=sys.stdin, env=os.environ) -> int:
     p.add_argument("command", choices=["login"])
     p.add_argument("--no-restart", action="store_true", help=f"skip `systemctl --user restart {SERVICE}`")
     args = p.parse_args(argv)
+    # the `secrets` wrapper strips BWS_ACCESS_TOKEN (its token is read-only) but passes BWS_WRITE_TOKEN through
+    token = env.get("BWS_WRITE_TOKEN") or env.get("BWS_ACCESS_TOKEN")
+    if not token:
+        print("login failed: set BWS_WRITE_TOKEN to a Bitwarden access token that can write the project",
+              file=sys.stderr)
+        return 1
+    env = {**env, "BWS_ACCESS_TOKEN": token}
     cid, secret = env["SCHWAB_CLIENT_ID"], env["SCHWAB_CLIENT_SECRET"]
     print(f"Open: {AUTH_URL}?{urlencode({'response_type': 'code', 'client_id': cid, 'redirect_uri': REDIRECT_URI})}")
     print("Sign in, approve, then paste the full URL the browser lands on (the page will not load):")
