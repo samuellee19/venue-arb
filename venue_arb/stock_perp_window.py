@@ -3,7 +3,7 @@
 The flow (flows/stock_perp_score.py) reads the rows from ClickHouse; rows are dicts keyed by the table's columns.
 """
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from venue_arb import episodes, scoring, sessions, stock_perps
 from venue_arb.config import STOCK_PERP_HOLD_H, STOCK_PERP_MIN_NET_BPS
@@ -17,6 +17,12 @@ ORACLE_PM_ID = "oracle"
 SOURCES = {"executable": "stock_perp", "oracle": "stock_perp_oracle"}
 
 
+def _utc_rows(rows: list[dict]) -> list[dict]:
+    """ClickHouse hands DateTime64(3, 'UTC') columns back naive; the window bounds and sessions need them aware."""
+    return [{k: v.replace(tzinfo=UTC) if isinstance(v, datetime) and v.tzinfo is None else v for k, v in r.items()}
+            for r in rows]
+
+
 def score_window(ctx_rows: list[dict], book_rows: list[dict], ref_rows: list[dict], labels: dict[str, Label], *,
                  start: datetime, end: datetime) -> tuple[list[dict], list[tuple[str, episodes.Episode]], dict]:
     """One edge row per (symbol, ctx tick) in [start, end) that has book rows at that tick. The reference is the
@@ -26,6 +32,7 @@ def score_window(ctx_rows: list[dict], book_rows: list[dict], ref_rows: list[dic
     per (symbol, mode, direction), as (source, episode); a tick scored in the other direction is a non-qualifying
     point there, so it ends the run. Oracle episodes come only from external-session ticks: an internal tick (the
     oracle follows the perp) is a non-qualifying point. Oracle episodes use pm_id = 'oracle' (ORACLE_PM_ID)."""
+    ctx_rows, book_rows, ref_rows = _utc_rows(ctx_rows), _utc_rows(book_rows), _utc_rows(ref_rows)
     books: dict[tuple[str, datetime], list[PerpLevel]] = defaultdict(list)
     for b in book_rows:
         books[b["symbol"], b["ts"]].append(PerpLevel(b["side"], b["level"], b["price"], b["size"]))

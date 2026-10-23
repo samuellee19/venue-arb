@@ -37,6 +37,16 @@ def window(ref_missing=()):
     return score_window(ctxs, books, refs, LABELS, start=START, end=END)
 
 
+def test_naive_clickhouse_timestamps_score_like_aware_ones():
+    naive = lambda rows: [{k: v.replace(tzinfo=None) if isinstance(v, datetime) else v for k, v in r.items()}
+                          for r in rows]
+    ctxs = [ctx("xyz:NVDA", t, 100.2, 100.0) for t in TICKS]
+    books = [r for t in TICKS for r in book("xyz:NVDA", t, 100.2, 100.21)]
+    refs = [ref("xyz:NVDA", t, 99.99, 100.01) for t in TICKS]
+    aware = score_window(ctxs, books, refs, LABELS, start=START, end=END)
+    assert score_window(naive(ctxs), naive(books), naive(refs), LABELS, start=START, end=END) == aware
+
+
 def test_score_window_episode_oracle_only_and_stats():
     rows, eps, stats = window()
     rows = [r for r in rows if r["mode"] == "executable"]
