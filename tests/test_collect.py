@@ -221,3 +221,13 @@ def test_ladder_pads_ignore_non_finite():
     assert ladder_pads([("BTC", float("nan")), ("BTC", float("inf")), ("BTC", None)] * 30) == {}
     assert ladder_pads([("BTC", 5.0)] * 30 + [("BTC", float("nan"))] * 5) == {"BTC": 5.0}
     assert LADDER_PAD_DEFAULT == 50.0
+
+
+def test_a_flushed_batch_lands_well_inside_the_publisher_freshness_window():
+    import inspect
+
+    from venue_arb import bundle, collect
+
+    every = inspect.signature(collect.run_forever).parameters["flush_every"].default
+    # the oldest unflushed book is (every + 1) ticks old when its batch lands; keep that under half the window
+    assert (every + 1) * collect.SNAPSHOT_INTERVAL_S <= bundle.LIVE_MAX_AGE_S / 2 + collect.SNAPSHOT_INTERVAL_S / 2

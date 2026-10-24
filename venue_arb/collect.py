@@ -182,7 +182,9 @@ def flush(buf, venues, load, record, run_sql, checks, stats, max_buffer: int = M
     return results
 
 
-def run_forever(interval_s: int = SNAPSHOT_INTERVAL_S, flush_every: int = 5) -> None:
+# every 2 ticks, not 5: the publisher drops books older than bundle.LIVE_MAX_AGE_S (300 s), so a 5-tick batch let the
+# newest books reach 300 s just before each flush and the page fell to the few pairs fetched last
+def run_forever(interval_s: int = SNAPSHOT_INTERVAL_S, flush_every: int = 2) -> None:
     import obs
     from qa import checks, db, sql, store
 

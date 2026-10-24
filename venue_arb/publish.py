@@ -48,7 +48,7 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 PIPELINE = f"{PIPELINE_PREFIX}_publish"
 INTERVAL_S = 60
 REFRESH_EVERY = 10  # ticks between pair/ladder/KPI refreshes
-RECORD_EVERY = 5  # ticks between qa records (Ruling 1, as collect.py's flush_every)
+RECORD_EVERY = 5  # ticks between qa records (Ruling 1)
 HISTORY_DAYS = 7
 HISTORY_SIZE_BUDGET_MB = 50
 # local hour files older than this are deleted; the server's prune cron cutoff (8 d, Task 9) must be no shorter, or
