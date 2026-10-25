@@ -61,6 +61,7 @@ def test_drift_warn_threshold():
     rows = [{"day": d, "symbol": "a", "p95_abs_bps": 10.0}, {"day": d, "symbol": "b", "p95_abs_bps": 4},
             {"day": d - timedelta(days=1), "symbol": "b", "p95_abs_bps": 10.5},
             {"day": d - timedelta(days=5), "symbol": "c", "p95_abs_bps": 50}]  # outside the 5-day window
+    rows = [r | {"segment": "regular"} for r in rows]
     (res,) = v.drift_results(checks, rows)
     assert res.name == "oracle_drift" and res.severity == "warn" and "b" in res.detail and not res.passed
 
@@ -82,8 +83,44 @@ def test_monday_open_gap_first_usable_tick_within_five_minutes():
 def test_oracle_check_report_states_its_coverage():  # the flow imports the platform stack, so read its source
     import re
 
-    text = re.sub(r'"\s*\n\s*"', "", Path("venue_arb/flows/stock_perp_oracle_check.py").read_text())  # join literals
+    text = re.sub(r'"\s*\n\s*"', "", Path("venue_arb/validation.py").read_text())  # join literals
     for phrase in ("US-listed names only", "fresh two-sided Schwab quote", "about 04:00-20:00 ET",
                    "overnight external hours (20:00-04:00 ET) are not validated",
                    "newest day is partial and is rewritten by the next run"):
         assert phrase in text, phrase
+
+
+def test_compare_splits_a_day_into_regular_and_extended_segments():
+    pre = datetime(2026, 10, 21, 12, 0, tzinfo=UTC)  # 08:00 EDT, pre-market: external session, not regular
+    open_ = datetime(2026, 10, 21, 13, 30, tzinfo=UTC)  # 09:30 EDT: the first regular minute
+    close = datetime(2026, 10, 21, 20, 0, tzinfo=UTC)  # 16:00 EDT: post-market, so extended again
+    rows = run([tick(0, t0=pre), tick(1, t0=pre), tick(0, t0=open_), tick(0, t0=T0), tick(0, t0=close)])
+    by = {r["segment"]: r for r in rows}
+    assert set(by) == {"regular", "extended"}
+    assert by["regular"]["n"] == 2 and by["extended"]["n"] == 3
+    assert all(r["symbol"] == "xyz:NVDA" and r["day"] == date(2026, 10, 21) for r in rows)
+
+
+def test_drift_warns_on_the_regular_segment_only():
+    d = date(2026, 10, 21)
+    rows = [{"day": d, "symbol": "thin", "segment": "extended", "p95_abs_bps": 150.0},
+            {"day": d, "symbol": "thin", "segment": "regular", "p95_abs_bps": 6.0},
+            {"day": d, "symbol": "wide", "segment": "regular", "p95_abs_bps": 10.5}]
+    (res,) = v.drift_results(checks, rows)
+    assert "wide" in res.detail and "thin" not in res.detail
+
+
+def test_report_prints_the_regular_segment_before_the_extended_one():
+    d = date(2026, 10, 21)
+    row = {"day": d, "n": 10, "median_abs_bps": 1.0, "p95_abs_bps": 9.0, "share_over_10": 0.1, "open_gap_bps": None}
+    text = v.report([row | {"symbol": "xyz:EXT", "segment": "extended", "p95_abs_bps": 150.0},
+                     row | {"symbol": "xyz:REG", "segment": "regular"}], d)
+    reg, ext = text.index("Regular session"), text.index("Extended hours")
+    assert reg < text.index("xyz:REG") < ext < text.index("xyz:EXT")
+    assert "warn" in text[:ext] and "regular session only" in text
+
+
+def test_oracle_check_table_keys_on_segment():
+    (path,) = Path("db/migrations/ch").glob("010_*.sql")
+    sql = path.read_text()
+    assert "ADD COLUMN segment" in sql and "MODIFY ORDER BY (symbol, day, segment)" in sql

@@ -257,7 +257,8 @@ The `stock_perp_oracle_check` deployment (cron `30 1 * * 2-6`, registered by `ve
 `venue-arb-flows` to pick it up) compares the oracle with the Schwab mid per name and day. It writes ClickHouse
 `venue_arb.stock_perp_oracle_check` (migration `ch/009`) and the Markdown report
 `data/private/oracle-check-YYYY-MM-DD.md` (git-ignored; never pushed), and warns `oracle_drift` when a name's trailing
-5-day p95 exceeds 10 bps. Run by hand:
+5-day **regular-session** (09:30-16:00 ET) p95 exceeds 10 bps; the report lists extended hours separately, for
+information only (thin names' pre- and post-market NBBOs are wide, so a gap there does not say which side is off). Run by hand:
 
 ```bash
 secrets uv run python -m venue_arb.flows.stock_perp_oracle_check

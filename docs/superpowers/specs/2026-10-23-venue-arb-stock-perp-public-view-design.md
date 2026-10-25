@@ -102,7 +102,9 @@ named.
   during US regular and extended sessions: per name and day, median and p95 of |oracle − mid| in bps, share of ticks
   over 10 bps, and count of ticks compared. Output goes to a ClickHouse table `stock_perp_oracle_check` (additive) and
   a Markdown report under `data/private/` (git-ignored) **(Claude's call)**. A qa warn `oracle_drift` fires per name
-  when its trailing 5-day p95 exceeds 10 bps.
+  when its trailing 5-day p95 exceeds 10 bps. *Amended 2026-10-25 (Sam):* figures are kept per segment, regular
+  session (09:30-16:00 ET) and extended hours, and the warn reads the regular session only; the pooled warn fired on
+  43 of 44 names on the first day, driven by wide extended-hours NBBOs on thin names.
 - **No automatic hiding (Sam, 2026-10-23).** Every name is shown on the public page. The validation report is for
   Sam to decide by hand; removing a name is a manual edit of `labels/stock_perps_excluded.txt` with a neutral
   comment that does not cite Schwab.
