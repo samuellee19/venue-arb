@@ -5,6 +5,7 @@ export const REPO = "https://github.com/samuellee19/venue-arb";
 export const POLL_MS = 30000, STALE_S = 120, DEAD_S = 3600, BOOKS_S = 300;  // BOOKS_S = bundle.LIVE_MAX_AGE_S
 export const US_BANNER = "No pair is executable from the US: Polymarket rejects US orders. Gaps shown for reference.";
 export const STALE_BANNER = "last update {n} min ago";
+export const DEAD_BANNER = "last update {n} min ago — figures may be behind";  // past DEAD_S: the publisher has stopped
 export const NO_BOOKS = "no books in 5 min";
 export const NOT_US = "Not executable from the US";
 export const NOT_COMPUTED = "research summary not computed yet";

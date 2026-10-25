@@ -11,7 +11,7 @@ VERDICTS = ("Exact match · no edge", "Executable edge", "Not an arbitrage · ba
             "Spread · within basis bound · no edge", "No asks on one side", "Stale · a leg has no snapshot in 5 min",
             "Not executable from the US", "Oracle basis · within perp costs", "Oracle internal · market closed", "Oracle basis")
 BANNERS = ("No pair is executable from the US: Polymarket rejects US orders. Gaps shown for reference.",
-           "last update {n} min ago", "no books in 5 min")
+           "last update {n} min ago", "last update {n} min ago — figures may be behind", "no books in 5 min")
 STOCK_COPY = ("Not advice. Hyperliquid blocks US traders; the perp leg is shown for reference.",
               ("{n} stock perps — perp against the venue's oracle, net of 2× perp taker fee, perp spread and 24 h funding, "
                "before stock-leg costs"), "basis is quoted in bps", "oracle internal", "perpetual",
@@ -246,3 +246,10 @@ def test_theme_tokens_meet_aa_contrast():
                  "k on panel": (t["k"], t["panel"]), "warn on warn-bg": (t["warn"], t["warn-bg"])}
         low = {k: round(_contrast(*v), 2) for k, v in pairs.items() if _contrast(*v) < 4.5}
         assert not low, f"{theme}: below AA 4.5 for 13 px text: {low}"
+
+
+def test_dead_bundle_greys_the_figures_and_says_so():
+    app, css, common = _read("app.js"), _read("styles.css"), _read("common.js")
+    assert "DEAD_BANNER" in common and "figures may be behind" in common
+    assert 'classList.toggle("dead"' in app and "DEAD_BANNER" in app  # the page, not only the header figures, goes dead
+    assert re.search(r"body\.dead[^{]*\.badge[^{]*\{", css) and re.search(r"body\.dead[^{]*td\.num[^{]*\{", css)

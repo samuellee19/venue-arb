@@ -36,6 +36,8 @@ header p { margin:0; font-size:13px; color:var(--mut); }
 .fig b { display:block; font-size:26px; line-height:1.2; font-weight:600; font-variant-numeric:tabular-nums; }
 .fig span { font-size:13px; color:var(--mut); }
 .figs.dead .fig { opacity:.45; }
+/* a dead bundle: every verdict and net figure fades and loses its colour, on the Scanner and in the Explorer */
+body.dead .badge, body.dead td.num, body.dead .row .e, body.dead .verdict > .badge, body.dead .wf .r.t { opacity:.45; filter:grayscale(1); }
 .live { display:inline-flex; align-items:center; gap:8px; font-size:13px; color:var(--mut); }
 .dot { width:8px; height:8px; border-radius:50%; background:var(--pos); flex:none; }
 .dot.stale { background:var(--mut); }

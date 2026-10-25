@@ -1,7 +1,7 @@
 // venue-arb dashboard: boot, load/poll of /api/live, tabs, header, theme, banners (dashboard/api/app.py serves it).
 // No edge, fee or basis logic here: every number comes from the bundle. Plotly is the vendored global (Explorer,
 // Research). Showing a tab renders it; the poll refreshes the visible one; a theme switch re-draws its charts.
-import {$, esc, num, seg, S, REPO, POLL_MS, STALE_S, DEAD_S, BOOKS_S, STALE_BANNER, NO_BOOKS} from "./common.js";
+import {$, esc, num, seg, S, REPO, POLL_MS, STALE_S, DEAD_S, BOOKS_S, STALE_BANNER, DEAD_BANNER, NO_BOOKS} from "./common.js";
 import {renderScanner} from "./scanner.js";
 import {renderExplorer} from "./explorer.js";
 import {renderResearch} from "./research.js";
@@ -43,9 +43,11 @@ function tick() {
   $("clock").textContent = noBooks ? NO_BOOKS
     : `books ${new Date(books).toLocaleTimeString("en-US", {timeZone: "America/Los_Angeles", hour12: false})} PT`;
   $("dot").classList.toggle("stale", noBooks || age > STALE_S);
+  const dead = age > DEAD_S;  // the verdicts and figures were true an hour ago: greyed, never hidden
   $("stale").hidden = age <= STALE_S;
-  $("stale").textContent = STALE_BANNER.replace("{n}", num(Math.round(age / 60)));
-  $("figs").classList.toggle("dead", age > DEAD_S);
+  $("stale").textContent = (dead ? DEAD_BANNER : STALE_BANNER).replace("{n}", num(Math.round(age / 60)));
+  $("figs").classList.toggle("dead", dead);
+  document.body.classList.toggle("dead", dead);
 }
 
 function renderTab() {
