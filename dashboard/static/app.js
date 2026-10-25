@@ -29,6 +29,8 @@ async function load() {
 function renderHeader() {
   const k = S.bundle.kpis;
   $("f-episodes").textContent = num(k.episodes_7d);  // the note's scoped count; the US toggle is a Scanner lens only
+  const l = $("f-episodes-l");
+  l.textContent = l.textContent.replace(/episodes?/, k.episodes_7d === 1 ? "episode" : "episodes");
   $("f-pairs").textContent = num(Object.values(k.pairs_live).reduce((a, b) => a + b, 0));  // market pairs
 }
 
@@ -50,7 +52,9 @@ function renderTab() {
   const t = TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "scanner";
   for (const x of TABS) {
     $(`tab-${x}`).hidden = x !== t;
-    document.querySelector(`nav a[href="#${x}"]`).classList.toggle("on", x === t);
+    const a = document.querySelector(`nav a[href="#${x}"]`);
+    a.classList.toggle("on", x === t);
+    if (x === t) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
   }
   if (!S.bundle) return;
   if (t === "explorer") renderExplorer();

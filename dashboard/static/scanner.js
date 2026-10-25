@@ -38,7 +38,8 @@ const badge = lab => `<span class="badge b-${VERDICT_TONES.find(([l]) => lab.sta
 function when(iso) {
   if (iso == null) return "perpetual";
   const h = (Date.parse(iso) - now()) / 3.6e6;
-  const rel = h <= 0 ? "settled" : h >= 48 ? `in ${Math.round(h / 24)} d` : `in ${Math.max(1, Math.round(h))} h`;
+  const rel = h <= 0 ? "settled" : h >= 48 ? `in ${Math.round(h / 24)} d` : h >= 2 ? `in ${Math.round(h)} h`
+    : `in ${Math.max(1, Math.round(h * 60))} m`;
   return `${day(new Date(iso))}<small>${rel}</small>`;
 }
 
@@ -53,27 +54,27 @@ function row(p) {
     + `<td><span class="cat">${esc(S.bundle.categories[p.category] ?? p.category)}</span><span class="title">${esc(p.title)}</span>`
     + `<small class="mono">${esc(k.market_id)} / ${esc(short(pm.market_id))}</small></td>`
     + `<td class="c-legs mut">${sp ? esc(p.trade) : legsTxt(p)}</td>`
-    + (sp ? `<td class="num ${t}"${S.unit === "c" ? ` title="${NO_BPS}"` : ""}>${bps(p.net_bps)}</td>`
+    + (sp ? `<td class="num ${t}"${S.unit === "c" ? ` title="${NO_BPS}"` : ""}>${bps(p.net_bps, 1)}</td>`
       : `<td class="num ${t}">${edge(p.net_edge_cents, p.net_edge_bps)}</td>`)
-    + `<td class="num ${t}">${p.net_edge_roi == null ? "—" : signed(100 * p.net_edge_roi, 1, "%")}</td>`
+    + `<td class="num ${t}">${p.net_edge_roi == null ? "—" : signed(100 * p.net_edge_roi, sp ? 2 : 1, "%")}</td>`
     + `<td class="num c-cap">${p.capacity_usd ? usd(p.capacity_usd) : "—"}</td>`
     + `<td class="when">${when(p.settles_at)}</td><td>${badge(label(p))}</td></tr>`;
 }
 
 // the stock-perp category's own columns: Name, Trade, Basis, Net, Funding, Capacity, Reference, Verdict
-const STOCK_HEAD = `<tr><th>Name</th><th class="c-legs">Trade</th><th class="num">Basis</th>`
-  + `<th class="num" data-s="edge"><button>Net</button></th><th class="num" data-s="funding"><button>Funding</button></th>`
-  + `<th class="num c-cap" data-s="cap"><button>Capacity</button></th><th>Reference</th><th>Verdict</th></tr>`;
+const STOCK_HEAD = `<tr><th scope="col">Name</th><th scope="col" class="c-legs">Trade</th><th scope="col" class="num">Basis</th>`
+  + `<th scope="col" class="num" data-s="edge"><button>Net</button></th><th scope="col" class="num" data-s="funding"><button>Funding</button></th>`
+  + `<th scope="col" class="num c-cap" data-s="cap"><button>Capacity</button></th><th scope="col">Reference</th><th scope="col">Verdict</th></tr>`;
 const PAIR_HEAD = document.querySelector("#scan thead").innerHTML;
 
 function stockRow(p) {
   const t = tone(p.net_edge_cents, p), f = p.next_funding_at;
   return `<tr data-k="${esc(p.key)}" tabindex="0" class="sp${S.us && !p.us_executable ? " grey" : ""}">`
     + `<td><span class="title">${esc(p.title)}</span><small class="mono">${esc(p.legs[0].market_id)}</small></td>`
-    + `<td class="c-legs mut">${esc(p.trade)}</td><td class="num" data-l="basis">${bps(p.basis_bps, 1)}</td><td class="num ${t}" data-l="net">${bps(p.net_bps, 1)}</td>`
+    + `<td class="c-legs mut" data-l="trade">${esc(p.trade)}</td><td class="num" data-l="basis">${bps(p.basis_bps, 1)}</td><td class="num ${t}" data-l="net">${bps(p.net_bps, 1)}</td>`
     + `<td class="num" data-l="funding">${p.funding_bps_h == null ? "—" : signed(p.funding_bps_h, 2, " bps/h")}`
     + `${f ? `<small>next ${hm(new Date(f))}</small>` : ""}</td>`
-    + `<td class="num c-cap">${p.capacity_usd ? usd(p.capacity_usd) : "—"}</td><td class="mut" data-l="reference">${esc(ref(p))}</td>`
+    + `<td class="num c-cap" data-l="capacity">${p.capacity_usd ? usd(p.capacity_usd) : "—"}</td><td class="mut" data-l="reference">${esc(ref(p))}</td>`
     + `<td>${badge(label(p))}</td></tr>`;
 }
 

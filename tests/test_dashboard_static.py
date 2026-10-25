@@ -10,7 +10,7 @@ TEXT = ("index.html", "styles.css", *sorted(p.name for p in STATIC.glob("*.js") 
 VERDICTS = ("Exact match · no edge", "Executable edge", "Not an arbitrage · basis exposure",
             "Spread · within basis bound · no edge", "No asks on one side", "Stale · a leg has no snapshot in 5 min",
             "Not executable from the US", "Oracle basis · within perp costs", "Oracle internal · market closed", "Oracle basis")
-BANNERS = ("No pair is executable from the US: Polymarket rejects US orders (docs/venues.md). Gaps shown for reference.",
+BANNERS = ("No pair is executable from the US: Polymarket rejects US orders. Gaps shown for reference.",
            "last update {n} min ago", "no books in 5 min")
 STOCK_COPY = ("Not advice. Hyperliquid blocks US traders; the perp leg is shown for reference.",
               ("{n} stock perps — perp against the venue's oracle, net of 2× perp taker fee, perp spread and 24 h funding, "
@@ -204,3 +204,45 @@ def test_stock_perp_copy_says_before_stock_leg_costs():
     assert "before stock-leg costs, with perp fees and 24 h funding" in head and "round-trip" not in head
     assert '"Stock-perp spread", "before stock-leg costs"' in _read("research.js") and "net of costs" not in _read("research.js")
     assert '"Perp depth while net ≥ 10 bps"' in _read("explorer.js") and "top of book" not in _read("explorer.js")
+
+
+def test_ux_round_two_markup():
+    index, scanner, app, explorer = _read("index.html"), _read("scanner.js"), _read("app.js"), _read("explorer.js")
+    assert 'rel="icon"' in index  # no favicon request that 404s on every load
+    assert not re.search(r"<th(?=[\s>])(?![^>]*scope=)", index + scanner), "every column header names its scope"
+    assert "aria-current" in app  # the active tab is announced
+    assert 'class="row' in explorer and 'tabindex="0"' in explorer and '$("rows").onkeydown' in explorer  # pair list by keyboard
+    assert "docs/venues.md" not in _js() + index  # repo paths mean nothing to a visitor
+    assert '$("sizebox").hidden' not in explorer  # the size row stays put, disabled, on a stock perp
+
+
+def test_ux_round_two_numbers():
+    scanner, app = _read("scanner.js"), _read("app.js")
+    assert "bps(p.net_bps, 1)" in scanner and "bps(p.net_bps)" not in scanner  # one decimal in the All view too
+    assert "sp ? 2 : 1" in scanner  # a bps row's ROI never prints as −0.0%
+    assert "Math.max(1, Math.round(h))" not in scanner and re.search(r"in \$\{[^}]+\} m", scanner)  # minutes under 2 h
+    assert re.search(r'=== 1 \? "episode" : "episodes"', app)  # "1 episodes" never shows
+
+
+def _lum(h):
+    r, g, b = (int(h[i:i + 2], 16) / 255 for i in (1, 3, 5))
+    f = lambda v: v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4
+    return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b)
+
+
+def _contrast(a, b):
+    la, lb = _lum(a), _lum(b)
+    return (max(la, lb) + 0.05) / (min(la, lb) + 0.05)
+
+
+def test_theme_tokens_meet_aa_contrast():
+    light, dark = _read("styles.css").split(':root[data-theme="dark"]')
+    for theme, block in (("light", light.split(":root")[1]), ("dark", dark)):
+        t = dict(re.findall(r"--([\w-]+):\s*(#[0-9a-fA-F]{6})", block.split("}")[0]))
+        assert "k-fill" in t, f"{theme}: the active chip needs its own fill token"
+        pairs = {"pos on panel": (t["pos"], t["panel"]), "pos on pos-bg": (t["pos"], t["pos-bg"]), "neg on panel": (t["neg"], t["panel"]),
+                 "mut on chip": (t["mut"], t["chip"]), "mut on hover": (t["mut"], t["hover"]), "mut on head": (t["mut"], t["head"]),
+                 "mut on panel": (t["mut"], t["panel"]), "white on k-fill": ("#ffffff", t["k-fill"]), "k on bg": (t["k"], t["bg"]),
+                 "k on panel": (t["k"], t["panel"]), "warn on warn-bg": (t["warn"], t["warn-bg"])}
+        low = {k: round(_contrast(*v), 2) for k, v in pairs.items() if _contrast(*v) < 4.5}
+        assert not low, f"{theme}: below AA 4.5 for 13 px text: {low}"

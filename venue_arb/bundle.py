@@ -440,6 +440,8 @@ def stock_perp_rows(perps: list[tuple[PerpCtx, Label, SnapPerp]], sparks: dict, 
         edge = stock_perps.score(ctx, levels, stock_perps.reference(ctx, None, label, ts), mode="oracle", session=state)
         live = now - ts <= timedelta(seconds=LIVE_MAX_AGE_S)
         sym, stock = ctx.symbol, label.ref_symbol or ctx.symbol
+        title = f"{label.name} ({label.exchange})" if label.exchange else label.name
+        stock_leg = label.ref_symbol or title  # the trade line names the stock; the key keeps the perp symbol as before
         short_perp = edge.direction == "short_perp_long_stock"
         perp_side, stock_side = ("short", "long") if short_perp else ("long", "short")
         key = stock_key(sym, stock)
@@ -449,7 +451,7 @@ def stock_perp_rows(perps: list[tuple[PerpCtx, Label, SnapPerp]], sparks: dict, 
         hold = edge.hold_h
         rows.append(Pair(
             key=key, kind="stock_perp", category="stock_perps",
-            title=f"{label.name} ({label.exchange})" if label.exchange else label.name, settles_at=None, ladder=None,
+            title=title, settles_at=None, ladder=None,
             legs=[Leg(venue="hyperliquid", market_id=sym, side=perp_side, title=sym,
                       url=f"https://app.hyperliquid.xyz/trade/{sym}", settlement_source=None, snapshot_at=ts),
                   Leg(venue=label.exchange.lower() or "stock", market_id=stock, side=stock_side, title=label.name,
@@ -467,7 +469,7 @@ def stock_perp_rows(perps: list[tuple[PerpCtx, Label, SnapPerp]], sparks: dict, 
             basis_bps=round(edge.basis_bps, 4) if scored else None, net_bps=net, funding_bps_h=ctx.funding_h * 1e4,
             next_funding_at=now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1),
             reference={"kind": "oracle", "state": state, "asof": ts.isoformat()},
-            trade=f"{perp_side} {sym} / {stock_side} {stock}", hold_hours=int(hold),
+            trade=f"{perp_side} {sym} / {stock_side} {stock_leg}", hold_hours=int(hold),
             costs=None if not scored else {
                 "perp_fee_bps": round(edge.perp_fee_bps, 4), "perp_spread_bps": round(edge.perp_spread_bps, 4),
                 "funding_bps": round(edge.funding_bps, 4)},

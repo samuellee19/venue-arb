@@ -311,10 +311,13 @@ def test_stock_perp_row_stale():
 
 
 def test_stock_perp_row_label_none_and_spark():
-    lab = Label("xyz:FOO", "none", None, "", "USD", "xyz:FOO")
+    lab = Label("xyz:FOO", "none", None, "KRX", "KRW", "Foo Corp")
     [p] = stock_perp_rows([(replace(CTX215, symbol="xyz:FOO"), lab, SP_SNAP)], {"xyz:FOO~xyz:FOO~stock_perp": [1.0] * 24}, SP_NOW)
-    assert p.key == "xyz:FOO~xyz:FOO~stock_perp" and p.title == "xyz:FOO" and p.spark == [1.0] * 24
-    assert p.trade == "short xyz:FOO / long xyz:FOO"
+    assert p.key == "xyz:FOO~xyz:FOO~stock_perp" and p.title == "Foo Corp (KRX)" and p.spark == [1.0] * 24
+    assert p.trade == "short xyz:FOO / long Foo Corp (KRX)"  # no stock symbol: the name, never the perp symbol twice
+    bare = Label("xyz:BAR", "none", None, "", "USD", "Bar")
+    [p] = stock_perp_rows([(replace(CTX215, symbol="xyz:BAR"), bare, SP_SNAP)], {}, SP_NOW)
+    assert p.trade == "short xyz:BAR / long Bar"
 
 
 def test_build_live_stock_perps_kpi_and_best_edge_ignores_them():

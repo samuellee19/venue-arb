@@ -1659,7 +1659,7 @@
         null
       ],
       "title": "SK hynix (KRX)",
-      "trade": "short xyz:SKHX / long xyz:SKHX",
+      "trade": "short xyz:SKHX / long SK hynix (KRX)",
       "us_executable": false,
       "verdict": {
         "checks": [

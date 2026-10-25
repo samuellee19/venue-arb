@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>venue-arb · Prediction Market Arbitrage</title>
 <link rel="stylesheet" href="/static/styles.css">
+<link rel="icon" href="/static/favicon.svg">
 <script>try { const t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch {}</script>
 </head>
 <body>
@@ -16,7 +17,7 @@
     <p>Kalshi vs Polymarket: matched markets, executable edge after fees and depth, and why most gaps aren't arbitrage.</p>
   </div>
   <div class="figs" id="figs">
-    <div class="fig"><b id="f-episodes">—</b><span>episodes · 7 d</span></div>
+    <div class="fig"><b id="f-episodes">—</b><span id="f-episodes-l">episodes · 7 d</span></div>
     <div class="fig"><b id="f-pairs">—</b><span>pairs live</span></div>
     <div class="live"><span class="dot" id="dot"></span><span id="clock">loading</span></div>
     <button class="toggle" id="theme" title="Switch light / dark">theme</button>
@@ -36,9 +37,9 @@
     <div class="banner" id="usban" hidden></div>
     <table id="scan">
       <thead><tr>
-        <th>Pair</th><th class="c-legs">Legs</th>
-        <th class="num" data-s="edge"><button>Net edge</button></th><th class="num" data-s="roi"><button>ROI</button></th>
-        <th class="num c-cap" data-s="cap"><button>Capacity</button></th><th data-s="settles"><button>Settles</button></th><th>Verdict</th>
+        <th scope="col">Pair</th><th scope="col" class="c-legs">Legs</th>
+        <th scope="col" class="num" data-s="edge"><button>Net edge</button></th><th scope="col" class="num" data-s="roi"><button>ROI</button></th>
+        <th scope="col" class="num c-cap" data-s="cap"><button>Capacity</button></th><th scope="col" data-s="settles"><button>Settles</button></th><th scope="col">Verdict</th>
       </tr></thead>
       <tbody id="srows"><tr><td colspan="7" class="mut">Loading the live bundle</td></tr></tbody>
     </table>

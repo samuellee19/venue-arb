@@ -1,15 +1,15 @@
 /* venue-arb v2: the approved light mockup (tabs-v1) as tokens; dark = a token swap under [data-theme="dark"].
    Type: 13 / 15 / 22 px (26 for the two header figures). Spacing: 8-px grid. One accent, --k. */
 :root {
-  --bg:#f6f7f9; --panel:#ffffff; --line:#e3e6ea; --txt:#13161b; --mut:#6b7280; --k:#2f6fe4; --pm:#d9822b;
-  --pos:#148a4a; --neg:#c2410c; --warn:#8a5a0a;
+  --bg:#f6f7f9; --panel:#ffffff; --line:#e3e6ea; --txt:#13161b; --mut:#636b79; --k:#2a66d6; --k-fill:#2a66d6; --pm:#d9822b;
+  --pos:#117a41; --neg:#c2410c; --warn:#8a5a0a;
   --chip:#eef1f5; --head:#fafbfc; --hover:#f3f6fb; --example:#f1f4f9;
   --warn-bg:#fbf1dc; --warn-line:#ecd28f; --pos-bg:#dff5e7;
   --sel:#e8effc; --k2:#a9c4f5; --pm2:#ecc79a;
   color-scheme: light;
 }
 :root[data-theme="dark"] {
-  --bg:#0e1116; --panel:#161b22; --line:#262d37; --txt:#e6e9ee; --mut:#8b95a5; --k:#4f8ff7; --pm:#f0a23b;
+  --bg:#0e1116; --panel:#161b22; --line:#262d37; --txt:#e6e9ee; --mut:#8b95a5; --k:#4f8ff7; --k-fill:#2a66d6; --pm:#f0a23b;
   --pos:#3ccb7f; --neg:#ff6b6b; --warn:#f6c343;
   --chip:#1d2530; --head:#12161c; --hover:#1b2129; --example:#1a2230;
   --warn-bg:#3a2d12; --warn-line:#5a4c1f; --pos-bg:#12301f;
@@ -49,7 +49,7 @@ main { padding:24px; max-width:1200px; }
 .bar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:16px; font-size:13px; }
 .chips { display:flex; gap:8px; flex-wrap:wrap; margin-right:auto; }
 .chip { font-size:13px; color:var(--mut); background:var(--chip); border:0; border-radius:999px; padding:4px 16px; cursor:pointer; }
-.chip.on { background:var(--k); color:#fff; }
+.chip.on { background:var(--k-fill); color:#fff; }
 .seg { display:inline-flex; border:1px solid var(--line); border-radius:6px; overflow:hidden; }
 .seg button { font-size:13px; color:var(--mut); background:none; border:0; padding:4px 8px; cursor:pointer; }
 .seg button:disabled { opacity:.5; cursor:not-allowed; }
@@ -188,6 +188,9 @@ footer ul { margin:0; padding-left:16px; flex-basis:100%; }
   #scan tbody tr.sp { grid-template-columns:1fr 1fr; }
   #scan tr.sp td.num { text-align:left; }
   #scan tr.sp td[data-l]::before { content:attr(data-l) " "; color:var(--mut); font-family:Inter, -apple-system, "Segoe UI", sans-serif; }
+  /* a stock perp's trade and capacity stay on the phone card (a pair's legs and capacity drop above) */
+  #scan tr.sp td.c-legs, #scan tr.sp td.c-cap { display:block; }
+  #scan tr.sp td.c-legs { grid-column:1 / -1; }
   #scan td:last-child { padding-top:8px; }
   .ex, .grid3, .cards { grid-template-columns:minmax(0, 1fr); }
   #rows { max-height:50vh; }

@@ -5,6 +5,14 @@ import {$, esc, enc, num, usd, signed, cents, bpsOf, tone, css, pz, hm, seg, saf
   legsTxt, settles, baseLayout, S, VERDICT_TONES, PLOT_CFG, NOT_ADVICE, STOCK_MIN_BPS} from "./common.js";
 
 const NO_WALK = "size re-walk needs published books";
+const NO_WALK_STOCK = "a stock perp has no size re-walk";
+
+// the size input stays in place and says why it is off: unpublished books, or a stock perp (/api/walk is 409)
+function sizeState() {
+  const why = S.sel && isStock(byKey(S.sel)) ? NO_WALK_STOCK : S.bundle.show_books ? "" : NO_WALK;
+  $("size").disabled = !!why;
+  $("size").title = $("sizebox").title = why;
+}
 const KIND = {exact: "exact", near_exact: "near-exact", ladder: "ladder", stock_perp: "stock perp"};
 const CHECK = {same_instant: "Same instant", exact_match: "Exact match", basis_bound: "Basis bound",
   fees_depth: "Fees & depth walked", jurisdiction: "Jurisdiction", reference: "Reference", fees_carry: "Fees, funding & borrow"};
@@ -21,8 +29,7 @@ let shown = {};  // the pair and bundle (computed_at) the detail pane was last b
 // the Scanner (S.sel set while this tab was hidden) is built here; an unchanged pane only re-draws (theme, resize).
 export function renderExplorer() {
   const b = S.bundle;
-  $("size").disabled = !b.show_books;
-  $("size").title = $("sizebox").title = b.show_books ? "" : NO_WALK;
+  sizeState();
   if (!S.sel || !byKey(S.sel)) select(defaultSel());
   else if (S.sel !== shown.sel) {  // picked on the Scanner: open its ladder group so the row shows
     if (byKey(S.sel).kind === "ladder") S.open.add(byKey(S.sel).ladder);
@@ -68,7 +75,7 @@ function renderList() {
 }
 
 function row(p) {
-  return `<div class="row${p.key === S.sel ? " sel" : ""}" data-k="${esc(p.key)}">`
+  return `<div class="row${p.key === S.sel ? " sel" : ""}" data-k="${esc(p.key)}" tabindex="0">`
     + `<div><div class="n">${esc(p.title)} <span class="kind k-${p.kind}">${KIND[p.kind]}</span></div>`
     + `<div class="m"><span>${settles(p.settles_at)}</span><span>${legsTxt(p)}</span>${p.live ? "" : "<span>stale</span>"}</div></div>`
     + `<div class="e ${tone(p.net_edge_cents, p)}">${fig(p.net_edge_cents, p.net_edge_bps, p)}</div>${spark(p)}</div>`;
@@ -104,7 +111,7 @@ function buildDetail() {
   if (old && window.Plotly) Plotly.purge(old);  // drops the graph and its window resize handler before the node goes
   if (!S.sel) { $("detail").innerHTML = `<div class="empty">No pairs in this bundle.</div>`; return; }
   const sp = isStock(byKey(S.sel));
-  $("sizebox").hidden = sp;  // a stock perp has no size re-walk (/api/walk is 409)
+  sizeState();
   const ranges = ["1h", "24h", "7d", "all"].map(r => `<button data-r="${r}"${r === S.range ? ' class="on"' : ""}>${r.replace(/(\d+)/, "$1 ")}</button>`);
   $("detail").innerHTML = `<div id="dhead"></div><div id="boxes"></div>`
     + `<div class="chart"><div class="tools"><h4>${sp ? "Net and basis, bps of notional, UTC" : "Net edge after fees, ¢ per contract, UTC"}</h4>`
@@ -266,7 +273,7 @@ function renderBoxes() {
   } else {
     el.className = "grid3 one";
     el.innerHTML = mid("Cost of both legs, per contract, first slice", costDerived(p),
-      `<div class="note">Per-leg prices and sizes are not published (venue display terms, docs/venues.md); ${NO_WALK}.</div>`);
+      `<div class="note">Per-leg prices and sizes are not published (venue display terms); ${NO_WALK}.</div>`);
   }
 }
 
@@ -399,7 +406,7 @@ $("size").oninput = e => {
   const v = Math.round(+e.target.value);
   if (v > 0 && v <= 1e6) { S.size = v; walk(); }
 };
-$("rows").onclick = e => {
+const pick = e => {
   const g = e.target.closest(".grp"), rw = e.target.closest(".row");
   if (g) { S.open.has(g.dataset.g) ? S.open.delete(g.dataset.g) : S.open.add(g.dataset.g); renderList(); }
   else if (rw) {
@@ -407,3 +414,5 @@ $("rows").onclick = e => {
     if (matchMedia("(max-width: 760px)").matches) $("detail").scrollIntoView({behavior: "smooth"});
   }
 };
+$("rows").onclick = pick;
+$("rows").onkeydown = e => { if (e.key === "Enter") pick(e); };
