@@ -259,7 +259,8 @@ def test_history_hour_waits_for_the_scoring_flows():
     assert publish.history_hour(datetime(2026, 10, 20, 15, 55, tzinfo=UTC)) == datetime(2026, 10, 20, 14, tzinfo=UTC)
 
 
-def test_write_history_hour_writes_zstd_parquet(tmp_path):
+def test_write_history_hour_writes_zstd_parquet(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "DASHBOARD_SHOW_STOCK_PERPS", False)  # the pair tier alone; the stock readers are not wired here
     import pyarrow.parquet as pq
 
     hour = datetime(2026, 10, 20, 15, tzinfo=UTC)
@@ -317,7 +318,8 @@ def _cycle(state, rd, tmp_path, now, calls, clock=None):
                          **({"clock": clock} if clock else {}))
 
 
-def test_research_runs_after_push_on_hour_change(tmp_path):
+def test_research_runs_after_push_on_hour_change(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "DASHBOARD_SHOW_STOCK_PERPS", False)  # the pair tier alone; the stock readers are not wired here
     calls, state = [], {"history_hour": publish.history_hour(NOW)}  # no history due: these tests have no db
     rd = research_readers(calls)
     assert _cycle(state, rd, tmp_path, NOW, calls) == []
@@ -337,7 +339,8 @@ def test_research_runs_after_push_on_hour_change(tmp_path):
     assert calls[-1] == "research" and state["research"].computed_at == later
 
 
-def test_research_failure_keeps_previous(tmp_path):
+def test_research_failure_keeps_previous(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "DASHBOARD_SHOW_STOCK_PERPS", False)  # the pair tier alone; the stock readers are not wired here
     calls, state = [], {"history_hour": publish.history_hour(NOW)}
     _cycle(state, research_readers(calls), tmp_path, NOW, calls)
     good = state["research"]
@@ -372,6 +375,7 @@ def test_research_seconds_warn(tmp_path):
 
 
 def test_research_bytes_warn(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "DASHBOARD_SHOW_STOCK_PERPS", False)  # the pair tier alone; the stock readers are not wired here
     assert publish.RESEARCH_BYTES_WARN == 150_000
     calls, state = [], {"history_hour": publish.history_hour(NOW)}
     _cycle(state, research_readers(calls), tmp_path, NOW, calls)

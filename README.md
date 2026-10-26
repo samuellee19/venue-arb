@@ -62,7 +62,7 @@ note is re-run once about four weeks of snapshots exist.
 tabs: **Scanner** (one row per matched pair, sortable, by category), **Explorer** (one pair's edge history, verdict
 and cost) and **Research** (the research note's headline numbers, recomputed hourly). While the venues' data terms
 are unresolved the page does not show quotes: it shows edges, capacities and episodes, and the per-leg book boxes
-collapse to one derived cost panel. The stock-perp category is built but hidden (`DASHBOARD_SHOW_STOCK_PERPS = False`)
+collapse to one derived cost panel. The stock-perp category is public since 2026-10-25 (`DASHBOARD_SHOW_STOCK_PERPS = True`)
 until the terms reads in `docs/going-public.md` are done.
 
 ## Architecture
@@ -201,8 +201,8 @@ On the OptiPlex:
 7. Run `secrets uv run python -m venue_arb.flows.stock_perp_score` and `... stock_perp_weekend` once by hand. Check
    their results in `qa.check_results` (Postgres) for the pipelines `venue_arb_stock_perp_score` and
    `venue_arb_stock_perp_weekend`.
-8. Leave `DASHBOARD_SHOW_STOCK_PERPS = False` in `venue_arb/config.py`. The collector, scoring and bundle fields run
-   regardless.
+8. `DASHBOARD_SHOW_STOCK_PERPS` (`venue_arb/config.py`) gates the public view only; the collector, scoring and bundle
+   fields run regardless. It has been `True` since 2026-10-25.
 
 Turning the category on, only after the first week of oracle-check reports (`docs/going-public.md`):
 
@@ -276,6 +276,6 @@ Quotes are not displayed publicly: `DASHBOARD_SHOW_BOOKS = False`, because Kalsh
 display without written authorization and Polymarket's terms, read on 2026-10-23, restrict the data (`docs/venues.md`, terms record). Kalshi's taker fee coefficient
 (0.07) is secondhand and unverified, as are the jurisdictions each venue admits; both are recorded with sources in
 `docs/venues.md`, and the going-public checklist is `docs/going-public.md`. The stock-perp figures are held back for the same reason:
-the public view is held behind `DASHBOARD_SHOW_STOCK_PERPS` until the oracle-check reports are read. Schwab's agreement
+the public view sits behind `DASHBOARD_SHOW_STOCK_PERPS` (on since 2026-10-25; the oracle-check reports stay the private yardstick). Schwab's agreement
 bars third-party use of its data, so nothing derived from it is published (terms record in `docs/venues.md`, a reading,
 not legal advice).

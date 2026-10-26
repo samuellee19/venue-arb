@@ -5,8 +5,8 @@ live-stock.json (the same bundle with the stock-perp tier on: four invented stoc
 
 Tickers have real shapes; every price, size and time is invented (seeded, fixed `now`), so the repo carries no real
 quotes. Uses config.DASHBOARD_SHOW_BOOKS as it is: while False, live.json has books null and the history Parquet has
-null quotes. Rerun after flipping the flag. live-stock.json forces config.DASHBOARD_SHOW_STOCK_PERPS True for its
-own build only; live.json stays flag-off. Output is deterministic (sorted-key JSON, zstd Parquet).
+null quotes. Rerun after flipping that flag. live-stock.json forces config.DASHBOARD_SHOW_STOCK_PERPS True for its
+own build and live.json forces it False, so the two samples keep their meaning whatever the live setting. Output is deterministic (sorted-key JSON, zstd Parquet).
 """
 import hashlib
 import json
@@ -327,7 +327,8 @@ def build(out: Path) -> None:
     bundle = make_bundle(rng)
     sides = {(p.kalshi_id, p.pm_id): p.yes_maps_to for p in PAIRS}
     (out / "history").mkdir(parents=True, exist_ok=True)
-    write_live(out, "live.json", bundle)
+    with mock.patch.object(config, "DASHBOARD_SHOW_STOCK_PERPS", False):  # the flag-off sample, whatever config says
+        write_live(out, "live.json", bundle)
     for hour in HOURS:
         tbl = history_table(*history_rows(rng, hour, bundle.pairs), sides)
         pq.write_table(tbl, out / "history" / f"pairs-{hour:%Y%m%d%H}.parquet", compression="zstd")
