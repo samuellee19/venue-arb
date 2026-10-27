@@ -61,7 +61,7 @@ def test_labels_cover_every_equity_and_catalog_flags_unlabelled(fx):
     labels = hl.load_labels()
     assert labels["xyz:NVDA"] == hl.Label("xyz:NVDA", "schwab", "NVDA", "NASDAQ", "USD", "NVIDIA")
     assert labels["xyz:SKHX"].ref_kind == "none" and labels["xyz:SKHX"].exchange == "KRX"
-    assert "xyz:SPCX" not in labels and "xyz:GOLD" not in labels  # pre-IPO and commodities out of scope
+    assert "xyz:GOLD" not in labels and labels["xyz:ANT"].kind == "pre_ipo"  # commodities out of scope; pre-IPO names are labelled, not scored
     assert len(labels) >= 100 and all(k.startswith("xyz:") for k in labels)
     assert all(lb.ref_kind != "schwab" or lb.ref_symbol for lb in labels.values())
     assert "xyz:GOLD" in hl.load_excluded()
