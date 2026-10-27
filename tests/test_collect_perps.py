@@ -125,7 +125,7 @@ def test_no_schwab_client_skips_quotes():
 def test_flush_results_warn_day_before_expiry():
     issued = NOW - timedelta(days=6, hours=1)
     res = {r.check: r for r in cp.flush_results(FAKE_CHECKS, {"schwab_auth": 0, "schwab_fetch_errors": 0, "unlabelled": ["xyz:NEWCO"]}, issued, NOW)}
-    assert not res["schwab_token_expires"].passed and res["schwab_token_expires"].severity == "warn"
+    assert not res["schwab_token_expires"].passed and res["schwab_token_expires"].severity == "error"  # pushes
     assert not res["unlabelled_perps"].passed and "xyz:NEWCO" in res["unlabelled_perps"].detail
     assert res["schwab_auth"].passed
 
@@ -135,7 +135,7 @@ def test_flush_results_healthy_and_auth_failed():
     res = {r.check: r for r in cp.flush_results(FAKE_CHECKS, {"schwab_auth": 0, "schwab_fetch_errors": 0, "unlabelled": []}, issued, NOW)}
     assert all(r.passed for r in res.values())
     res = {r.check: r for r in cp.flush_results(FAKE_CHECKS, {"schwab_auth": 2, "schwab_fetch_errors": 0, "unlabelled": []}, issued, NOW)}
-    assert not res["schwab_auth"].passed and res["schwab_auth"].severity == "warn"
+    assert not res["schwab_auth"].passed and res["schwab_auth"].severity == "error"  # pushes
 
 
 def test_flush_results_without_token_warns_and_skips_expiry():
@@ -197,3 +197,18 @@ def test_label_reload_keeps_the_last_good_labels(caplog):
     assert "ValueError" in caplog.text
     with pytest.raises(ValueError):
         cp.reload_labels(({}, set()), bad, lambda: set())  # nothing good yet: the cycle fails and retries
+
+
+def test_token_check_pushes_two_days_ahead():
+    # an error-severity failure is what the platform alerter pushes to Telegram; warn only reaches the daily summary
+    from venue_arb.sources import schwab
+
+    def results(hours_left):
+        issued = NOW - (schwab.refresh_expires_at(NOW) - NOW) + timedelta(hours=hours_left)  # token expires in hours_left
+        return {r.check: r for r in cp.flush_results(FAKE_CHECKS, {"schwab_auth": 0, "schwab_fetch_errors": 0, "unlabelled": []}, issued, NOW)}
+
+    assert results(60)["schwab_token_expires"].passed
+    r = results(36)["schwab_token_expires"]
+    assert not r.passed and r.severity == "error" and r.threshold == 48
+    missing = {r.check: r for r in cp.flush_results(FAKE_CHECKS, {"schwab_auth": 0, "schwab_fetch_errors": 0, "unlabelled": []}, None, NOW)}
+    assert missing["schwab_auth"].severity == "error"
