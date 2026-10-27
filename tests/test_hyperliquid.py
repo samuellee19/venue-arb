@@ -146,9 +146,9 @@ def test_label_or_none_defaults_to_equity():
     assert hl.label_or_none("xyz:NEW", {}).kind == "equity"
 
 
-def test_labels_file_has_a_kind_on_every_row_and_six_pre_ipo_names():
+def test_labels_file_has_a_kind_on_every_row_and_the_pre_ipo_names():
     labels = hl.load_labels()
     pre = sorted(s for s, lb in labels.items() if lb.kind == "pre_ipo")
-    assert {"xyz:ANT", "xyz:YMTC", "xyz:JIO"} <= set(pre)
+    assert {"xyz:ANT", "xyz:JIO"} <= set(pre)  # YMTC is delisted on the venue and excluded
     assert all(lb.exchange for lb in labels.values() if lb.kind == "equity")
     assert all(lb.ref_kind == "none" and not lb.ref_symbol and not lb.exchange for lb in labels.values() if lb.kind == "pre_ipo")
