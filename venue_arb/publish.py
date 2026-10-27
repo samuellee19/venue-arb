@@ -92,7 +92,7 @@ SELECT k, p, d, toStartOfHour(ts) AS h, avg(e) FROM (
 """
 # every query that reads stock_perp_edges takes {ex}, the names in labels/stock_perps_excluded.txt (excluded()):
 # hidden from every public path, their rows stay in the private tables
-# the stock-perp tier: rows with p = '' take their reference symbol from labels (spark_series refs) and d = 'stock_perp'
+# the stock-perp tier: rows with p = '' take their reference symbol from labels and d = 'stock_perp'
 # (bundle.stock_key: one row a name, either direction); the hourly max of the oracle-mode net_bps / 1e4 over
 # external-session ticks reads, x100 like the pair rows, as net_bps / 100
 # both sources; pair-source rows are scoped in Python (scope_episodes) with note.SCOPE_SQL's rows, as the note does
@@ -248,14 +248,13 @@ def _first_ask(snaps: dict | None, t: datetime, side: str):
     return next((lv for lv in snaps[min(near, key=lambda x: abs(x - t))] if lv.side == side), None)
 
 
-def history_table(edge_rows, ladder_rows, books, sides: dict | None = None, stock_rows=(),
-                  refs: dict | None = None) -> pa.Table:
+def history_table(edge_rows, ladder_rows, books, sides: dict | None = None, stock_rows=()) -> pa.Table:
     """EDGES_HOUR_SQL and LADDER_HOUR_SQL rows + scoring.snapshots books -> one row per scored snapshot.
     k_ask/pm_ask = each leg's first ask at that snapshot, for exact and near-exact rows only; an exact row needs its
     pair's yes mapping in `sides` {(kalshi_id, pm_id): "yes"|"no"} to know the Polymarket side, else asks are null.
     Asks and sizes are null while config.DASHBOARD_SHOW_BOOKS is False; fees_cents (derived) is kept.
-    `stock_rows` = STOCK_PERP_HOUR_SQL rows (ts, symbol, direction, basis_bps, net_bps, capacity_usd), keyed with
-    `refs` {perp: reference symbol} as the bundle rows are (bundle.stock_key; `direction` keeps the side);
+    `stock_rows` = STOCK_PERP_HOUR_SQL rows (ts, symbol, direction, basis_bps, net_bps, capacity_usd), keyed as the bundle
+    rows are (bundle.stock_key; `direction` keeps the side);
     net_edge_cents is net_bps / 100, asks and fees null."""
     sides, flip = sides or {}, {"yes": "no", "no": "yes"}
     show = config.DASHBOARD_SHOW_BOOKS  # read at call time (tests monkeypatch it); fees stay, quotes go
@@ -283,7 +282,6 @@ def history_table(edge_rows, ladder_rows, books, sides: dict | None = None, stoc
                      ("pm_size", pa_.size if show and pa_ else None), ("fees_cents", fee), ("basis_bps", None),
                      ("net_bps", None)):
             cols[c].append(v)
-    refs = refs or {}
     for ts, sym, d, basis, net, cap in stock_rows:
         for c, v in (("ts", _utc(ts)), ("key", bundle.stock_key(sym)), ("kind", "stock_perp"),
                      ("direction", d), ("net_edge_cents", None if net is None else net / 100), ("capacity_usd", cap),
@@ -305,12 +303,11 @@ def write_history_hour(ch, out_dir: Path, hour: datetime, sides: dict | None = N
     books = snapshots(ch.query(HISTORY_BOOKS_SQL, parameters={
         "lo": round((lo - pad).timestamp() * 1000), "hi": round((hi + pad).timestamp() * 1000), "k": k, "p": p}
     ).result_rows) if k else {}
-    stock, refs = [], {}
+    stock = []
     if config.DASHBOARD_SHOW_STOCK_PERPS:  # the parquet is public output: gated like the bundle rows
         stock = ch.query(STOCK_PERP_HOUR_SQL, parameters={"lo": lo, "hi": hi, "ex": excluded()}).result_rows
-        refs = stock_refs()
     buf = io.BytesIO()
-    pq.write_table(history_table(edge, lad, books, sides, stock, refs), buf, compression="zstd")
+    pq.write_table(history_table(edge, lad, books, sides, stock), buf, compression="zstd")
     path = _hour_file(out_dir, lo)
     path.parent.mkdir(parents=True, exist_ok=True)
     write_atomic(path, buf.getvalue())
@@ -377,21 +374,14 @@ def excluded() -> list[str]:
     return _last_excluded
 
 
-def stock_refs() -> dict[str, str]:
-    """{perp symbol: reference symbol} from the labels; a perp without a stock symbol is its own reference."""
-    return {perp: lb.ref_symbol or perp for perp, lb in hyperliquid.load_labels().items()}
-
-
-def spark_series(rows, start: datetime, refs: dict | None = None) -> dict[str, list[float | None]]:
+def spark_series(rows, start: datetime) -> dict[str, list[float | None]]:
     """SPARKS_SQL rows (k, p, direction, hour, avg best_edge) -> {key: SPARK_HOURS hourly ¢ points from `start`}.
-    A stock-perp row has p = '' and d = 'stock_perp', and takes its reference symbol from `refs` {perp: reference
-    symbol}, so its key is bundle.stock_key's."""
+    A stock-perp row has p = '' and d = 'stock_perp'; its key is bundle.stock_key's."""
     out: dict[str, list[float | None]] = {}
     for k, p, d, h, avg in rows:
-        p = p or (refs or {}).get(k, k)
         i = int((_utc(h) - start) / timedelta(hours=1))
         if 0 <= i < bundle.SPARK_HOURS and avg is not None and math.isfinite(avg):
-            out.setdefault(pair_key(k, p, d), [None] * bundle.SPARK_HOURS)[i] = round(100 * avg, 4)
+            out.setdefault(bundle.stock_key(k) if d == "stock_perp" else pair_key(k, p, d), [None] * bundle.SPARK_HOURS)[i] = round(100 * avg, 4)
     return out
 
 
@@ -418,8 +408,7 @@ def load_context(conn, ch, now: datetime) -> dict:
 
     start = _hour(now) - timedelta(hours=bundle.SPARK_HOURS - 1)
     ex = excluded()
-    sparks = spark_series(ch.query(SPARKS_SQL, parameters={"start": start, "ex": ex}).result_rows, start,
-                          stock_refs() if config.DASHBOARD_SHOW_STOCK_PERPS else None)
+    sparks = spark_series(ch.query(SPARKS_SQL, parameters={"start": start, "ex": ex}).result_rows, start)
     scope = {(k, p): {"exact": rel == "exact", "bad_review": bad}
              for k, p, rel, bad, _closed in conn.execute(SCOPE_SQL, {"pv": PROMPT_VERSION}).fetchall()}
     episodes = [Episode(key=pair_key(r["kalshi_id"], r["pm_id"], r["direction"]), start=r["start_ts"],
@@ -578,7 +567,8 @@ def stock_perp_inputs(ch, conn, labels: dict, ex: list[str] = ()) -> dict:
     names, snapshots, first = q(SP_COUNTS_SQL)[0]
     share, share_hours = q(SP_SHARE_SQL)[0]
     by_name = [{"symbol": sym, "name": hyperliquid.label_or_none(sym, labels).name, "max_net_bps": mx,
-                "hours_ge_10": int(hours)} for sym, mx, hours in q(SP_BY_NAME_SQL)]
+                "hours_ge_10": int(hours)} for sym, mx, hours in q(SP_BY_NAME_SQL)
+               if hyperliquid.label_or_none(sym, labels).kind != "pre_ipo"]
     return {"hourly": [(_utc(h), v) for h, v in q(SP_HOURLY_SQL)], "names": int(names),
             "snapshots": int(snapshots), "window_start": _utc(first) if snapshots else None,
             "episodes": conn.execute(SP_EPISODES_ALL_SQL, p).fetchone()[0],

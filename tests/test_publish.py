@@ -432,7 +432,7 @@ def test_episodes_sql_and_scope_exclude_stock_perp():
 def test_spark_series_maps_stock_perp_rows_to_the_bundle_key():
     start = datetime(2026, 10, 19, 16, tzinfo=UTC)
     rows = [("xyz:NVDA", "", "stock_perp", start, 0.008432)]
-    s = publish.spark_series(rows, start, refs={"xyz:NVDA": "NVDA"})["xyz:NVDA~NVDA~stock_perp"]
+    s = publish.spark_series(rows, start)["xyz:NVDA~stock_perp"]
     assert s[0] == pytest.approx(0.8432)  # SPARKS_SQL emits net_bps / 1e4; x100 -> net_bps / 100 (¢ of the net)
     assert "stock_perp_edges" in publish.SPARKS_SQL and "max(net_bps)" in publish.SPARKS_SQL
     stock_leg = publish.SPARKS_SQL.split("stock_perp_edges")[1]
@@ -443,8 +443,7 @@ def test_spark_series_maps_stock_perp_rows_to_the_bundle_key():
 def test_history_table_has_basis_columns_null_for_pairs():
     t, edge_rows, ladder_rows, books = _history_fixture()
     stock = [(t, "xyz:NVDA", "short_perp_long_stock", 101.2, 84.3, 63864.0)]
-    tab = publish.history_table(edge_rows, ladder_rows, books, sides={("K1", "P1"): "yes"}, stock_rows=stock,
-                                refs={"xyz:NVDA": "NVDA"})
+    tab = publish.history_table(edge_rows, ladder_rows, books, sides={("K1", "P1"): "yes"}, stock_rows=stock)
     rows = tab.to_pylist()
     assert tab.schema.field("basis_bps").type == pa.float64() and tab.schema.field("net_bps").type == pa.float64()
     assert all(r["basis_bps"] is None and r["net_bps"] is None for r in rows[:-1])
@@ -697,3 +696,31 @@ def test_a_catalog_run_refreshes_before_the_period_is_up():
     stamp[0] = "run-2"  # the catalog landed: the next hour's ladders are listed
     publish.tick(state, r, NOW)
     assert calls["pairs"] == 2 and state["since_refresh"] == 1
+
+
+def test_history_table_keys_stock_rows_on_the_perp():
+    tbl = publish.history_table([], [], {}, None, stock_rows=[(NOW, "xyz:NVDA", "short_perp_long_stock", 12.0, 11.0, 500.0)])
+    assert tbl.column("key").to_pylist() == ["xyz:NVDA~stock_perp"]
+
+
+def test_spark_series_keys_stock_rows_on_the_perp():
+    rows = [("xyz:NVDA", "", "stock_perp", NOW, 0.0011)]
+    assert set(publish.spark_series(rows, NOW)) == {"xyz:NVDA~stock_perp"}
+
+
+def test_stock_refs_is_gone():
+    assert not hasattr(publish, "stock_refs")
+
+
+def test_stock_perp_inputs_names_exclude_pre_ipo_labels():
+    from venue_arb.sources.hyperliquid import Label
+
+    rows = {publish.SP_COUNTS_SQL: [(1, 3, NOW)], publish.SP_SHARE_SQL: [(0.4, 2)], publish.SP_HOURLY_SQL: [],
+            publish.SP_BY_NAME_SQL: [("xyz:NVDA", 25.0, 2), ("xyz:ANT", 5.0, 1)], publish.SP_EDGES_SQL: []}
+    ch = SimpleNamespace(query=lambda sql, parameters=None: SimpleNamespace(result_rows=rows[sql]))
+    cur = SimpleNamespace(fetchone=lambda: (0,), fetchall=list, description=[])
+    conn = SimpleNamespace(execute=lambda sql, params=None: cur)
+    labels = {"xyz:NVDA": Label("xyz:NVDA", "schwab", "NVDA", "NASDAQ", "USD", "NVIDIA"),
+              "xyz:ANT": Label("xyz:ANT", "none", None, "", "USD", "Anthropic (pre-IPO)", "pre_ipo")}
+    out = publish.stock_perp_inputs(ch, conn, labels, [])
+    assert [n["symbol"] for n in out["by_name"]] == ["xyz:NVDA"]

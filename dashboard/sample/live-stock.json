@@ -51,6 +51,7 @@
   "categories": {
     "crypto_price": "Crypto",
     "fed_macro": "Fed & macro",
+    "pre_ipo": "Pre-IPO",
     "stock_perps": "Stock perps",
     "weather": "Weather"
   },
@@ -90,7 +91,7 @@
     "screened_share_ge_1c": 0.004,
     "stock_perps": {
       "episodes_7d": 2,
-      "names_live": 3
+      "names_live": 4
     },
     "violations": 0
   },
@@ -1362,7 +1363,7 @@
       "fees_cents": 0.018,
       "funding_bps_h": 0.1,
       "hold_hours": 24,
-      "key": "xyz:NVDA~NVDA~stock_perp",
+      "key": "xyz:NVDA~stock_perp",
       "kind": "stock_perp",
       "ladder": null,
       "legs": [
@@ -1481,7 +1482,7 @@
       "fees_cents": 0.018,
       "funding_bps_h": 0.1,
       "hold_hours": 24,
-      "key": "xyz:TSLA~TSLA~stock_perp",
+      "key": "xyz:TSLA~stock_perp",
       "kind": "stock_perp",
       "ladder": null,
       "legs": [
@@ -1596,7 +1597,7 @@
       "fees_cents": null,
       "funding_bps_h": 0.1,
       "hold_hours": 24,
-      "key": "xyz:SKHX~xyz:SKHX~stock_perp",
+      "key": "xyz:SKHX~stock_perp",
       "kind": "stock_perp",
       "ladder": null,
       "legs": [
@@ -1707,7 +1708,7 @@
       "fees_cents": null,
       "funding_bps_h": 0.1,
       "hold_hours": 24,
-      "key": "xyz:MSFT~MSFT~stock_perp",
+      "key": "xyz:MSFT~stock_perp",
       "kind": "stock_perp",
       "ladder": null,
       "legs": [
@@ -1796,6 +1797,109 @@
           }
         ],
         "label": "Stale · a leg has no snapshot in 5 min"
+      }
+    },
+    {
+      "basis_bps": null,
+      "books": null,
+      "capacity_contracts": 0.0,
+      "capacity_usd": 0.0,
+      "category": "pre_ipo",
+      "costs": null,
+      "direction": "",
+      "fee_params": {},
+      "fees_cents": null,
+      "funding_bps_h": 0.1,
+      "hold_hours": null,
+      "key": "xyz:PREIPO~stock_perp",
+      "kind": "stock_perp",
+      "ladder": null,
+      "legs": [
+        {
+          "market_id": "xyz:PREIPO",
+          "settlement_source": null,
+          "side": "",
+          "snapshot_at": "2026-10-20T15:29:20Z",
+          "title": "xyz:PREIPO",
+          "url": "https://app.hyperliquid.xyz/trade/xyz:PREIPO",
+          "venue": "hyperliquid"
+        },
+        {
+          "market_id": "xyz:PREIPO",
+          "settlement_source": null,
+          "side": "",
+          "snapshot_at": null,
+          "title": "Invented Co (pre-IPO)",
+          "url": null,
+          "venue": "pre_ipo"
+        }
+      ],
+      "live": true,
+      "net_bps": null,
+      "net_edge_bps": null,
+      "net_edge_cents": null,
+      "net_edge_roi": null,
+      "next_funding_at": "2026-10-20T16:00:00Z",
+      "reference": {
+        "asof": "2026-10-20T15:29:20+00:00",
+        "kind": "none",
+        "state": "pre_ipo"
+      },
+      "sensitivity": null,
+      "settles_at": null,
+      "spark": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "title": "Invented Co (pre-IPO)",
+      "trade": "perp only",
+      "us_executable": false,
+      "verdict": {
+        "checks": [
+          {
+            "detail": "no listed share",
+            "name": "reference",
+            "status": "partial"
+          },
+          {
+            "detail": "not scored: pre-IPO",
+            "name": "fees_carry",
+            "status": "partial"
+          },
+          {
+            "detail": "not scored: pre-IPO",
+            "name": "fees_depth",
+            "status": "partial"
+          },
+          {
+            "detail": "anywhere: perp leg open · US: Hyperliquid blocks US traders",
+            "name": "jurisdiction",
+            "status": "partial"
+          }
+        ],
+        "label": "Pre-IPO · no listed market"
       }
     }
   ],

@@ -227,7 +227,7 @@ def research_section():
 
 
 def stock_inputs():
-    """Four invented stock perps through stock_perp_rows (oracle mode): NVDA oracle basis (mark 213.4 vs oracle 212.8),
+    """Four invented stock perps and one pre-IPO name through stock_perp_rows (oracle mode): NVDA oracle basis (mark 213.4 vs oracle 212.8),
     TSLA inside perp costs (book on the mark), SKHX oracle internal (Korean exchange closed), MSFT stale (snapshot
     12 min old)."""
     def book(mid, step, size):
@@ -238,12 +238,15 @@ def stock_inputs():
     tsla = PerpCtx("xyz:TSLA", 250.4, 250.38, 250.4, 0.00001, 0.0001, 1e6, 4e6, True, 10)
     skhx = PerpCtx("xyz:SKHX", 180000.0, 179800.0, 180000.0, 0.00001, 0.0002, 5e5, 1e6, False, 5)
     msft = PerpCtx("xyz:MSFT", 420.0, 420.0, 420.0, 0.00001, 0.0001, 1e6, 3e6, True, 10)
+    ipo = PerpCtx("xyz:PREIPO", 95.0, 95.0, 95.0, 0.00001, 0.0001, 1e6, 2e6, True, 3)
     return [
         (nvda, Label("xyz:NVDA", "schwab", "NVDA", "NASDAQ", "USD", "NVIDIA"), (snap, book(213.4, 0.2, 100.0))),
         (tsla, Label("xyz:TSLA", "schwab", "TSLA", "NASDAQ", "USD", "Tesla"), (snap, book(250.4, 0.1, 100.0))),
         (skhx, Label("xyz:SKHX", "none", None, "KRX", "KRW", "SK hynix"), (snap, book(180000.0, 100.0, 20.0))),
         (msft, Label("xyz:MSFT", "schwab", "MSFT", "NASDAQ", "USD", "Microsoft"),  # collector behind: the stale row
-         (NOW - timedelta(minutes=12), book(420.0, 0.2, 100.0)))]
+         (NOW - timedelta(minutes=12), book(420.0, 0.2, 100.0))),
+        (ipo, Label("xyz:PREIPO", "none", None, "", "USD", "Invented Co (pre-IPO)", "pre_ipo"),  # listed, never scored
+         (snap, book(95.0, 0.1, 100.0)))]
 
 
 def stock_block():
