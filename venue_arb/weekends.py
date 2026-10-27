@@ -52,7 +52,9 @@ def weekend_row(symbol: str, friday: date, marks: list[tuple[datetime, float]], 
     for key, (_, t) in SAMPLES.items():
         row["p_" + key] = sample(marks, at(friday + timedelta(days=OFFSET[key]), t), tol)
     monday = friday + timedelta(days=3)
-    if label.exchange == "KRX":  # no US stock to compare: the first oracle print once Seoul opens
+    if label.kind == "pre_ipo":  # no listed reference at all
+        row["ref_kind"] = "none"
+    elif label.exchange == "KRX":  # no US stock to compare: the first oracle print once Seoul opens
         row["p_open_pre"] = first_between(refs, at(monday, OPEN_KRX, KST), at(monday, CLOSE_KRX, KST))
         row["ref_kind"] = "oracle_krx"
     elif label.exchange.strip().upper() in _US:

@@ -46,7 +46,7 @@ def compare(ctx_rows: list[dict], ref_rows: list[dict], labels: dict[str, Label]
         sym, ts = r["symbol"], r["ts"]
         label = labels.get(sym)
         orc = oracle.get((sym, ts))
-        if (label is None or label.exchange.strip().upper() not in sessions._US or orc is None
+        if (label is None or label.kind == "pre_ipo" or label.exchange.strip().upper() not in sessions._US or orc is None
                 or not sessions.external(label, ts) or not fresh(ts, r["quote_time"]) or not 0 < r["bid"] <= r["ask"]):
             continue
         mid = (r["bid"] + r["ask"]) / 2

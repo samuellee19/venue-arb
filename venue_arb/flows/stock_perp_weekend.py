@@ -57,7 +57,7 @@ def stock_perp_weekend_flow(end: datetime | None = None, pipeline: str = PIPELIN
         with db.pg() as conn:
             done = set(conn.execute(DONE_SQL, {"lo": fridays[0]}).fetchall()) if fridays else set()
         for friday in fridays:
-            todo = [s for s in labels if (s, friday) not in done]
+            todo = [s for s in labels if labels[s].kind != "pre_ipo" and (s, friday) not in done]
             if not todo:
                 continue
             fri = weekends.at(friday, weekends.SAMPLES["fri"][1])

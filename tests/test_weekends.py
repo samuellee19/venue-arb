@@ -169,3 +169,15 @@ def test_holiday_monday_keeps_only_external_oracle_prints():
     row = wk.weekend_row("xyz:NVDA", fri, MARKS, refs, LABEL_SCHWAB)
     assert row["p_open_reg"] is None and row["p_open_pre"] is None and row["ref_kind"] == "oracle_us"
     assert wk.contained(row) is None
+
+
+def test_pre_ipo_label_gets_no_opens_and_ref_kind_none():
+    ant = Label("xyz:ANT", "none", None, "", "USD", "Anthropic (pre-IPO)", "pre_ipo")
+    row = wk.weekend_row("xyz:ANT", FRI, MARKS, REFS, ant)
+    assert row["ref_kind"] == "none" and row["p_open_pre"] is None and row["p_open_reg"] is None
+
+
+def test_weekend_flow_skips_pre_ipo_symbols():
+    from pathlib import Path
+    text = Path("venue_arb/flows/stock_perp_weekend.py").read_text()
+    assert 'kind != "pre_ipo"' in text  # the flow imports the platform stack; pin the filter in source

@@ -124,3 +124,9 @@ def test_oracle_check_table_keys_on_segment():
     (path,) = Path("db/migrations/ch").glob("010_*.sql")
     sql = path.read_text()
     assert "ADD COLUMN segment" in sql and "MODIFY ORDER BY (symbol, day, segment)" in sql
+
+
+def test_compare_skips_pre_ipo_labels_even_with_a_us_exchange():
+    ant = Label("xyz:ANT", "none", None, "NASDAQ", "USD", "Anthropic (pre-IPO)", "pre_ipo")  # unreachable via the CSV
+    ticks = [tick(0, sym="xyz:ANT")]
+    assert v.compare([c for c, _ in ticks], [r for _, r in ticks], {"xyz:ANT": ant}) == []
