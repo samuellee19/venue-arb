@@ -301,7 +301,10 @@ personal-use terms, Pyth display terms).
 - Oracle-mode episodes in `stock_perp_window` carry `pm_id = 'oracle'` (`ORACLE_PM_ID`) and `source =
   'stock_perp_oracle'`; the private two-leg tier keeps `source = 'stock_perp'`.
 - Exclusion is manual only: a name leaves the public page when someone adds it to `labels/stock_perps_excluded.txt`
-  by hand with a neutral comment that does not cite Schwab. Nothing hides a name automatically. The file then means
+  by hand with a neutral comment that does not cite Schwab. Nothing hides a name automatically. The file is for
+  indices, commodities, FX and delisted names; pre-IPO names are labels of kind `pre_ipo` in `labels/stock_perps.csv`
+  (`xyz:ANT`, `xyz:YMTC`, `xyz:JIO`), collected but never scored. SPCX, QNT and CBRS stay listed here until their
+  listing-day edit (README, Stock perps). The file then means
   "hidden from every public path": the publisher re-reads it and filters the name out of the live rows, sparklines,
   history Parquet, research block and episode counts (history hours already pushed keep the name until rewritten: with `DASHBOARD_SHOW_STOCK_PERPS` on, run `secrets uv run python -m venue_arb.publish history --hours 240` (the server keeps about 10 days of hour files; the run rewrites and pushes them); with the flag off the hour files hold no stock rows, so there is nothing to rewrite.). A name may be in both the labels CSV and the excluded file; its
   rows stay in the private tables. The collector (`collect_perps.run_forever`) skips excluded names, so an excluded

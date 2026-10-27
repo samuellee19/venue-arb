@@ -51,3 +51,8 @@ def test_readme_mentions_oracle_check():
     text = (ROOT / "README.md").read_text()
     assert "stock_perp_oracle_check" in text
     assert "data/private/" in text
+
+
+def test_readme_documents_the_listing_day_edit():
+    text = Path("README.md").read_text()
+    assert "kind" in text and "listing day" in text.lower() and "publish history --hours 240" in text

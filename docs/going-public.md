@@ -39,6 +39,8 @@ Before the repo's visibility changes (Sam's action, after every box is ticked). 
   must not cite Schwab. Nothing is hidden automatically. The publisher re-reads the file and drops the name from every
   public path (live rows, sparklines, history Parquet, research block, episode counts); the private tables keep it.
   Then, history hours already pushed keep the name until rewritten: with `DASHBOARD_SHOW_STOCK_PERPS` on, run `secrets uv run python -m venue_arb.publish history --hours 240` (the server keeps about 10 days of hour files; the run rewrites and pushes them); with the flag off the hour files hold no stock rows, so there is nothing to rewrite.
+- [x] **Pre-IPO rows are informational.** Names of kind `pre_ipo` show price and funding only: no cost table, no verdict
+  beyond "Pre-IPO · no listed market", nothing from the private reference quotes.
 - [x] **`DASHBOARD_SHOW_STOCK_PERPS`** turned on 2026-10-25 by Sam after the first session's regular-hours check (oracle within
   about 10 bps p95 of the consolidated market for the typical name); originally meant to stay `False` until the first week of oracle-check reports is read and the
   rewritten `copy.METHOD["stock_perps"]` is reviewed on the rendered page.

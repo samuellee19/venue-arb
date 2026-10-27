@@ -211,6 +211,40 @@ Turning the category on, only after the first week of oracle-check reports (`doc
 3. Sam reviews `copy.METHOD["stock_perps"]` and `copy.HEADLINE["stock_perps"]` on the rendered page. Wording fixes go in
    `venue_arb/report/copy.py` only.
 
+#### Label kinds and pre-IPO names
+
+`labels/stock_perps.csv` has a `kind` column, `equity` or `pre_ipo`. An `equity` row needs an `exchange`. A `pre_ipo`
+row has `ref_kind none`, no `ref_symbol` and no `exchange`. `load_labels` rejects anything else. Pre-IPO rows are
+collected every tick but never scored, and they stay out of the weekend tier, the oracle check and the research counts.
+The page shows them under the "Pre-IPO" Scanner chip with the verdict "Pre-IPO · no listed market", and the Explorer
+shows a one-line note instead of a cost table. Today `xyz:ANT`, `xyz:YMTC` and `xyz:JIO` are `pre_ipo`.
+`labels/stock_perps_excluded.txt` is now for indices, commodities, FX and names hidden by hand, not for pre-IPO names.
+It still holds `xyz:SPCX` (listed 2026-06-12), `xyz:QNT` (2026-06-04) and `xyz:CBRS` (2026-05-14), which listed on
+Nasdaq: they are the first three candidates for the listing-day edit below, and Sam supplies their tickers.
+
+Listing day, per name:
+
+1. Edit the row in `labels/stock_perps.csv`: `kind` to `equity`, `ref_kind` to `schwab` for a US listing or `none`
+   elsewhere, then `ref_symbol`, `exchange` and `currency`. For SPCX, QNT and CBRS also delete the line from
+   `labels/stock_perps_excluded.txt`. One commit through the usual CI path, fast-forward `main`. No restart: the
+   collector reloads labels every ten ticks, and the publisher and every flow read them per run.
+2. From the next collector tick the Schwab quote flows (a US name). From the next external-session tick the row is
+   scored. The weekend tier and the oracle check include it from their next runs.
+3. The row keeps its key. Its sparkline and history begin on listing day; the pre-IPO stretch has no public rows.
+
+Deploying the `kind` change (stock-perp pair keys went from `{perp}~{stock}~stock_perp` to `{perp}~stock_perp`, and
+`Leg.side` now admits `""`):
+
+1. **Update the VM's server tree first** (`deploy/server/README.md`, Update section). This is mandatory: the server
+   validates bundles with `extra="forbid"` models, so if the publisher restarts before the VM is updated, the page
+   freezes on a rejected bundle.
+2. On the OptiPlex, fast-forward `main`, then `uv sync`.
+3. `systemctl --user restart venue-arb-publish`.
+4. `secrets uv run python -m venue_arb.publish history --hours 240`. It rewrites the pushed history Parquet under the
+   new keys; the server keeps about ten days of hour files, so 240 hours covers all of them. Without it the Explorer's
+   history lookups miss for every stock perp.
+5. Check `/api/live`: `categories` contains `"pre_ipo"` and no stock key has three parts.
+
 ### Dashboard publisher
 
 `venue-arb-publish` (`python -m venue_arb.publish`) writes `live.json` every 60 s and one history Parquet per clock
