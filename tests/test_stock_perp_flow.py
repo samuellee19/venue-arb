@@ -193,3 +193,8 @@ def test_pre_ipo_names_are_never_scored_even_with_a_stray_quote():
     refs = [dict(ref("xyz:ANT", t, 114.0, 114.2), ref_symbol="ANT") for t in TICKS]  # a buffered quote from an old label
     rows, eps, st = score_window(ctxs, books, refs, {"xyz:ANT": ant}, start=START, end=END)
     assert rows == [] and eps == [] and st["symbols_pre_ipo"] == 1 and st["snapshots"] == len(TICKS)
+
+
+def test_flow_skips_pre_ipo_before_the_no_books_warning():
+    text = Path("venue_arb/flows/stock_perp_score.py").read_text()
+    assert 0 < text.index('st["symbols_pre_ipo"]') < text.index("no book rows")

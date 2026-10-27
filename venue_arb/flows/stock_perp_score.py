@@ -80,6 +80,8 @@ def stock_perp_score_flow(window_hours: int = WINDOW_HOURS, end: datetime | None
                                          _dicts(ch.query(REFS_SQL, parameters=p)), labels, start=start, end=end)
             for key, v in st.items():
                 stats[key] += v
+            if not rows and st["symbols_pre_ipo"]:  # a pre-IPO name is skipped on purpose, not a collector fault
+                continue
             if not rows:  # contexts without any book rows: the collector's books-fresh check owns that; go on
                 stats["symbols_no_books"] += 1
                 log.warning("%s: %d contexts, no book rows in the window", symbol, st["snapshots"])
