@@ -30,3 +30,7 @@ def test_version_changes_on_rules_edit():
 
 def test_display_covers_every_category():
     assert set(CATEGORIES) <= set(DISPLAY) and all(DISPLAY[c] for c in CATEGORIES)
+
+
+def test_display_names_pre_ipo():
+    assert DISPLAY["pre_ipo"] == "Pre-IPO"

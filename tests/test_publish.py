@@ -449,7 +449,7 @@ def test_history_table_has_basis_columns_null_for_pairs():
     assert tab.schema.field("basis_bps").type == pa.float64() and tab.schema.field("net_bps").type == pa.float64()
     assert all(r["basis_bps"] is None and r["net_bps"] is None for r in rows[:-1])
     sp = rows[-1]
-    assert (sp["key"], sp["kind"], sp["direction"]) == ("xyz:NVDA~NVDA~stock_perp", "stock_perp",
+    assert (sp["key"], sp["kind"], sp["direction"]) == ("xyz:NVDA~stock_perp", "stock_perp",
                                                         "short_perp_long_stock")
     assert (sp["basis_bps"], sp["net_bps"], sp["capacity_usd"]) == (101.2, 84.3, 63864.0)
     assert sp["net_edge_cents"] == pytest.approx(0.843) and sp["k_ask"] is None and sp["fees_cents"] is None
@@ -468,7 +468,7 @@ def test_write_history_hour_reads_stock_perp_edges_only_while_flag_on(tmp_path, 
     assert pq.read_table(publish.write_history_hour(ch, tmp_path, hour)).num_rows == 0
     monkeypatch.setattr(config, "DASHBOARD_SHOW_STOCK_PERPS", True)
     [row] = pq.read_table(publish.write_history_hour(ch, tmp_path, hour)).to_pylist()
-    assert row["key"] == "xyz:NVDA~NVDA~stock_perp" and row["net_bps"] == 84.3  # labels/stock_perps.csv
+    assert row["key"] == "xyz:NVDA~stock_perp" and row["net_bps"] == 84.3  # labels/stock_perps.csv
 
 
 def _stock_inputs():

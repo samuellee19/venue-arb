@@ -285,7 +285,7 @@ def history_table(edge_rows, ladder_rows, books, sides: dict | None = None, stoc
             cols[c].append(v)
     refs = refs or {}
     for ts, sym, d, basis, net, cap in stock_rows:
-        for c, v in (("ts", _utc(ts)), ("key", bundle.stock_key(sym, refs.get(sym, sym))), ("kind", "stock_perp"),
+        for c, v in (("ts", _utc(ts)), ("key", bundle.stock_key(sym)), ("kind", "stock_perp"),
                      ("direction", d), ("net_edge_cents", None if net is None else net / 100), ("capacity_usd", cap),
                      ("k_ask", None), ("k_size", None), ("pm_ask", None), ("pm_size", None), ("fees_cents", None),
                      ("basis_bps", basis), ("net_bps", net)):

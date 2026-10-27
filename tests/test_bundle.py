@@ -21,6 +21,7 @@ from venue_arb.bundle import (
     ladder_pair_rows,
     market_url,
     roi,
+    stock_key,
     stock_perp_rows,
     verdict,
 )
@@ -212,7 +213,7 @@ def test_pairs_live_counts_pairs_not_directions():
 def test_categories_from_taxonomy_display():
     b = _live(_ex(), _lad())
     assert b.categories == {"fed_macro": "Fed & macro", "crypto_price": "Crypto", "weather": "Weather",
-                            "stock_perps": "Stock perps"}
+                            "stock_perps": "Stock perps", "pre_ipo": "Pre-IPO"}
     odd = [r.model_copy(update={"category": "sports"}) for r in _ex()]
     assert _live(odd, []).categories["sports"] == "sports"  # an unknown slug still renders
 
@@ -252,7 +253,7 @@ SAT = datetime.fromisoformat("2026-10-24T15:00:00+00:00")  # Saturday: the oracl
 def test_stock_perp_row_oracle_basis():
     [p] = stock_perp_rows([(CTXB, LABEL_NVDA, SP_SNAP)], {}, SP_NOW)
     assert p.kind == "stock_perp" and p.category == "stock_perps" and p.settles_at is None and p.books is None
-    assert p.key == "xyz:NVDA~NVDA~stock_perp" and p.title == "NVIDIA (NASDAQ)" and p.live
+    assert p.key == "xyz:NVDA~stock_perp" and p.title == "NVIDIA (NASDAQ)" and p.live
     assert p.direction == "short_perp_long_stock" and p.hold_hours == 24
     assert p.trade == "short xyz:NVDA / long NVDA"
     assert p.reference == {"kind": "oracle", "state": "external", "asof": SP_SNAP[0].isoformat()}
@@ -312,12 +313,33 @@ def test_stock_perp_row_stale():
 
 def test_stock_perp_row_label_none_and_spark():
     lab = Label("xyz:FOO", "none", None, "KRX", "KRW", "Foo Corp")
-    [p] = stock_perp_rows([(replace(CTX215, symbol="xyz:FOO"), lab, SP_SNAP)], {"xyz:FOO~xyz:FOO~stock_perp": [1.0] * 24}, SP_NOW)
-    assert p.key == "xyz:FOO~xyz:FOO~stock_perp" and p.title == "Foo Corp (KRX)" and p.spark == [1.0] * 24
+    [p] = stock_perp_rows([(replace(CTX215, symbol="xyz:FOO"), lab, SP_SNAP)], {"xyz:FOO~stock_perp": [1.0] * 24}, SP_NOW)
+    assert p.key == "xyz:FOO~stock_perp" and p.title == "Foo Corp (KRX)" and p.spark == [1.0] * 24
     assert p.trade == "short xyz:FOO / long Foo Corp (KRX)"  # no stock symbol: the name, never the perp symbol twice
     bare = Label("xyz:BAR", "none", None, "", "USD", "Bar")
     [p] = stock_perp_rows([(replace(CTX215, symbol="xyz:BAR"), bare, SP_SNAP)], {}, SP_NOW)
     assert p.trade == "short xyz:BAR / long Bar"
+
+
+def test_stock_key_is_the_perp_alone():
+    assert stock_key("xyz:NVDA") == "xyz:NVDA~stock_perp"
+
+
+def test_equity_rows_key_on_the_perp_even_with_a_reference_symbol():
+    [p] = stock_perp_rows([(CTX215, LABEL_NVDA, SP_SNAP)], {}, SP_NOW)
+    assert p.key == "xyz:NVDA~stock_perp" and p.legs[1].market_id == "NVDA"
+
+
+def test_pre_ipo_row_is_informational():
+    ant = Label("xyz:ANT", "none", None, "", "USD", "Anthropic (pre-IPO)", "pre_ipo")
+    [p] = stock_perp_rows([(replace(CTX215, symbol="xyz:ANT"), ant, SP_SNAP)], {}, SP_NOW)
+    assert p.category == "pre_ipo" and p.kind == "stock_perp" and p.key == "xyz:ANT~stock_perp"
+    assert p.verdict.label == "Pre-IPO · no listed market"
+    assert p.trade == "perp only" and p.reference == {"kind": "none", "state": "pre_ipo", "asof": SP_SNAP[0].isoformat()}
+    assert p.net_bps is None and p.net_edge_cents is None and p.basis_bps is None and p.capacity_usd == 0.0
+    assert p.costs is None and p.sensitivity is None and p.funding_bps_h is not None
+    assert [c.status for c in p.verdict.checks[:3]] == ["partial", "partial", "partial"]
+    assert p.legs[1].venue == "pre_ipo" and p.legs[1].title == "Anthropic (pre-IPO)"
 
 
 def test_build_live_stock_perps_kpi_and_best_edge_ignores_them():
@@ -341,8 +363,8 @@ def test_old_live_json_without_new_fields_still_validates():  # live_v2.json: th
 
 def test_stock_perp_key_ignores_direction():  # a basis sign flip keeps the row's identity, sparks and history
     long_p = stock_perp_rows([(replace(CTX215, mark=210.0), LABEL_NVDA, SP_SNAP)], {}, SP_NOW)[0]
-    [short_p] = stock_perp_rows([(CTX215, LABEL_NVDA, SP_SNAP)], {"xyz:NVDA~NVDA~stock_perp": [2.0] * 24}, SP_NOW)
-    assert long_p.direction != short_p.direction and long_p.key == short_p.key == "xyz:NVDA~NVDA~stock_perp"
+    [short_p] = stock_perp_rows([(CTX215, LABEL_NVDA, SP_SNAP)], {"xyz:NVDA~stock_perp": [2.0] * 24}, SP_NOW)
+    assert long_p.direction != short_p.direction and long_p.key == short_p.key == "xyz:NVDA~stock_perp"
     assert short_p.spark == [2.0] * 24
 
 

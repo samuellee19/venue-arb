@@ -23,7 +23,7 @@ from venue_arb.sources.hyperliquid import Label, PerpCtx, PerpLevel
 from venue_arb.stock_perps import StockPerpEdge
 
 LIVE_MAX_AGE_S = 300  # a leg's latest snapshot older than this -> not live
-PAIR_KEY_SEP = "~"  # key = f"{k_id}~{pm_id}~{direction}"; a stock perp's: f"{perp}~{stock}~stock_perp" (stock_key)
+PAIR_KEY_SEP = "~"  # key = f"{k_id}~{pm_id}~{direction}"; a stock perp's: f"{perp}~stock_perp" (stock_key)
 MIN_CAPACITY_USD = 100.0  # the episode rule (episodes.find's default): executable = >= 1¢ net and >= $100
 SPARK_HOURS = 24
 US = US_EXECUTABLE["kalshi"] and US_EXECUTABLE["polymarket"]
@@ -38,7 +38,7 @@ class _M(BaseModel):
 class Leg(_M):
     venue: str
     market_id: str
-    side: Literal["yes", "no", "long", "short"]
+    side: Literal["yes", "no", "long", "short", ""]  # "" = no trade on this leg (pre-IPO)
     title: str
     url: str | None  # None: no page to link (the stock leg of a stock perp)
     settlement_source: str | None
@@ -223,9 +223,10 @@ def pair_key(k_id: str, pm_id: str, direction: str) -> str:
     return PAIR_KEY_SEP.join((k_id, pm_id, direction))
 
 
-def stock_key(perp: str, stock: str) -> str:
-    """A stock-perp row's key: the direction is a field, not identity, so a basis sign flip keeps the row's history."""
-    return pair_key(perp, stock, "stock_perp")
+def stock_key(perp: str) -> str:
+    """A stock-perp row's key: the perp alone (direction and reference symbol are fields, not identity), so a basis
+    sign flip or a relabel keeps the row's history."""
+    return f"{perp}{PAIR_KEY_SEP}stock_perp"
 
 
 def market_url(venue: str, listing: dict) -> str:
@@ -387,12 +388,19 @@ def _rank(edge: Edge | None) -> float:
     return edge.best_edge if edge and edge.best_edge is not None else float("-inf")
 
 
-def stock_perp_verdict(edge: StockPerpEdge, state: str, live: bool, now: datetime, *, has_book: bool = True,
+def stock_perp_verdict(edge: StockPerpEdge | None, state: str, live: bool, now: datetime, *, has_book: bool = True,
                        asof: datetime | None = None) -> Verdict:
     """The public stock-perp verdict: checks reference, fees_carry, fees_depth, jurisdiction. The basis is the perp
     mark against the venue oracle; `now` is the publisher's tick and `asof` the snapshot's (the oracle's age).
     `state` internal (the oracle follows the perp) is never an edge. `has_book` False (the perp book fetch failed):
-    "No asks on one side", as the pair tiers word a missing side."""
+    "No asks on one side", as the pair tiers word a missing side. `state` pre_ipo (no listed share): `edge` is None."""
+    if state == "pre_ipo":
+        return Verdict(label="Pre-IPO · no listed market", checks=[
+            Check(name="reference", status="partial", detail="no listed share"),
+            Check(name="fees_carry", status="partial", detail="not scored: pre-IPO"),
+            Check(name="fees_depth", status="partial", detail="not scored: pre-IPO"),
+            Check(name="jurisdiction", status="partial",
+                  detail="anywhere: perp leg open · US: Hyperliquid blocks US traders")])
     internal = state == "internal"
     nobook = live and not has_book
     ok = live and edge.net_bps >= config.STOCK_PERP_MIN_NET_BPS and edge.capacity_usd >= MIN_CAPACITY_USD
@@ -437,14 +445,32 @@ def stock_perp_rows(perps: list[tuple[PerpCtx, Label, SnapPerp]], sparks: dict, 
     rows = []
     for ctx, label, (ts, levels) in perps:
         state = sessions.state(label, ts)
-        edge = stock_perps.score(ctx, levels, stock_perps.reference(ctx, None, label, ts), mode="oracle", session=state)
         live = now - ts <= timedelta(seconds=LIVE_MAX_AGE_S)
+        if label.kind == "pre_ipo":  # no listed share: an informational row, never scored
+            sym = ctx.symbol
+            rows.append(Pair(
+                key=stock_key(sym), kind="stock_perp", category="pre_ipo", title=label.name, settles_at=None,
+                ladder=None,
+                legs=[Leg(venue="hyperliquid", market_id=sym, side="", title=sym,
+                          url=f"https://app.hyperliquid.xyz/trade/{sym}", settlement_source=None, snapshot_at=ts),
+                      Leg(venue="pre_ipo", market_id=sym, side="", title=label.name, url=None,
+                          settlement_source=None, snapshot_at=None)],
+                direction="", live=live, net_edge_cents=None, net_edge_bps=None, net_edge_roi=None,
+                fees_cents=None, capacity_contracts=0.0, capacity_usd=0.0, books=None,
+                verdict=stock_perp_verdict(None, state, live, now, has_book=bool(levels), asof=ts),
+                us_executable=False, fee_params={}, spark=sparks.get(stock_key(sym), [None] * SPARK_HOURS),
+                basis_bps=None, net_bps=None, funding_bps_h=ctx.funding_h * 1e4,
+                next_funding_at=now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1),
+                reference={"kind": "none", "state": "pre_ipo", "asof": ts.isoformat()},
+                trade="perp only", hold_hours=None, costs=None, sensitivity=None))
+            continue
+        edge = stock_perps.score(ctx, levels, stock_perps.reference(ctx, None, label, ts), mode="oracle", session=state)
         sym, stock = ctx.symbol, label.ref_symbol or ctx.symbol
         title = f"{label.name} ({label.exchange})" if label.exchange else label.name
         stock_leg = label.ref_symbol or title  # the trade line names the stock; the key keeps the perp symbol as before
         short_perp = edge.direction == "short_perp_long_stock"
         perp_side, stock_side = ("short", "long") if short_perp else ("long", "short")
-        key = stock_key(sym, stock)
+        key = stock_key(sym)
         scored = live and state != "internal"  # an internal oracle follows the perp: published unscored, like stale
         net = round(edge.net_bps, 4) if scored else None
         taker = HYPERLIQUID_TAKER["growth" if ctx.growth_mode else "standard"]
