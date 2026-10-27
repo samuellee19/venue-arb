@@ -528,7 +528,7 @@ def build_live(*, now: datetime, exact_rows: list[Pair], ladder_rows: list[Pair]
         **{f: kpi_inputs.get(f) for f in ("checks_window", "admissible_checks", "violations",
                                           "screened_share_ge_1c", "screened_hours")},
         stock_perps=None if stock_rows is None else {
-            "names_live": sum(p.live for p in stock_rows),
+            "names_live": sum(p.live and p.category != "pre_ipo" for p in stock_rows),
             "episodes_7d": kpi_inputs.get("stock_perps", {}).get("episodes_7d", 0)})
     return LiveBundle(computed_at=now, collector_last_snapshot_at=collector_last,
                       show_books=config.DASHBOARD_SHOW_BOOKS, basis=basis, kpis=kpis, pairs=pairs,

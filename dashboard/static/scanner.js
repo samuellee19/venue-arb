@@ -1,12 +1,12 @@
 // Scanner tab: one row per market pair (its better direction), sortable, filtered by category chip.
 import {$, esc, num, usd, signed, bpsOf, tone, day, hm, now, seg, legsTxt, label, usBlocked, S, US_BANNER, EXEC, VERDICT_TONES,
-  EXAMPLE, FOOT, FOOT_CHECKS, FOOT_NO_HOUR, FOOT_STOCK, NOT_ADVICE, NO_BPS} from "./common.js";
+  EXAMPLE, FOOT, FOOT_CHECKS, FOOT_NO_HOUR, FOOT_STOCK, FOOT_PRE_IPO, NOT_ADVICE, NO_BPS} from "./common.js";
 
 // numeric sort keys; nulls (stale, no asks, a perpetual's settlement) always sort last
 const KEYS = {edge: p => p.net_edge_cents, roi: p => p.net_edge_roi, cap: p => p.capacity_usd,
   settles: p => p.settles_at ? Date.parse(p.settles_at) : null};
 const STOCK_KEYS = {edge: p => p.net_bps, cap: p => p.capacity_usd, funding: p => p.funding_bps_h};  // the stock-perp header
-const keysFor = cat => cat === "stock_perps" ? STOCK_KEYS : KEYS;
+const keysFor = cat => cat === "stock_perps" || cat === "pre_ipo" ? STOCK_KEYS : KEYS;
 const isStock = p => p.kind === "stock_perp";
 const stale = p => p.net_edge_cents == null;
 const by = (f, dir) => (a, b) => {  // stale / no-asks rows last under every sort, then nulls of the key last
@@ -45,7 +45,7 @@ function when(iso) {
 
 // stock perps are quoted in bps: the unit switch cannot show them in ¢, so a ¢ setting shows the same bps (titled)
 const bps = (x, d = 0) => x == null ? "—" : signed(x, d, " bps");
-const ref = p => !p.reference ? "—" : p.reference.state === "internal" ? "oracle internal"
+const ref = p => !p.reference || p.reference.kind === "none" ? "—" : p.reference.state === "internal" ? "oracle internal"
   : `oracle${p.live ? ", live" : ", stale"} ${num(Math.round((Date.parse(S.bundle.computed_at) - Date.parse(p.reference.asof)) / 1000))}s`;
 
 function row(p) {
@@ -90,7 +90,7 @@ export function renderScanner() {
     .map(([c, name]) => `<button class="chip${c === S.cat ? " on" : ""}" data-c="${esc(c)}">${esc(name)} <span>${counts[c]}</span></button>`).join("");
   $("usban").hidden = !usBlocked();
   $("usban").textContent = US_BANNER;
-  const sp = S.cat === "stock_perps";  // only this category gets the stock-perp header; "All" keeps the pair header
+  const sp = S.cat === "stock_perps" || S.cat === "pre_ipo";  // only these categories get the stock-perp header; "All" keeps the pair header
   const head = document.querySelector("#scan thead"), want = sp ? STOCK_HEAD : PAIR_HEAD;
   if (head.dataset.t !== (sp ? "sp" : "pair")) { head.innerHTML = want; head.dataset.t = sp ? "sp" : "pair"; }
   const cBtn = $("unit").querySelector('[data-u="c"]');
@@ -103,7 +103,8 @@ export function renderScanner() {
     th.setAttribute("aria-sort", on ? ((S.sort?.dir ?? 1) > 0 ? "descending" : "ascending") : "none");
   }
   const n = rows.length;
-  $("sfoot").textContent = sp ? `${FOOT_STOCK.replace("{n} stock perps", n === 1 ? "1 stock perp" : `${num(n)} stock perps`)}. ${NOT_ADVICE}`
+  const [foot, pl, one] = S.cat === "pre_ipo" ? [FOOT_PRE_IPO, "pre-IPO perps", "1 pre-IPO perp"] : [FOOT_STOCK, "stock perps", "1 stock perp"];
+  $("sfoot").textContent = sp ? `${foot.replace(`{n} ${pl}`, n === 1 ? one : `${num(n)} ${pl}`)}. ${NOT_ADVICE}`
     : FOOT.replace("{n} pairs", n === 1 ? "1 pair" : `${num(n)} pairs`) + (k.admissible_checks == null
       ? FOOT_NO_HOUR : FOOT_CHECKS.replace("{checks}", num(k.admissible_checks)).replace("{violations}", num(k.violations ?? 0)))
       + (rows.some(isStock) ? `. ${NOT_ADVICE}` : "");

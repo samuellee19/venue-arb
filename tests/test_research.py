@@ -144,5 +144,5 @@ def test_research_summary_without_stock_block_still_validates():
 
 def test_method_has_five_paragraphs():
     assert set(copy.METHOD) == {"matching", "edge", "crypto", "not_shown", "stock_perps"}
-    assert 4 <= copy.METHOD["stock_perps"].count(". ") + 1 <= 6
+    assert 4 <= copy.METHOD["stock_perps"].count(". ") + 1 <= 7
     assert "trade.xyz" in copy.METHOD["stock_perps"] and "US traders" in copy.METHOD["stock_perps"]

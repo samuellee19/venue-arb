@@ -9,13 +9,14 @@ STATIC = Path(__file__).parent.parent / "dashboard" / "static"
 TEXT = ("index.html", "styles.css", *sorted(p.name for p in STATIC.glob("*.js") if p.name != "plotly-basic.min.js"))
 VERDICTS = ("Exact match · no edge", "Executable edge", "Not an arbitrage · basis exposure",
             "Spread · within basis bound · no edge", "No asks on one side", "Stale · a leg has no snapshot in 5 min",
-            "Not executable from the US", "Oracle basis · within perp costs", "Oracle internal · market closed", "Oracle basis")
+            "Not executable from the US", "Oracle basis · within perp costs", "Oracle internal · market closed", "Oracle basis",
+            "Pre-IPO · no listed market")
 BANNERS = ("No pair is executable from the US: Polymarket rejects US orders. Gaps shown for reference.",
            "last update {n} min ago", "last update {n} min ago — figures may be behind", "no books in 5 min")
 STOCK_COPY = ("Not advice. Hyperliquid blocks US traders; the perp leg is shown for reference.",
               ("{n} stock perps — perp against the venue's oracle, net of 2× perp taker fee, perp spread and 24 h funding, "
                "before stock-leg costs"), "basis is quoted in bps", "oracle internal", "perpetual",
-              "The stock leg is not modelled on this page.", "at 1 h / 7 d / with borrow")
+              "The stock leg is not modelled on this page.", "at 1 h / 7 d / with borrow", "nothing to score until it lists")
 SCANNER_COPY = ("Example — what a row looks like when a pair clears the rule",
                 "per-leg quotes are not published (venue display terms)", "ROI = net edge ÷ all-in cost per contract",
                 "admissible ladder checks in the last scored hour", "violations", "no scored hour yet",
@@ -137,6 +138,17 @@ def test_verdict_labels_verbatim_in_common():
         assert f'"{text}"' in common, text
 
 
+def test_pre_ipo_client_rules():
+    common, scanner, explorer = _read("common.js"), _read("scanner.js"), _read("explorer.js")
+    assert '"Pre-IPO · no listed market"' in common and "FOOT_PRE_IPO" in common
+    assert 'cat === "pre_ipo"' in scanner and 'S.cat === "pre_ipo"' in scanner
+    assert 'category === "pre_ipo"' in explorer and "No listed share yet: nothing to score until it lists." in explorer
+
+
+def test_pre_ipo_sentence_in_method_copy():
+    assert "Pre-IPO perps are listed for their price only and are not scored until the company lists." in copy.METHOD["stock_perps"]
+
+
 def test_research_tab_copy():
     js = _read("research.js")
     for text in RESEARCH_COPY:
@@ -187,7 +199,7 @@ def test_no_schwab_on_the_page():
     for f in files:
         assert "schwab" not in f.read_text(encoding="utf-8").lower(), f
     assert "schwab" not in METHOD["stock_perps"].lower()
-    assert len(re.findall(r"[.!?](?:\s|$)", METHOD["stock_perps"])) <= 6
+    assert len(re.findall(r"[.!?](?:\s|$)", METHOD["stock_perps"])) <= 7
 
 
 def test_client_reads_only_the_oracle_keys():

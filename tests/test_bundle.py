@@ -353,6 +353,11 @@ def test_build_live_stock_perps_kpi_and_best_edge_ignores_them():
     off = build_live(now=SP_NOW, exact_rows=[], ladder_rows=[], basis=BASIS, episodes=[], annotations=[],
                      kpi_inputs={}, attribution=[], caveats=[], collector_last=None)
     assert off.kpis.stock_perps is None
+    ant = Label("xyz:ANT", "none", None, "", "USD", "Anthropic (pre-IPO)", "pre_ipo")
+    [pre] = stock_perp_rows([(replace(CTX215, symbol="xyz:ANT"), ant, SP_SNAP)], {}, SP_NOW)
+    both = build_live(now=SP_NOW, exact_rows=[], ladder_rows=[], basis=BASIS, episodes=[], annotations=[],
+                      kpi_inputs={}, attribution=[], caveats=[], collector_last=None, stock_rows=[sp, pre])
+    assert pre.live and both.kpis.stock_perps["names_live"] == 1  # a live pre-IPO row is not a live name
 
 
 def test_old_live_json_without_new_fields_still_validates():  # live_v2.json: the sample as of 4d54aa3, before stock perps

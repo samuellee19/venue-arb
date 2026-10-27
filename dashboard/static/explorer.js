@@ -16,7 +16,8 @@ function sizeState() {
 const KIND = {exact: "exact", near_exact: "near-exact", ladder: "ladder", stock_perp: "stock perp"};
 const CHECK = {same_instant: "Same instant", exact_match: "Exact match", basis_bound: "Basis bound",
   fees_depth: "Fees & depth walked", jurisdiction: "Jurisdiction", reference: "Reference", fees_carry: "Fees, funding & borrow"};
-const VENUE = {kalshi: ["Kalshi", "kalshi.com"], polymarket: ["Polymarket", "polymarket.com"], hyperliquid: ["Hyperliquid", "app.hyperliquid.xyz"]};
+const VENUE = {kalshi: ["Kalshi", "kalshi.com"], polymarket: ["Polymarket", "polymarket.com"], hyperliquid: ["Hyperliquid", "app.hyperliquid.xyz"], pre_ipo: ["Pre-IPO", ""]};
+const PRE_IPO_NOTE = "No listed share yet: nothing to score until it lists.";
 const isStock = p => p.kind === "stock_perp";
 const bps = (x, d = 1) => x == null ? "—" : signed(x, d, " bps");
 const ICON = {ok: ["✓", "pos"], fail: ["✗", "neg"], partial: ["◐", "warn"]};
@@ -110,6 +111,11 @@ function buildDetail() {
   const old = $("plot");
   if (old && window.Plotly) Plotly.purge(old);  // drops the graph and its window resize handler before the node goes
   if (!S.sel) { $("detail").innerHTML = `<div class="empty">No pairs in this bundle.</div>`; return; }
+  if (byKey(S.sel).category === "pre_ipo") {  // nothing to score: heading, legs, verdict and one note, no chart
+    sizeState();
+    $("detail").innerHTML = `<div id="dhead"></div><div id="boxes"></div>`;
+    return refreshDetail();
+  }
   const sp = isStock(byKey(S.sel));
   sizeState();
   const ranges = ["1h", "24h", "7d", "all"].map(r => `<button data-r="${r}"${r === S.range ? ' class="on"' : ""}>${r.replace(/(\d+)/, "$1 ")}</button>`);
@@ -132,6 +138,7 @@ function buildDetail() {
 
 function refreshDetail() {
   if (!$("dhead")) return buildDetail();
+  if (byKey(S.sel).category === "pre_ipo") { renderHead(); renderBoxes(); return; }
   renderHead(); renderBoxes(); renderWhy(); loadChart(); walk();
 }
 
@@ -141,7 +148,7 @@ function renderHead() {
     const k = l.venue === "kalshi", sp = isStock(p), [name, host] = VENUE[l.venue] ?? [`Stock (${esc(l.venue.toUpperCase())})`, ""];
     const id = k || sp ? l.market_id : l.url?.split("/event/")[1] || l.market_id;
     const body = `<span class="sw" style="background:var(--${l.venue === "polymarket" ? "pm" : l.url ? "k" : "mut"})"></span>`
-      + `${name}, ${sp ? esc(l.side) : `buy ${esc(l.side.toUpperCase())}`} <span class="id">${esc(id)}</span>`;
+      + `${name}${l.side || !sp ? `, ${sp ? esc(l.side) : `buy ${esc(l.side.toUpperCase())}`}` : ""} <span class="id">${esc(l.venue === "pre_ipo" ? l.title : id)}</span>`;
     return l.url  // a stock leg has no page: no link
       ? `<a class="leg" href="${esc(safeUrl(l.url))}" target="_blank" rel="noopener">${body} <span class="ext">↗ ${host}</span></a>`
       : `<span class="leg">${body}</span>`;
@@ -245,6 +252,7 @@ function costStockSnap(s) {  // a history row of a stock perp
 function renderBoxes() {
   const p = byKey(S.sel), show = S.bundle.show_books, el = $("boxes");
   if (!p || !el) return;
+  if (p.category === "pre_ipo") { el.className = ""; el.innerHTML = `<div class="note">${PRE_IPO_NOTE}</div>`; return; }
   const mid = (h, body, note = "") => `<div class="box"><h4>${h}</h4><div class="wf">${body}</div>${note}</div>`;
   if (isStock(p)) {
     const adv = `<div class="note">${NOT_ADVICE}</div>`;

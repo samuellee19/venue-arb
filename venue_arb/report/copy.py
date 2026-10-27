@@ -45,7 +45,8 @@ METHOD: dict[str, str] = {
         "taker fee twice, half the perp's bid-ask spread on exit, and funding for the hold. The stock leg is not "
         "modelled, so its spread and borrow come off the net before any trade. The weekend test compares the perp's "
         "price at Friday 8 PM, Saturday noon and Sunday 6 PM New York time with the oracle print at Monday's open. "
-        "Hyperliquid blocks US traders, so none of this can be executed from the US."),
+        "Hyperliquid blocks US traders, so none of this can be executed from the US. "
+        "Pre-IPO perps are listed for their price only and are not scored until the company lists."),
 }
 
 HEADLINE: dict[str, str] = {
