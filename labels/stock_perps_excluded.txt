@@ -27,3 +27,4 @@ xyz:ALUMINIUM  # commodity
 xyz:DIESEL  # commodity
 xyz:DRAM  # spot index
 xyz:H100  # spot index
+xyz:YMTC  # delisted
