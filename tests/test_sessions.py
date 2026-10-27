@@ -85,3 +85,9 @@ def test_nse_window_is_the_assumed_regular_session():
     assert not sessions.external(nse, at(23, 9, 14)) and sessions.external(nse, at(23, 9, 15))
     assert sessions.external(nse, at(23, 15, 29)) and not sessions.external(nse, at(23, 15, 30))
     assert not sessions.external(nse, at(24, 11, 0))  # Saturday
+
+
+def test_pre_ipo_is_its_own_state_at_any_time():
+    ant = Label("xyz:ANT", "none", None, "", "USD", "Anthropic (pre-IPO)", "pre_ipo")
+    for ts in (datetime(2026, 10, 21, 15, 0, tzinfo=UTC), datetime(2026, 10, 24, 15, 0, tzinfo=UTC)):  # a Wednesday, a Saturday
+        assert s.state(ant, ts) == "pre_ipo" and s.external(ant, ts) is False

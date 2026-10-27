@@ -52,6 +52,8 @@ def _us_external(ts: datetime) -> bool:
 
 
 def external(label: Label, ts: datetime) -> bool:
+    if label.kind == "pre_ipo":
+        return False
     ex = label.exchange.strip().upper()
     if ex in _US:
         return _us_external(ts)
@@ -62,5 +64,7 @@ def external(label: Label, ts: datetime) -> bool:
     return False
 
 
-def state(label: Label, ts: datetime) -> Literal["external", "internal"]:
+def state(label: Label, ts: datetime) -> Literal["external", "internal", "pre_ipo"]:
+    if label.kind == "pre_ipo":
+        return "pre_ipo"
     return "external" if external(label, ts) else "internal"
