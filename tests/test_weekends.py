@@ -172,7 +172,7 @@ def test_holiday_monday_keeps_only_external_oracle_prints():
 
 
 def test_pre_ipo_label_gets_no_opens_and_ref_kind_none():
-    ant = Label("xyz:ANT", "none", None, "", "USD", "Anthropic (pre-IPO)", "pre_ipo")
+    ant = Label("xyz:ANT", "none", None, "NASDAQ", "USD", "Anthropic (pre-IPO)", "pre_ipo")
     row = wk.weekend_row("xyz:ANT", FRI, MARKS, REFS, ant)
     assert row["ref_kind"] == "none" and row["p_open_pre"] is None and row["p_open_reg"] is None
 
