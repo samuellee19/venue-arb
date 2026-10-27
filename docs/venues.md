@@ -244,7 +244,7 @@ verdict (spec §5).
   no Schwab-derived figure is displayed. The old `basis_bps` / `fees_cents` disclosure points no longer apply, since
   those Schwab-referenced fields are not public.
 - When the refresh token lapses, the collector's stock leg stops (the first failed call is logged; `schwab_auth` is
-  recorded at the next QA flush, every five ticks) and rows fall back to the oracle. `schwab_token_expires` warns 24 h before expiry.
+  recorded at the next QA flush, every five ticks) and rows fall back to the oracle. `schwab_token_expires` fails at error severity 48 h before expiry, which the platform alerter pushes to Telegram (and `schwab_auth` likewise when the token stops working).
 
 ## Pyth Network
 

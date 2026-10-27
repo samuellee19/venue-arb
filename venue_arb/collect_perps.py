@@ -33,7 +33,7 @@ CONTRACTS = {
              "ask": "float", "bid_size": "float", "ask_size": "float", "last": "float", "quote_time": "datetime"},
 }
 NULLABLE = {"books": frozenset(), "ctx": frozenset({"mid", "premium"}), "refs": frozenset({"last"})}
-WARN_TOKEN_LEFT = timedelta(hours=24)
+ALERT_TOKEN_LEFT = timedelta(hours=48)  # error severity: the platform alerter pushes it to Telegram; two days to run the login
 
 
 def _book_rows(fetch_book, now: datetime, symbol: str):
@@ -113,20 +113,22 @@ def tick(perps: list[PerpCtx] | None, labels: dict, fetch_ctxs, fetch_book, quot
 
 
 def flush_results(checks, stats: dict, issued_at: datetime | None, now: datetime) -> list:
-    """Warn-level checks on the stock leg and the label files (the perp side keeps working without Schwab)."""
+    """Checks on the stock leg and the label files (the perp side keeps working without Schwab). The two Schwab
+    credential checks are error severity so the platform alerter pushes them (once, then "recovered"); the collector
+    never enforces them, so a failed one does not stop the flush."""
     results = []
     if issued_at is None:
         results.append(checks.Result("schwab_auth", False, None, None, "SCHWAB_REFRESH_TOKEN not set",
-                                     severity="warn", target=PIPELINE))
+                                     severity="error", target=PIPELINE))
     else:
         n = stats["schwab_auth"]
         results.append(checks.Result("schwab_auth", n == 0, n, 0, f"{n} Schwab auth failures since the last flush",
-                                     severity="warn", target=PIPELINE))
+                                     severity="error", target=PIPELINE))
         left = schwab.refresh_expires_at(issued_at) - now
-        results.append(checks.Result("schwab_token_expires", left >= WARN_TOKEN_LEFT,
-                                     round(left.total_seconds() / 3600, 1), WARN_TOKEN_LEFT.total_seconds() / 3600,
+        results.append(checks.Result("schwab_token_expires", left >= ALERT_TOKEN_LEFT,
+                                     round(left.total_seconds() / 3600, 1), ALERT_TOKEN_LEFT.total_seconds() / 3600,
                                      f"Schwab refresh token expires in {left}; re-run the login CLI",
-                                     severity="warn", target=PIPELINE))
+                                     severity="error", target=PIPELINE))
     n = stats["schwab_fetch_errors"]
     results.append(checks.Result("schwab_fetch_errors", n == 0, n, 0, f"{n} Schwab quote calls failed since the last flush",
                                  severity="warn", target=PIPELINE))
