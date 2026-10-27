@@ -70,7 +70,8 @@ def stock_perp_score_flow(window_hours: int = WINDOW_HOURS, end: datetime | None
             by_symbol.setdefault(c["symbol"], []).append(c)
         del ctx_rows
         stats = {"symbols": 0, "snapshots": 0, "edge_rows": 0, "rows_with_capacity": 0, "episodes": 0,
-                 "oracle_only_rows": 0, "oracle_rows": 0, "internal_rows": 0, "symbols_no_books": 0}
+                 "oracle_only_rows": 0, "oracle_rows": 0, "internal_rows": 0, "symbols_no_books": 0,
+                 "symbols_pre_ipo": 0}
         stored_total = 0
         opps = []
         for symbol, ctxs in sorted(by_symbol.items()):

@@ -60,7 +60,7 @@ def test_score_window_episode_oracle_only_and_stats():
     assert (ep.kalshi_id, ep.pm_id, ep.direction, ep.snapshots) == ("xyz:NVDA", "NVDA", "short_perp_long_stock", 4)
     assert (ep.start, ep.end) == (TICKS[0], TICKS[-1]) and ep.annualized > 0
     assert stats == {"symbols": 2, "snapshots": 8, "edge_rows": 16, "rows_with_capacity": 8, "episodes": 2,
-                     "oracle_only_rows": 4, "oracle_rows": 8, "internal_rows": 4}
+                     "oracle_only_rows": 4, "oracle_rows": 8, "internal_rows": 4, "symbols_pre_ipo": 0}
 
 
 def test_missing_or_stale_ref_falls_back_to_oracle():
@@ -184,3 +184,12 @@ def test_executable_and_oracle_episodes_have_distinct_opportunity_keys():
     key = ("kalshi_id", "pm_id", "direction", "start_ts")
     assert tuple(ex[k] for k in key) != tuple(orc[k] for k in key)
     assert tuple(ex[k] for k in key[:3]) != tuple(orc[k] for k in key[:3])  # the no-overlap check joins on these
+
+
+def test_pre_ipo_names_are_never_scored_even_with_a_stray_quote():
+    ant = Label("xyz:ANT", "none", None, "", "USD", "Anthropic (pre-IPO)", "pre_ipo")
+    ctxs = [ctx("xyz:ANT", t, 115.0, 115.0) for t in TICKS]
+    books = [r for t in TICKS for r in book("xyz:ANT", t, 114.9, 115.1)]
+    refs = [dict(ref("xyz:ANT", t, 114.0, 114.2), ref_symbol="ANT") for t in TICKS]  # a buffered quote from an old label
+    rows, eps, st = score_window(ctxs, books, refs, {"xyz:ANT": ant}, start=START, end=END)
+    assert rows == [] and eps == [] and st["symbols_pre_ipo"] == 1 and st["snapshots"] == len(TICKS)

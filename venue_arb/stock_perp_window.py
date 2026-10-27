@@ -39,8 +39,13 @@ def score_window(ctx_rows: list[dict], book_rows: list[dict], ref_rows: list[dic
     refs = {(r["symbol"], r["ts"]): r for r in ref_rows if r["ref_kind"] == "schwab"}
     rows: list[dict] = []
     snapshots = 0
+    pre_ipo: set[str] = set()
     for c in sorted((c for c in ctx_rows if start <= c["ts"] < end), key=lambda c: (c["symbol"], c["ts"])):
         snapshots += 1
+        label = label_or_none(c["symbol"], labels)
+        if label and label.kind == "pre_ipo":  # no oracle-vs-perp edge is meaningful before a listing
+            pre_ipo.add(c["symbol"])
+            continue
         book = books.get((c["symbol"], c["ts"]))
         if not book:
             continue
@@ -48,8 +53,7 @@ def score_window(ctx_rows: list[dict], book_rows: list[dict], ref_rows: list[dic
                       c["day_volume_usd"], bool(c["growth_mode"]), 0)
         r = refs.get((c["symbol"], c["ts"]))
         quote = Quote(r["ref_symbol"], r["bid"], r["ask"], r["bid_size"], r["ask_size"], r["last"], r["quote_time"]) if r else None
-        ref = stock_perps.reference(ctx, quote, label_or_none(c["symbol"], labels), c["ts"])
-        label = label_or_none(c["symbol"], labels)
+        ref = stock_perps.reference(ctx, quote, label, c["ts"])
         session = sessions.state(label, c["ts"])
         for mode in ("executable", "oracle"):
             rows.append(stock_perps.edge_row(c["ts"], stock_perps.score(ctx, book, ref, mode=mode, session=session),
@@ -68,7 +72,7 @@ def score_window(ctx_rows: list[dict], book_rows: list[dict], ref_rows: list[dic
             eps += [(source, e) for e in episodes.find(
                 pts, close_time, kalshi_id=symbol, pm_id=ORACLE_PM_ID if mode == "oracle" else label_or_none(symbol, labels).ref_symbol or symbol,
                 direction=d, min_edge=STOCK_PERP_MIN_NET_BPS / 1e4, annualize=stock_perps.annualize)]
-    stats = {"symbols": len({c["symbol"] for c in ctx_rows}), "snapshots": snapshots, "edge_rows": len(rows),
+    stats = {"symbols": len({c["symbol"] for c in ctx_rows}), "snapshots": snapshots, "symbols_pre_ipo": len(pre_ipo), "edge_rows": len(rows),
              "rows_with_capacity": sum(r["capacity_contracts"] > 0 for r in rows), "episodes": len(eps),
              "oracle_only_rows": sum(r["ref_kind"] == "oracle" for r in rows if r["mode"] == "executable"),
              "oracle_rows": sum(r["mode"] == "oracle" for r in rows),
