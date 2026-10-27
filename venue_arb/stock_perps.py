@@ -51,7 +51,7 @@ class StockPerpEdge:
     stock_cap_usd: float | None
     hold_h: float = STOCK_PERP_HOLD_H  # the hold the carry above was charged for
     mode: Mode = "executable"
-    session: Literal["external", "internal"] = "external"
+    session: Literal["external", "internal", "pre_ipo"] = "external"
 
 
 def reference(ctx: PerpCtx, quote: Quote | None, label: Label, now: datetime, max_age_s: int = REF_MAX_AGE_S) -> Reference:
@@ -100,7 +100,7 @@ def _net(side: Direction, basis: float, c: dict) -> float:
 
 
 def score(ctx: PerpCtx, book: list[PerpLevel], ref: Reference, *, mode: Mode = "executable",
-          session: Literal["external", "internal"] = "external", hold_h: float = STOCK_PERP_HOLD_H,
+          session: Literal["external", "internal", "pre_ipo"] = "external", hold_h: float = STOCK_PERP_HOLD_H,
           borrow_bps_yr: float = STOCK_PERP_BORROW_BPS_YR, min_net_bps: float = STOCK_PERP_MIN_NET_BPS) -> StockPerpEdge:
     """Capacity is the dollars fillable while each level's own net stays at or above `min_net_bps` (the rule the pair
     tier's edges.walk applies at 1 cent), capped by the stock leg's size; with no such level it is 0 and net is at the

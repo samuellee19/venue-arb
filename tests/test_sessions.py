@@ -91,3 +91,7 @@ def test_pre_ipo_is_its_own_state_at_any_time():
     ant = Label("xyz:ANT", "none", None, "", "USD", "Anthropic (pre-IPO)", "pre_ipo")
     for ts in (datetime(2026, 10, 21, 15, 0, tzinfo=UTC), datetime(2026, 10, 24, 15, 0, tzinfo=UTC)):  # a Wednesday, a Saturday
         assert s.state(ant, ts) == "pre_ipo" and s.external(ant, ts) is False
+    # a real US exchange at a weekday 11:00 ET, inside the regular session: only the pre_ipo guard makes this False
+    ant_nasdaq = Label("xyz:ANT", "none", None, "NASDAQ", "USD", "Anthropic (pre-IPO)", "pre_ipo")
+    assert s.external(ant_nasdaq, datetime(2026, 10, 21, 15, 0, tzinfo=UTC)) is False
+    assert s.state(ant_nasdaq, datetime(2026, 10, 21, 15, 0, tzinfo=UTC)) == "pre_ipo"
