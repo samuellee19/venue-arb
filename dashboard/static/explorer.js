@@ -137,7 +137,7 @@ function buildDetail() {
 }
 
 function refreshDetail() {
-  if (!$("dhead")) return buildDetail();
+  if (!$("dhead") || (byKey(S.sel)?.category === "pre_ipo") === !!$("plot")) return buildDetail();
   if (byKey(S.sel).category === "pre_ipo") { renderHead(); renderBoxes(); return; }
   renderHead(); renderBoxes(); renderWhy(); loadChart(); walk();
 }
@@ -305,7 +305,7 @@ function walk() {
 // ---- chart ----
 async function loadChart() {
   const p = byKey(S.sel), base = p.key.slice(0, p.key.lastIndexOf("~") + 1);
-  // same two markets, other direction; a stock perp has one row a name, keyed "perp~stock~stock_perp" whichever
+  // same two markets, other direction; a stock perp has one row a name, keyed "perp~stock_perp" whichever
   // direction it holds, so no sibling and a direction flip keeps its history
   const sib = isStock(p) ? null : pairs().find(q => q.key !== p.key && q.key.startsWith(base));
   const keys = [p, sib].filter(Boolean).map(q => q.key), sel = S.sel, range = S.range;

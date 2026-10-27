@@ -143,6 +143,7 @@ def test_pre_ipo_client_rules():
     assert '"Pre-IPO · no listed market"' in common and "FOOT_PRE_IPO" in common
     assert 'cat === "pre_ipo"' in scanner and 'S.cat === "pre_ipo"' in scanner
     assert 'category === "pre_ipo"' in explorer and "No listed share yet: nothing to score until it lists." in explorer
+    assert '(byKey(S.sel)?.category === "pre_ipo") === !!$("plot")' in explorer  # a same-key label flip rebuilds the layout
 
 
 def test_pre_ipo_sentence_in_method_copy():

@@ -54,5 +54,5 @@ def test_readme_mentions_oracle_check():
 
 
 def test_readme_documents_the_listing_day_edit():
-    text = Path("README.md").read_text()
+    text = (ROOT / "README.md").read_text()
     assert "kind" in text and "listing day" in text.lower() and "publish history --hours 240" in text

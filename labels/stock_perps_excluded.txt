@@ -1,6 +1,6 @@
-xyz:SPCX  # pre-IPO
-xyz:QNT  # pre-IPO
-xyz:CBRS  # pre-IPO
+xyz:SPCX  # listed, awaiting the listing-day edit
+xyz:QNT  # listed, awaiting the listing-day edit
+xyz:CBRS  # listed, awaiting the listing-day edit
 xyz:SP500  # index
 xyz:XYZ100  # index
 xyz:JP225  # index

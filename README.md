@@ -224,13 +224,19 @@ Nasdaq: they are the first three candidates for the listing-day edit below, and 
 
 Listing day, per name:
 
+0. Make the edit only after the first regular-session print AND after the venue's oracle has switched to an external
+   feed (the row's reference reads "oracle, live" on the page, not internal). The scorer rescores the last 3 hours
+   (`WINDOW_HOURS`) with the current labels, so ticks from before the edit are scored as `equity`: wait 3 hours after
+   that point, or accept up to 3 hours of early rows.
 1. Edit the row in `labels/stock_perps.csv`: `kind` to `equity`, `ref_kind` to `schwab` for a US listing or `none`
    elsewhere, then `ref_symbol`, `exchange` and `currency`. For SPCX, QNT and CBRS also delete the line from
    `labels/stock_perps_excluded.txt`. One commit through the usual CI path, fast-forward `main`. No restart: the
    collector reloads labels every ten ticks, and the publisher and every flow read them per run.
 2. From the next collector tick the Schwab quote flows (a US name). From the next external-session tick the row is
    scored. The weekend tier and the oracle check include it from their next runs.
-3. The row keeps its key. Its sparkline and history begin on listing day; the pre-IPO stretch has no public rows.
+3. The row keeps its key. While the label is `pre_ipo` it has no public scored rows; rows appear from the edit, including
+   up to 3 rescored hours. A name whose old scored rows exist (`xyz:JIO`, from the earlier NSE assumption) will see
+   those rows reappear in public counts once it leaves the hide-list at listing.
 
 Deploying the `kind` change (stock-perp pair keys went from `{perp}~{stock}~stock_perp` to `{perp}~stock_perp`, and
 `Leg.side` now admits `""`):

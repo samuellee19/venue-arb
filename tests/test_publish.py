@@ -631,7 +631,10 @@ def test_excluded_labelled_symbol_reaches_no_public_path(monkeypatch, tmp_path):
     monkeypatch.setattr(hyperliquid, "load_excluded", lambda: {"xyz:NVDA", "xyz:GOLD"})
     assert bundle.stock_perp_rows(publish.read_perps(ch), {}, SP_NOW) == []
     # every stock_perp_edges query gets the list as a server-side parameter
-    want = ["xyz:GOLD", "xyz:NVDA"]
+    pre = sorted(s for s, lb in hyperliquid.load_labels().items() if lb.kind == "pre_ipo")
+    assert pre
+    want = sorted({"xyz:GOLD", "xyz:NVDA", *pre})
+    assert publish.hidden() == want
     publish.write_history_hour(ch, tmp_path, datetime(2026, 10, 20, 15, tzinfo=UTC))
     [hour] = [p for s, p in ch_log if s == publish.STOCK_PERP_HOUR_SQL]
     assert hour["ex"] == want
@@ -724,3 +727,13 @@ def test_stock_perp_inputs_names_exclude_pre_ipo_labels():
               "xyz:ANT": Label("xyz:ANT", "none", None, "", "USD", "Anthropic (pre-IPO)", "pre_ipo")}
     out = publish.stock_perp_inputs(ch, conn, labels, [])
     assert [n["symbol"] for n in out["by_name"]] == ["xyz:NVDA"]
+
+
+def test_hidden_adds_pre_ipo_labels(monkeypatch):
+    from venue_arb.sources import hyperliquid
+
+    labels = hyperliquid.load_labels()
+    pre = next(s for s, lb in labels.items() if lb.kind == "pre_ipo")
+    monkeypatch.setattr(hyperliquid, "load_excluded", lambda: {"xyz:GOLD"})
+    assert {"xyz:GOLD", pre} <= set(publish.hidden())
+    assert publish.excluded() == ["xyz:GOLD"]  # the collector's list is unchanged

@@ -90,9 +90,9 @@ SELECT k, p, d, toStartOfHour(ts) AS h, avg(e) FROM (
   WHERE ts >= {start:DateTime64(3, 'UTC')} AND mode = 'oracle' AND session = 'external' AND NOT has({ex:Array(String)}, symbol) GROUP BY hts, symbol
 ) GROUP BY k, p, d, h
 """
-# every query that reads stock_perp_edges takes {ex}, the names in labels/stock_perps_excluded.txt (excluded()):
-# hidden from every public path, their rows stay in the private tables
-# the stock-perp tier: rows with p = '' take their reference symbol from labels and d = 'stock_perp'
+# every query that reads stock_perp_edges takes {ex}, hidden(): the names in labels/stock_perps_excluded.txt plus the
+# pre_ipo labels, hidden from every public path, their rows stay in the private tables
+# the stock-perp tier: rows with p = '' carry d = 'stock_perp'
 # (bundle.stock_key: one row a name, either direction); the hourly max of the oracle-mode net_bps / 1e4 over
 # external-session ticks reads, x100 like the pair rows, as net_bps / 100
 # both sources; pair-source rows are scoped in Python (scope_episodes) with note.SCOPE_SQL's rows, as the note does
@@ -305,7 +305,7 @@ def write_history_hour(ch, out_dir: Path, hour: datetime, sides: dict | None = N
     ).result_rows) if k else {}
     stock = []
     if config.DASHBOARD_SHOW_STOCK_PERPS:  # the parquet is public output: gated like the bundle rows
-        stock = ch.query(STOCK_PERP_HOUR_SQL, parameters={"lo": lo, "hi": hi, "ex": excluded()}).result_rows
+        stock = ch.query(STOCK_PERP_HOUR_SQL, parameters={"lo": lo, "hi": hi, "ex": hidden()}).result_rows
     buf = io.BytesIO()
     pq.write_table(history_table(edge, lad, books, sides, stock), buf, compression="zstd")
     path = _hour_file(out_dir, lo)
@@ -402,12 +402,18 @@ def scope_episodes(rows: list[dict], scope: dict) -> list[dict]:
     return [r for r in rows if r["source"] not in ("stock_perp", "stock_perp_oracle") and (r["source"] != "pair" or ok(r))]
 
 
+def hidden() -> list[str]:
+    """The public hide-list: excluded() plus every pre_ipo label. A pre-IPO name's older scored rows (xyz:JIO carried
+    an NSE exchange before the kind column) stay in the private tables and reach no public query."""
+    return sorted(set(excluded()) | {s for s, lb in hyperliquid.load_labels().items() if lb.kind == "pre_ipo"})
+
+
 def load_context(conn, ch, now: datetime) -> dict:
     """The slow-moving bundle parts, read every REFRESH_EVERY ticks: sparks, episodes, annotations, KPI inputs."""
     from venue_arb.report.note import SCOPE_SQL  # lazily: keeps the report module (numpy) off the import path
 
     start = _hour(now) - timedelta(hours=bundle.SPARK_HOURS - 1)
-    ex = excluded()
+    ex = hidden()
     sparks = spark_series(ch.query(SPARKS_SQL, parameters={"start": start, "ex": ex}).result_rows, start)
     scope = {(k, p): {"exact": rel == "exact", "bad_review": bad}
              for k, p, rel, bad, _closed in conn.execute(SCOPE_SQL, {"pv": PROMPT_VERSION}).fetchall()}
@@ -663,7 +669,7 @@ def default_readers(db) -> dict:
 
     def stock_perp_research():
         with db.pg() as conn:
-            return stock_perp_inputs(db.ch(), conn, hyperliquid.load_labels(), excluded())
+            return stock_perp_inputs(db.ch(), conn, hyperliquid.load_labels(), hidden())
 
     def perps():
         return read_perps(db.ch())
