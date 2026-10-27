@@ -72,6 +72,27 @@ did not settle when fetched is marked "unverified". Re-check before relying on a
 - To flip to `True`: obtain Kalshi's written permission, or read the Developer Agreement and find an explicit
   display allowance; then re-run `python -m venue_arb.publish history --hours 168` and regenerate `dashboard/sample`.
 
+### Developer Agreement (2026-10-27)
+- Read in full. The page <https://kalshi.com/developer-agreement> embeds the PDF
+  <https://assets.kalshi.com/Kalshi-Developer-Agreement.pdf> (v1.1, 6 pages, Kalshi Ex LLC; "Accessing or using
+  Kalshi's API shall be considered a binding acceptance"). Opened in the browser pane; curl and WebFetch still get
+  HTTP 429.
+- Clause 3: "Use of Kalshi APIs is expressly limited to facilitating a member's own trading on the Exchange; all
+  other usages are disallowed and may result in account suspension."
+- Clause 3.1 prohibits "Collecting, caching, aggregating, or storing data or content accessed via the API except for
+  purposes of facilitating your own trading on Kalshi. You may not share such data or content with third parties in
+  any manner without prior written authorization from Kalshi."
+- Clause 3.5 prohibits API use "for purposes of monitoring the availability, performance, or functionality of any of
+  Kalshi's services or for any other benchmarking or competitive purposes." Clause 4.1.1: API users "must be a
+  Member of Kalshi's Exchange and comply with Kalshi's Rulebook." Clause 6.4: prior written approval for public
+  statements "relating to Kalshi, the Kalshi Marks, Kalshi Services, Kalshi API, or this Agreement."
+- No display allowance anywhere, so the Data Terms question above is answered: the restriction reaches API data.
+  On a plain reading the 60 s collection, the stored history and the page's Kalshi-derived figures (mids, edges,
+  capacity, research block) all fall inside clauses 3 and 3.1. `DASHBOARD_SHOW_BOOKS` stays `False`.
+- **Decision (Sam, 2026-10-27): recorded, public page kept as is.** Non-commercial personal research; the same
+  posture as for Binance (see the research note's terms table). Revisit if Kalshi objects or before any commercial
+  use; written authorization is the way to flip `DASHBOARD_SHOW_BOOKS`.
+
 ### Kalshi fee schedule source (2026-10-20, Task 1)
 - Still unverified. <https://kalshi.com/fee-schedule> and the PDF both return HTTP 429; the S3 guess
   `kalshi-public-docs.s3.amazonaws.com/kalshi-fee-schedule.pdf` is 404. `docs.kalshi.com/llms.txt` lists no fee
