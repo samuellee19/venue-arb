@@ -119,9 +119,36 @@ def test_post_json_retries_then_raises_without_leaking_body(monkeypatch):
 
 
 def test_load_labels_rejects_a_bad_row(tmp_path):
-    head = "perp,ref_kind,ref_symbol,exchange,currency,name\n"
-    for row, needle in (("xyz:FOO,schwab,,NASDAQ,USD,Foo\n", "xyz:FOO"), ("xyz:BAR,yahoo,BAR,NYSE,USD,Bar\n", "xyz:BAR")):
+    head = "perp,ref_kind,ref_symbol,exchange,currency,name,kind\n"
+    for row, needle in (("xyz:FOO,schwab,,NASDAQ,USD,Foo,equity\n", "xyz:FOO"), ("xyz:BAR,yahoo,BAR,NYSE,USD,Bar,equity\n", "xyz:BAR")):
         p = tmp_path / "labels.csv"
-        p.write_text(head + "xyz:OK,none,,KRX,KRW,Ok\n" + row)
+        p.write_text(head + "xyz:OK,none,,KRX,KRW,Ok,equity\n" + row)
         with pytest.raises(ValueError, match=needle):
             hl.load_labels(p)
+
+
+def test_load_labels_reads_kind_and_validates_it(tmp_path):
+    p = tmp_path / "l.csv"
+    head = "perp,ref_kind,ref_symbol,exchange,currency,name,kind\n"
+    p.write_text(head + "xyz:NVDA,schwab,NVDA,NASDAQ,USD,NVIDIA,equity\nxyz:ANT,none,,,USD,Anthropic (pre-IPO),pre_ipo\n")
+    labels = hl.load_labels(p)
+    assert labels["xyz:NVDA"].kind == "equity" and labels["xyz:ANT"].kind == "pre_ipo"
+    for bad in ("xyz:A,none,,NSE,INR,Jio,pre_ipo",        # pre_ipo with an exchange
+                "xyz:B,schwab,B,NASDAQ,USD,B,pre_ipo",     # pre_ipo with a reference
+                "xyz:C,none,,,CNY,YMTC,equity",            # equity without an exchange
+                "xyz:D,none,,,USD,D,spac"):                # unknown kind
+        p.write_text(head + bad + "\n")
+        with pytest.raises(ValueError, match="bad label row"):
+            hl.load_labels(p)
+
+
+def test_label_or_none_defaults_to_equity():
+    assert hl.label_or_none("xyz:NEW", {}).kind == "equity"
+
+
+def test_labels_file_has_a_kind_on_every_row_and_six_pre_ipo_names():
+    labels = hl.load_labels()
+    pre = sorted(s for s, lb in labels.items() if lb.kind == "pre_ipo")
+    assert {"xyz:ANT", "xyz:YMTC", "xyz:JIO"} <= set(pre)
+    assert all(lb.exchange for lb in labels.values() if lb.kind == "equity")
+    assert all(lb.ref_kind == "none" and not lb.ref_symbol and not lb.exchange for lb in labels.values() if lb.kind == "pre_ipo")

@@ -1,107 +1,107 @@
-perp,ref_kind,ref_symbol,exchange,currency,name
-xyz:AAOI,schwab,AAOI,NASDAQ,USD,Applied Optoelectronics
-xyz:AAPL,schwab,AAPL,NASDAQ,USD,Apple
-xyz:ACN,schwab,ACN,NYSE,USD,Accenture
-xyz:AMAT,schwab,AMAT,NASDAQ,USD,Applied Materials
-xyz:AMD,schwab,AMD,NASDAQ,USD,Advanced Micro Devices
-xyz:AMZN,schwab,AMZN,NASDAQ,USD,Amazon
-xyz:ARM,schwab,ARM,NASDAQ,USD,Arm Holdings
-xyz:ASML,schwab,ASML,NASDAQ,USD,ASML Holding
-xyz:AVGO,schwab,AVGO,NASDAQ,USD,Broadcom
-xyz:BABA,schwab,BABA,NYSE,USD,Alibaba Group
-xyz:BB,schwab,BB,NYSE,USD,BlackBerry
-xyz:BE,schwab,BE,NYSE,USD,Bloom Energy
-xyz:BIRD,schwab,BIRD,NASDAQ,USD,Smartbird
-xyz:BMNR,schwab,BMNR,NYSE,USD,BitMine Immersion Technologies
-xyz:BOT,schwab,BOT,NASDAQ,USD,RoboStrategy
-xyz:BX,schwab,BX,NYSE,USD,Blackstone
-xyz:COIN,schwab,COIN,NASDAQ,USD,Coinbase
-xyz:COST,schwab,COST,NASDAQ,USD,Costco
-xyz:CRCL,schwab,CRCL,NYSE,USD,Circle Internet Group
-xyz:CRWD,schwab,CRWD,NASDAQ,USD,CrowdStrike
-xyz:CRWV,schwab,CRWV,NASDAQ,USD,CoreWeave
-xyz:CVX,schwab,CVX,NYSE,USD,Chevron
-xyz:DELL,schwab,DELL,NYSE,USD,Dell Technologies
-xyz:DKNG,schwab,DKNG,NASDAQ,USD,DraftKings
-xyz:EBAY,schwab,EBAY,NASDAQ,USD,eBay
-xyz:EWJ,schwab,EWJ,NYSE Arca,USD,iShares MSCI Japan ETF
-xyz:EWT,schwab,EWT,NYSE Arca,USD,iShares MSCI Taiwan ETF
-xyz:EWY,schwab,EWY,NYSE Arca,USD,iShares MSCI South Korea ETF
-xyz:EWZ,schwab,EWZ,NYSE Arca,USD,iShares MSCI Brazil ETF
-xyz:GEV,schwab,GEV,NYSE,USD,GE Vernova
-xyz:GLW,schwab,GLW,NYSE,USD,Corning
-xyz:GME,schwab,GME,NYSE,USD,GameStop
-xyz:GOOGL,schwab,GOOGL,NASDAQ,USD,Alphabet
-xyz:HIMS,schwab,HIMS,NYSE,USD,Hims & Hers Health
-xyz:HOOD,schwab,HOOD,NASDAQ,USD,Robinhood
-xyz:IBM,schwab,IBM,NYSE,USD,IBM
-xyz:INTC,schwab,INTC,NASDAQ,USD,Intel
-xyz:IREN,schwab,IREN,NASDAQ,USD,IREN
-xyz:KORU,schwab,KORU,NYSE Arca,USD,Direxion Daily MSCI South Korea Bull 3X
-xyz:KSTR,schwab,KSTR,NYSE Arca,USD,KraneShares China Technology & Semiconductor STAR 50 Index ETF
-xyz:LITE,schwab,LITE,NASDAQ,USD,Lumentum
-xyz:LLY,schwab,LLY,NYSE,USD,Eli Lilly
-xyz:LRCX,schwab,LRCX,NASDAQ,USD,Lam Research
-xyz:LYTE,schwab,LYTE,Cboe BZX,USD,Roundhill Photonics & Optics ETF
-xyz:MAGS,schwab,MAGS,Cboe BZX,USD,Roundhill Magnificent Seven ETF
-xyz:META,schwab,META,NASDAQ,USD,Meta Platforms
-xyz:MRNA,schwab,MRNA,NASDAQ,USD,Moderna
-xyz:MRVL,schwab,MRVL,NASDAQ,USD,Marvell Technology
-xyz:MSFT,schwab,MSFT,NASDAQ,USD,Microsoft
-xyz:MSTR,schwab,MSTR,NASDAQ,USD,Strategy
-xyz:MU,schwab,MU,NASDAQ,USD,Micron Technology
-xyz:NBIS,schwab,NBIS,NASDAQ,USD,Nebius Group
-xyz:NCLD,schwab,NCLD,NASDAQ,USD,Roundhill Neocloud ETF
-xyz:NET,schwab,NET,NYSE,USD,Cloudflare
-xyz:NFLX,schwab,NFLX,NASDAQ,USD,Netflix
-xyz:NOK,schwab,NOK,NYSE,USD,Nokia
-xyz:NOW,schwab,NOW,NYSE,USD,ServiceNow
-xyz:NVDA,schwab,NVDA,NASDAQ,USD,NVIDIA
-xyz:ORCL,schwab,ORCL,NYSE,USD,Oracle
-xyz:OURA,schwab,OURA,NASDAQ,USD,Oura
-xyz:PLTR,schwab,PLTR,NASDAQ,USD,Palantir
-xyz:PURRDAT,schwab,PURR,NASDAQ,USD,Hyperliquid Strategies
-xyz:QCOM,schwab,QCOM,NASDAQ,USD,Qualcomm
-xyz:RDDT,schwab,RDDT,NYSE,USD,Reddit
-xyz:RIVN,schwab,RIVN,NASDAQ,USD,Rivian
-xyz:RKLB,schwab,RKLB,NASDAQ,USD,Rocket Lab
-xyz:SHAZ,schwab,SHAZ,NASDAQ,USD,SharonAI
-xyz:SKHY,schwab,SKHY,NASDAQ,USD,SK hynix ADS
-xyz:SMH,schwab,SMH,NASDAQ,USD,VanEck Semiconductor ETF
-xyz:SNAP,schwab,SNAP,NYSE,USD,Snap
-xyz:SNDK,schwab,SNDK,NASDAQ,USD,Sandisk
-xyz:SNXX,schwab,SNXX,Cboe BZX,USD,Tradr 2X Long SNDK Daily ETF
-xyz:SOXL,schwab,SOXL,NYSE Arca,USD,Direxion Daily Semiconductor Bull 3X
-xyz:STRC,schwab,STRC,NASDAQ,USD,Strategy Variable Rate Series A Perpetual Stretch Preferred
-xyz:TLT,schwab,TLT,NASDAQ,USD,iShares 20+ Year Treasury Bond ETF
-xyz:TSLA,schwab,TSLA,NASDAQ,USD,Tesla
-xyz:TSM,schwab,TSM,NYSE,USD,Taiwan Semiconductor Manufacturing ADS
-xyz:TTWO,schwab,TTWO,NASDAQ,USD,Take-Two Interactive
-xyz:TWST,schwab,TWST,NASDAQ,USD,Twist Bioscience
-xyz:UMC,schwab,UMC,NYSE,USD,United Microelectronics ADS
-xyz:URNM,schwab,URNM,NYSE Arca,USD,Sprott Uranium Miners ETF
-xyz:USAR,schwab,USAR,NASDAQ,USD,USA Rare Earth
-xyz:WDC,schwab,WDC,NASDAQ,USD,Western Digital
-xyz:XBI,schwab,XBI,NYSE Arca,USD,SPDR S&P Biotech ETF
-xyz:XLE,schwab,XLE,NYSE Arca,USD,Energy Select Sector SPDR ETF
-xyz:ZM,schwab,ZM,NASDAQ,USD,Zoom Communications
-xyz:SKHX,none,000660,KRX,KRW,SK hynix
-xyz:SMSN,none,005930,KRX,KRW,Samsung Electronics
-xyz:HYUNDAI,none,005380,KRX,KRW,Hyundai Motor
-xyz:SOFTBANK,none,9984,TSE,JPY,SoftBank Group
-xyz:KIOXIA,none,285A,TSE,JPY,Kioxia Holdings
-xyz:IBIDEN,none,4062,TSE,JPY,Ibiden
-xyz:CAMBRICON,none,688256,SSE,CNY,Cambricon Technologies
-xyz:CXMT,none,688825,SSE,CNY,CXMT (ChangXin Memory Technologies)
-xyz:GIGADEV,none,603986,SSE,CNY,GigaDevice Semiconductor
-xyz:UNITREE,none,688836,SSE,CNY,Unitree Robotics (Yushu Technology)
-xyz:AMEC,none,688012,SSE,CNY,Advanced Micro-Fabrication Equipment
-xyz:INNOLIGHT,none,300308,SZSE,CNY,Zhongji Innolight
-xyz:CATL,none,300750,SZSE,CNY,Contemporary Amperex Technology
-xyz:YMTC,none,,,CNY,Yangtze Memory Technologies
-xyz:SHEIN,none,0625,HKEX,HKD,SHEIN Group
-xyz:JIO,none,,NSE,INR,Jio Platforms
-xyz:RELIANCE,none,RELIANCE,NSE,INR,Reliance Industries
-xyz:MINIMAX,none,0100,HKEX,HKD,MiniMax Group
-xyz:ZHIPU,none,2513,HKEX,HKD,Knowledge Atlas Technology (Zhipu AI)
-xyz:ANT,none,,,USD,Anthropic (pre-IPO)
+perp,ref_kind,ref_symbol,exchange,currency,name,kind
+xyz:AAOI,schwab,AAOI,NASDAQ,USD,Applied Optoelectronics,equity
+xyz:AAPL,schwab,AAPL,NASDAQ,USD,Apple,equity
+xyz:ACN,schwab,ACN,NYSE,USD,Accenture,equity
+xyz:AMAT,schwab,AMAT,NASDAQ,USD,Applied Materials,equity
+xyz:AMD,schwab,AMD,NASDAQ,USD,Advanced Micro Devices,equity
+xyz:AMZN,schwab,AMZN,NASDAQ,USD,Amazon,equity
+xyz:ARM,schwab,ARM,NASDAQ,USD,Arm Holdings,equity
+xyz:ASML,schwab,ASML,NASDAQ,USD,ASML Holding,equity
+xyz:AVGO,schwab,AVGO,NASDAQ,USD,Broadcom,equity
+xyz:BABA,schwab,BABA,NYSE,USD,Alibaba Group,equity
+xyz:BB,schwab,BB,NYSE,USD,BlackBerry,equity
+xyz:BE,schwab,BE,NYSE,USD,Bloom Energy,equity
+xyz:BIRD,schwab,BIRD,NASDAQ,USD,Smartbird,equity
+xyz:BMNR,schwab,BMNR,NYSE,USD,BitMine Immersion Technologies,equity
+xyz:BOT,schwab,BOT,NASDAQ,USD,RoboStrategy,equity
+xyz:BX,schwab,BX,NYSE,USD,Blackstone,equity
+xyz:COIN,schwab,COIN,NASDAQ,USD,Coinbase,equity
+xyz:COST,schwab,COST,NASDAQ,USD,Costco,equity
+xyz:CRCL,schwab,CRCL,NYSE,USD,Circle Internet Group,equity
+xyz:CRWD,schwab,CRWD,NASDAQ,USD,CrowdStrike,equity
+xyz:CRWV,schwab,CRWV,NASDAQ,USD,CoreWeave,equity
+xyz:CVX,schwab,CVX,NYSE,USD,Chevron,equity
+xyz:DELL,schwab,DELL,NYSE,USD,Dell Technologies,equity
+xyz:DKNG,schwab,DKNG,NASDAQ,USD,DraftKings,equity
+xyz:EBAY,schwab,EBAY,NASDAQ,USD,eBay,equity
+xyz:EWJ,schwab,EWJ,NYSE Arca,USD,iShares MSCI Japan ETF,equity
+xyz:EWT,schwab,EWT,NYSE Arca,USD,iShares MSCI Taiwan ETF,equity
+xyz:EWY,schwab,EWY,NYSE Arca,USD,iShares MSCI South Korea ETF,equity
+xyz:EWZ,schwab,EWZ,NYSE Arca,USD,iShares MSCI Brazil ETF,equity
+xyz:GEV,schwab,GEV,NYSE,USD,GE Vernova,equity
+xyz:GLW,schwab,GLW,NYSE,USD,Corning,equity
+xyz:GME,schwab,GME,NYSE,USD,GameStop,equity
+xyz:GOOGL,schwab,GOOGL,NASDAQ,USD,Alphabet,equity
+xyz:HIMS,schwab,HIMS,NYSE,USD,Hims & Hers Health,equity
+xyz:HOOD,schwab,HOOD,NASDAQ,USD,Robinhood,equity
+xyz:IBM,schwab,IBM,NYSE,USD,IBM,equity
+xyz:INTC,schwab,INTC,NASDAQ,USD,Intel,equity
+xyz:IREN,schwab,IREN,NASDAQ,USD,IREN,equity
+xyz:KORU,schwab,KORU,NYSE Arca,USD,Direxion Daily MSCI South Korea Bull 3X,equity
+xyz:KSTR,schwab,KSTR,NYSE Arca,USD,KraneShares China Technology & Semiconductor STAR 50 Index ETF,equity
+xyz:LITE,schwab,LITE,NASDAQ,USD,Lumentum,equity
+xyz:LLY,schwab,LLY,NYSE,USD,Eli Lilly,equity
+xyz:LRCX,schwab,LRCX,NASDAQ,USD,Lam Research,equity
+xyz:LYTE,schwab,LYTE,Cboe BZX,USD,Roundhill Photonics & Optics ETF,equity
+xyz:MAGS,schwab,MAGS,Cboe BZX,USD,Roundhill Magnificent Seven ETF,equity
+xyz:META,schwab,META,NASDAQ,USD,Meta Platforms,equity
+xyz:MRNA,schwab,MRNA,NASDAQ,USD,Moderna,equity
+xyz:MRVL,schwab,MRVL,NASDAQ,USD,Marvell Technology,equity
+xyz:MSFT,schwab,MSFT,NASDAQ,USD,Microsoft,equity
+xyz:MSTR,schwab,MSTR,NASDAQ,USD,Strategy,equity
+xyz:MU,schwab,MU,NASDAQ,USD,Micron Technology,equity
+xyz:NBIS,schwab,NBIS,NASDAQ,USD,Nebius Group,equity
+xyz:NCLD,schwab,NCLD,NASDAQ,USD,Roundhill Neocloud ETF,equity
+xyz:NET,schwab,NET,NYSE,USD,Cloudflare,equity
+xyz:NFLX,schwab,NFLX,NASDAQ,USD,Netflix,equity
+xyz:NOK,schwab,NOK,NYSE,USD,Nokia,equity
+xyz:NOW,schwab,NOW,NYSE,USD,ServiceNow,equity
+xyz:NVDA,schwab,NVDA,NASDAQ,USD,NVIDIA,equity
+xyz:ORCL,schwab,ORCL,NYSE,USD,Oracle,equity
+xyz:OURA,schwab,OURA,NASDAQ,USD,Oura,equity
+xyz:PLTR,schwab,PLTR,NASDAQ,USD,Palantir,equity
+xyz:PURRDAT,schwab,PURR,NASDAQ,USD,Hyperliquid Strategies,equity
+xyz:QCOM,schwab,QCOM,NASDAQ,USD,Qualcomm,equity
+xyz:RDDT,schwab,RDDT,NYSE,USD,Reddit,equity
+xyz:RIVN,schwab,RIVN,NASDAQ,USD,Rivian,equity
+xyz:RKLB,schwab,RKLB,NASDAQ,USD,Rocket Lab,equity
+xyz:SHAZ,schwab,SHAZ,NASDAQ,USD,SharonAI,equity
+xyz:SKHY,schwab,SKHY,NASDAQ,USD,SK hynix ADS,equity
+xyz:SMH,schwab,SMH,NASDAQ,USD,VanEck Semiconductor ETF,equity
+xyz:SNAP,schwab,SNAP,NYSE,USD,Snap,equity
+xyz:SNDK,schwab,SNDK,NASDAQ,USD,Sandisk,equity
+xyz:SNXX,schwab,SNXX,Cboe BZX,USD,Tradr 2X Long SNDK Daily ETF,equity
+xyz:SOXL,schwab,SOXL,NYSE Arca,USD,Direxion Daily Semiconductor Bull 3X,equity
+xyz:STRC,schwab,STRC,NASDAQ,USD,Strategy Variable Rate Series A Perpetual Stretch Preferred,equity
+xyz:TLT,schwab,TLT,NASDAQ,USD,iShares 20+ Year Treasury Bond ETF,equity
+xyz:TSLA,schwab,TSLA,NASDAQ,USD,Tesla,equity
+xyz:TSM,schwab,TSM,NYSE,USD,Taiwan Semiconductor Manufacturing ADS,equity
+xyz:TTWO,schwab,TTWO,NASDAQ,USD,Take-Two Interactive,equity
+xyz:TWST,schwab,TWST,NASDAQ,USD,Twist Bioscience,equity
+xyz:UMC,schwab,UMC,NYSE,USD,United Microelectronics ADS,equity
+xyz:URNM,schwab,URNM,NYSE Arca,USD,Sprott Uranium Miners ETF,equity
+xyz:USAR,schwab,USAR,NASDAQ,USD,USA Rare Earth,equity
+xyz:WDC,schwab,WDC,NASDAQ,USD,Western Digital,equity
+xyz:XBI,schwab,XBI,NYSE Arca,USD,SPDR S&P Biotech ETF,equity
+xyz:XLE,schwab,XLE,NYSE Arca,USD,Energy Select Sector SPDR ETF,equity
+xyz:ZM,schwab,ZM,NASDAQ,USD,Zoom Communications,equity
+xyz:SKHX,none,000660,KRX,KRW,SK hynix,equity
+xyz:SMSN,none,005930,KRX,KRW,Samsung Electronics,equity
+xyz:HYUNDAI,none,005380,KRX,KRW,Hyundai Motor,equity
+xyz:SOFTBANK,none,9984,TSE,JPY,SoftBank Group,equity
+xyz:KIOXIA,none,285A,TSE,JPY,Kioxia Holdings,equity
+xyz:IBIDEN,none,4062,TSE,JPY,Ibiden,equity
+xyz:CAMBRICON,none,688256,SSE,CNY,Cambricon Technologies,equity
+xyz:CXMT,none,688825,SSE,CNY,CXMT (ChangXin Memory Technologies),equity
+xyz:GIGADEV,none,603986,SSE,CNY,GigaDevice Semiconductor,equity
+xyz:UNITREE,none,688836,SSE,CNY,Unitree Robotics (Yushu Technology),equity
+xyz:AMEC,none,688012,SSE,CNY,Advanced Micro-Fabrication Equipment,equity
+xyz:INNOLIGHT,none,300308,SZSE,CNY,Zhongji Innolight,equity
+xyz:CATL,none,300750,SZSE,CNY,Contemporary Amperex Technology,equity
+xyz:YMTC,none,,,CNY,Yangtze Memory (pre-IPO),pre_ipo
+xyz:SHEIN,none,0625,HKEX,HKD,SHEIN Group,equity
+xyz:JIO,none,,,INR,Reliance Jio (pre-IPO),pre_ipo
+xyz:RELIANCE,none,RELIANCE,NSE,INR,Reliance Industries,equity
+xyz:MINIMAX,none,0100,HKEX,HKD,MiniMax Group,equity
+xyz:ZHIPU,none,2513,HKEX,HKD,Knowledge Atlas Technology (Zhipu AI),equity
+xyz:ANT,none,,,USD,Anthropic (pre-IPO),pre_ipo

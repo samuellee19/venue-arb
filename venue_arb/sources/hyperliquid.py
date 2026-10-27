@@ -48,6 +48,7 @@ class Label:
     exchange: str
     currency: str
     name: str
+    kind: Literal["equity", "pre_ipo"] = "equity"
 
 
 def post_json(body: dict, post=None, delay: float = 0.1, tries: int = 4) -> dict | list:
@@ -122,15 +123,17 @@ def fetch_funding(symbol: str, start: datetime, post=post_json) -> list[dict]:
 
 
 def load_labels(path: Path = LABELS) -> dict[str, Label]:
-    """ValueError naming the row when ref_kind is not schwab/none or a schwab row has no ref_symbol."""
+    """ValueError naming the row when kind/ref_kind are invalid, a schwab row has no ref_symbol, a pre_ipo row has a
+    reference or an exchange, or an equity row has no exchange."""
     out = {}
     with path.open(newline="") as f:
         for r in csv.DictReader(f):
-            if r["ref_kind"] not in ("schwab", "none") or (r["ref_kind"] == "schwab" and not r["ref_symbol"].strip()):
-                raise ValueError(f"{path}: bad label row {r['perp']!r} (ref_kind={r['ref_kind']!r}, "
-                                 f"ref_symbol={r['ref_symbol']!r})")
-            out[r["perp"]] = Label(r["perp"], r["ref_kind"], r["ref_symbol"] or None, r["exchange"], r["currency"],
-                                   r["name"])
+            kind, rk, sym, ex = r["kind"], r["ref_kind"], r["ref_symbol"].strip(), r["exchange"].strip()
+            if (kind not in ("equity", "pre_ipo") or rk not in ("schwab", "none") or (rk == "schwab" and not sym)
+                    or (kind == "pre_ipo" and (sym or ex or rk != "none")) or (kind == "equity" and not ex)):
+                raise ValueError(f"{path}: bad label row {r['perp']!r} (kind={kind!r}, ref_kind={rk!r}, "
+                                 f"ref_symbol={r['ref_symbol']!r}, exchange={r['exchange']!r})")
+            out[r["perp"]] = Label(r["perp"], rk, r["ref_symbol"] or None, r["exchange"], r["currency"], r["name"], kind)
     return out
 
 
