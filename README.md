@@ -74,7 +74,8 @@ Three questions, each with its own tier of data:
 
 ## Live dashboard
 
-<https://34.127.95.87/> (a bare IP with a self-signed certificate until a domain is attached; `docs/going-public.md`),
+<https://venue-arb.samuel-shlee.com/> (until its DNS record and certificate exist: <https://34.127.95.87/>, a bare IP
+with a self-signed certificate; `docs/going-public.md`),
 titled "venue-arb · Prediction Market Arbitrage", with three tabs: **Scanner** (one row per matched pair, sortable, by
 category), **Explorer** (one pair's edge history, verdict and cost) and **Research** (the research note's headline
 numbers, recomputed hourly). The page shows edges, capacities, bases and episodes, never quotes or order books: the

@@ -28,8 +28,8 @@ Before the repo's visibility changes (Sam's action, after every box is ticked). 
   deploy that the link opens the public repo.
 - [ ] **Serve from a domain or `<ip>.sslip.io`** (Let's Encrypt) before linking from a resume: a bare IP shows a
   self-signed warning. Commands under "Steps that need Sam" below.
-- [ ] **Repo links the page.** `README.md` "Live dashboard" carries `https://34.127.95.87/` (2026-10-28); replace it with
-  the domain once one exists, and check that it opens.
+- [ ] **Repo links the page.** `README.md` "Live dashboard" names `https://venue-arb.samuel-shlee.com/` with the IP as
+  the interim address (2026-10-28); once the record and certificate are in place, drop the IP and check that it opens.
 - [ ] **Backlog (2026-10-22): decimate `exec_hourly` to daily past 60 days** (research section passes 150 KB around
   early Feb 2027; `research_bytes` warns).
 - [x] **Stock-perp terms read (2026-10-23).** Record in `docs/venues.md`, "Terms record (2026-10-23)". Hyperliquid's and
@@ -60,17 +60,25 @@ Before the repo's visibility changes (Sam's action, after every box is ticked). 
 Everything the branch could not do without an external action, with the commands. Sam approves anything that touches
 the VM or DNS.
 
-1. **Register a domain** (any registrar) and **point DNS at the VM**: an `A` record for the host you will serve from
-   (`venue-arb.<your-domain>` or the apex) to `34.127.95.87`, TTL 300. Wait until `dig +short <domain>` prints the IP.
-   Alternative without a registrar: `34.127.95.87.sslip.io` resolves to the IP already.
+1. **Point DNS at the VM (Sam).** The domain is `samuel-shlee.com` (nameservers `ns-cloud-d*.googledomains.com`, the
+   zone Google Domains handed to Squarespace). Its apex and `www` already serve the GitHub Pages site
+   (`samuellee19.github.io`, checked 2026-10-28), so the dashboard takes a subdomain. Add one record in the domain's
+   DNS panel:
+
+   | type | host | value | TTL |
+   |---|---|---|---|
+   | A | `venue-arb` | `34.127.95.87` | 300 |
+
+   Wait until `dig +short venue-arb.samuel-shlee.com` prints the IP. Nothing else in the zone changes.
 2. **Switch Caddy from `tls internal` to a public certificate.** `deploy/server/provision.sh` writes
    `/etc/caddy/Caddyfile` from its second argument: a bare IP gets `tls internal` and `default_sni`, a domain gets
-   neither and Caddy fetches a Let's Encrypt certificate. On the VM, with 80 and 443 open (Let's Encrypt's HTTP
-   challenge uses 80; the GCP firewall rule is separate from the VM's own):
+   neither and Caddy fetches a Let's Encrypt certificate. On the VM. 443 is already open, which is enough: Caddy
+   also tries the TLS-ALPN challenge on 443, so port 80 need not be opened (open it in the GCP firewall rule only if
+   `journalctl -u caddy` shows both challenges failing):
 
    ```bash
-   sudo bash /srv/venue-arb/app/deploy/server/provision.sh /path/to/venue-arb-push.pub <domain>
-   curl -sS https://<domain>/healthz   # no -k: the certificate must validate
+   sudo bash /srv/venue-arb/app/deploy/server/provision.sh /path/to/venue-arb-push.pub venue-arb.samuel-shlee.com
+   curl -sS https://venue-arb.samuel-shlee.com/healthz   # no -k: the certificate must validate
    ```
 
    The script is idempotent (deps, units, cron and the Caddyfile; it restarts Caddy). `journalctl -u caddy` shows the
@@ -93,7 +101,7 @@ the VM or DNS.
    ```bash
    sudo git -C /srv/venue-arb/app pull
    sudo systemctl restart venue-arb-web
-   curl -sS https://<domain>/ | grep -o 'meta name="repo" content="[^"]*"'   # the injected URL
+   curl -sS https://venue-arb.samuel-shlee.com/ | grep -o 'meta name="repo" content="[^"]*"'   # the injected URL
    ```
 
    If the VM's checkout does not pull from a remote it can reach, rsync the checkout as `deploy/server/README.md` says,
