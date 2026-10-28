@@ -25,7 +25,7 @@ RESEARCH_COPY = ("How it's measured", '"Matching"', '"Edge"', '"Crypto ladders"'
                  "Match review: precision", "no review sitting yet",
                  "recomputed hourly from the same tables the Scanner reads", "NOT_COMPUTED")
 MIDDOT_OK = tuple(v for v in VERDICTS if "·" in v)  # mid-dots live only inside the verbatim verdict labels
-ALLOWED_URL = re.compile(r"https://(kalshi\.com|polymarket\.com|app\.hyperliquid\.xyz|github\.com/samuellee19/venue-arb)(/|$)")
+ALLOWED_URL = re.compile(r"https://(kalshi\.com|polymarket\.com|app\.hyperliquid\.xyz)(/|$)")  # the repo URL is config.REPO_URL, injected
 URL = re.compile(r"https?://[^\s'\"`)]+")
 IMPORT = re.compile(r'^import\s[^;]*?\sfrom\s+"([^"]+)"', re.MULTILINE)
 
@@ -58,6 +58,12 @@ def test_no_external_urls_but_venue_and_repo_links():
         for url in URL.findall(_read(name)):
             assert ALLOWED_URL.match(url), (name, url)
     assert not ALLOWED_URL.match("https://kalshi.com.evil.net/x")
+
+
+def test_repo_url_comes_from_config_only():
+    assert "github.com" not in _js() + _read("index.html")  # one value: venue_arb.config.REPO_URL
+    assert '<meta name="repo" content="__REPO_URL__">' in _read("index.html")
+    assert "meta[name=\"repo\"]" in _read("common.js")
 
 
 def test_title_heading_and_tabs():

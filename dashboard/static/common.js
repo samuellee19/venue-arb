@@ -1,7 +1,7 @@
 // Shared state, constants, copy and formatting helpers for the dashboard modules (app.js, scanner.js, explorer.js,
 // research.js).
 // No edge, fee or basis logic here: every number comes from the bundle (dashboard/api/app.py serves it).
-export const REPO = "https://github.com/samuellee19/venue-arb";
+export const REPO = document.querySelector('meta[name="repo"]')?.content || "#";  // config.REPO_URL, injected by the server
 export const POLL_MS = 30000, STALE_S = 120, DEAD_S = 3600, BOOKS_S = 300;  // BOOKS_S = bundle.LIVE_MAX_AGE_S
 export const US_BANNER = "No pair is executable from the US: Polymarket rejects US orders. Gaps shown for reference.";
 export const STALE_BANNER = "last update {n} min ago";

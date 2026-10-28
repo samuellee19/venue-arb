@@ -17,11 +17,12 @@ from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
 from dashboard.api.store import NoBundle, Store
 from venue_arb.bundle import LiveBundle
+from venue_arb.config import REPO_URL
 from venue_arb.edges import fill
 from venue_arb.fees import kalshi_taker_fee, polymarket_taker_fee, transfer_cost
 from venue_arb.models import Level
@@ -45,7 +46,9 @@ def _live() -> tuple[LiveBundle, float]:
 @app.get("/", include_in_schema=False)
 def index():
     page = STATIC / "index.html"
-    return FileResponse(page) if page.is_file() else PlainTextResponse("dashboard not built")
+    if not page.is_file():
+        return PlainTextResponse("dashboard not built")
+    return HTMLResponse(page.read_text(encoding="utf-8").replace("__REPO_URL__", REPO_URL))
 
 
 @app.get("/api/live")

@@ -4,6 +4,9 @@ import os
 from pathlib import Path
 
 PIPELINE_PREFIX = "venue_arb"
+# the public repository the page footer, wordmark and research-note links point at; set it here (or VENUE_ARB_REPO_URL on
+# the server) once the GitHub repository exists. The server injects it into index.html; the static files carry no URL.
+REPO_URL = os.environ.get("VENUE_ARB_REPO_URL", "https://github.com/samuellee19/venue-arb")
 CATEGORIES = ("fed_macro", "crypto_price", "stock_perps")
 SQL_CHECKS = Path("sql_checks")
 CONFIDENCE_FLOOR = 0.8

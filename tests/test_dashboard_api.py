@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 
 from dashboard.api import app as app_mod
 from dashboard.api.store import Store
+from venue_arb.config import REPO_URL
 from venue_arb.edges import fill
 from venue_arb.fees import kalshi_taker_fee, polymarket_taker_fee, transfer_cost
 from venue_arb.models import Level
@@ -47,7 +48,9 @@ def test_live_and_health(client):
     h = client.get("/healthz").json()
     assert h["ok"] is True and h["pairs"] == 11 and h["age_s"] >= body["age_s"]
     assert client.get("/api/live", headers={"Accept-Encoding": "gzip"}).headers["content-encoding"] == "gzip"
-    assert client.get("/").status_code == 200
+    page = client.get("/")
+    assert page.status_code == 200
+    assert REPO_URL in page.text and "__REPO_URL__" not in page.text
 
 
 def test_no_bundle_yet_is_503(monkeypatch, tmp_path):
