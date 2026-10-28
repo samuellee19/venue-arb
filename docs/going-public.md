@@ -74,7 +74,9 @@ the VM or DNS.
    |---|---|---|---|
    | A | `venue-arb` | `34.127.95.87` | 300 |
 
-   Wait until `dig +short venue-arb.samuel-shlee.com` prints the IP. Nothing else in the zone changes.
+   Wait until `dig +short venue-arb.samuel-shlee.com` prints the IP. Nothing else in the zone changes. The address is a
+   reserved static external IP since 2026-10-28 (`venue-arb-web`, us-west1, promoted from ephemeral), so a VM stop or
+   restart keeps it; it costs nothing while attached to the running VM.
 2. **Done 2026-10-28 (Caddyfile written by hand, see the ticked box above). Switch Caddy from `tls internal` to a public certificate.** `deploy/server/provision.sh` writes
    `/etc/caddy/Caddyfile` from its second argument: a bare IP gets `tls internal` and `default_sni`, a domain gets
    neither and Caddy fetches a Let's Encrypt certificate. On the VM. 443 is already open, which is enough: Caddy
