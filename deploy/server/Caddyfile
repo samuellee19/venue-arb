@@ -3,5 +3,14 @@
 # public certificate, point the domain's A record at the VM and re-run provision.sh with the domain as its second
 # argument (docs/going-public.md, "Steps that need Sam"): it drops `tls internal` and restarts Caddy.
 SITE {
-	reverse_proxy 127.0.0.1:8000
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy no-referrer
+		-Server
+	}
+	reverse_proxy 127.0.0.1:8000 {
+		header_down -Server
+	}
 }

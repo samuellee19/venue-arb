@@ -70,7 +70,10 @@ install -m 644 "$BASE/app/deploy/server/prune.cron" /etc/cron.d/venue-arb-prune
   [[ $SITE =~ ^[0-9.]+$ ]] && printf '{\n\tdefault_sni %s\n}\n\n' "$SITE"
   echo "$SITE {"
   [[ $SITE =~ ^[0-9.]+$ ]] && printf '\ttls internal\n'
-  printf '\treverse_proxy 127.0.0.1:8000\n}\n'
+  # security headers: a year of HSTS (the site is HTTPS-only), no MIME sniffing, no framing, no referrer leak, no
+  # Server banner from Caddy (uvicorn's own 'server' header is dropped below)
+  printf '\theader {\n\t\tStrict-Transport-Security "max-age=31536000"\n\t\tX-Content-Type-Options nosniff\n\t\tX-Frame-Options DENY\n\t\tReferrer-Policy no-referrer\n\t\t-Server\n\t}\n'
+  printf '\treverse_proxy 127.0.0.1:8000 {\n\t\theader_down -Server\n\t}\n}\n'
 } >/etc/caddy/Caddyfile
 systemctl daemon-reload
 systemctl enable --now cron

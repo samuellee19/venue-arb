@@ -51,6 +51,8 @@ def test_live_and_health(client):
     page = client.get("/")
     assert page.status_code == 200
     assert REPO_URL in page.text and "__REPO_URL__" not in page.text
+    for u in ("/docs", "/redoc", "/openapi.json"):
+        assert client.get(u).status_code == 404, u  # no schema or docs page on the public server
 
 
 def test_no_bundle_yet_is_503(monkeypatch, tmp_path):

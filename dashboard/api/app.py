@@ -30,7 +30,7 @@ from venue_arb.models import Level
 STATIC = Path(__file__).parent.parent / "static"
 store = Store(Path(os.environ.get("BUNDLE_DIR", "/srv/venue-arb/bundle")))
 
-app = FastAPI(title="venue-arb dashboard", docs_url=None, redoc_url=None)
+app = FastAPI(title="venue-arb dashboard", docs_url=None, redoc_url=None, openapi_url=None)  # no schema page either
 app.add_middleware(GZipMiddleware, minimum_size=1000)  # live.json is ~70–100 KB today (research included)
 if STATIC.is_dir():
     app.mount("/static", StaticFiles(directory=STATIC), name="static")
