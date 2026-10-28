@@ -102,7 +102,7 @@ the VM or DNS.
    If the repository gets another name, change `REPO_URL` in `venue_arb/config.py` (or set `VENUE_ARB_REPO_URL` in the
    web unit) in one commit through the usual CI path, and put the real URL in `README.md`'s "Live dashboard" and
    `deploy/server/README.md`'s `REPO_URL` example.
-4. **Done 2026-10-28 (main at 5a73350 shipped with `git archive main | ssh venue-arb-vm 'sudo tar -x --no-same-owner -C /srv/venue-arb/app'`, backup `/srv/venue-arb/app-backup-20261028-1844.tgz` without the venv, then the restart; the Mac key for the VM lives in the instance's SSH-keys metadata, since the guest agent rewrites `authorized_keys` from it). Deploy the page copy and restart the web service.** The footer, wordmark and research-note links come from
+4. **Done 2026-10-28 (main at 5a73350 shipped with `git archive main | ssh venue-arb-vm 'sudo tar -x --no-same-owner -C /srv/venue-arb/app'`, backup `/srv/venue-arb/app-backup-20261028-1844.tgz` without the venv, then the restart; the admin key for the VM lives in the instance's SSH-keys metadata, since the guest agent rewrites `authorized_keys` from it). Deploy the page copy and restart the web service.** The footer, wordmark and research-note links come from
    `REPO_URL`, injected by the server, so the VM needs the new code:
 
    ```bash
@@ -112,7 +112,7 @@ the VM or DNS.
    ```
 
    The VM's `/srv/venue-arb/app` is an rsync copy, not a git checkout (checked 2026-10-28), so the update is a rsync of
-   the OptiPlex `main` checkout as `deploy/server/README.md` says (the Mac reaches the VM as `ssh venue-arb-vm`, user
-   `sammy96119`, key `~/.ssh/venue-arb-vm`), then the restart.
+   the OptiPlex `main` checkout as `deploy/server/README.md` says (the Mac has an ssh alias for the VM; the login
+   details stay out of the repo), then the restart.
 5. **Decisions still open above:** `BWS_PROJECT_ID` in the units (identifier, not a secret), the manual exclusion review
    after a week of oracle-check reports, and the `exec_hourly` decimation backlog.
