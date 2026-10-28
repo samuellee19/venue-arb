@@ -60,6 +60,16 @@ Before the repo's visibility changes (Sam's action, after every box is ticked). 
   advice.
 - [x] **Pyth: not used.** Equities with display rights need Pro (from $2,500 a month); out of scope (`docs/venues.md`).
 
+- [x] **Security pass (2026-10-28).** Public surface: only 22 and 443 answer; uvicorn and Caddy's admin port are loopback-only;
+  ufw default deny. SQL: the server's only user inputs (`key`, snapshot `ts`) are DuckDB bound parameters; `range` is a
+  Literal, `size` is bounded, `/static` traversal gets 404. sshd: no passwords, `PermitRootLogin no`, no X11 or TCP
+  forwarding (drop-in `/etc/ssh/sshd_config.d/10-venue-arb-hardening.conf`); the stale `ubuntu` and `sam` accounts are
+  locked and expired. Unattended security upgrades on. The server serves no OpenAPI schema or docs page. Caddy sends
+  HSTS (one year), `nosniff`, `X-Frame-Options DENY`, `Referrer-Policy no-referrer` and no Server banner (the VM's file
+  is the two-site form with an `(hard)` snippet; backup `/etc/caddy/Caddyfile.pre-headers.bak`). No CSP: the page's
+  inline theme script and Plotly's inline styles would need reworking first. Not done: fail2ban or `ufw limit OpenSSH`
+  (key-only auth makes the brute-force noise harmless).
+
 ## Steps that need Sam
 
 Everything the branch could not do without an external action, with the commands. Sam approves anything that touches
