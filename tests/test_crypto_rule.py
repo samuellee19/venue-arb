@@ -2,7 +2,7 @@ import json
 from datetime import UTC, date, datetime
 from pathlib import Path
 
-from venue_arb.matching.crypto_rule import clip, ladders, parse, parse_strike
+from venue_arb.matching.crypto_rule import RULE_MODEL, clip, decide, ladders, parse, parse_strike
 
 H5 = datetime(2026, 10, 20, 9, tzinfo=UTC)  # 5 AM EDT
 
@@ -133,3 +133,30 @@ def test_et_winter_daily_hourly_and_year_rollover():
     assert s.instant == datetime(2027, 1, 15, 20, tzinfo=UTC)
     s = parse_strike(_pm("Bitcoin above 80,000 on December 31, 11PM ET?", datetime(2027, 1, 1, 4, tzinfo=UTC)))
     assert s.instant == datetime(2027, 1, 1, 4, tzinfo=UTC)  # Dec 31 title, Jan 1 UTC close
+
+
+def test_decide_same_strike_same_instant_is_near():
+    v = decide(k(80000), p(80000))
+    assert (v.relation, v.yes_maps_to, v.confidence) == ("near", "yes", 1.0)
+    assert "CF Benchmarks" in v.reason and v.tail_risks is None
+    assert RULE_MODEL == "rule:crypto-v1"
+
+
+def test_decide_different_strike_instant_or_asset():
+    assert decide(k(80000), p(81000)).relation == "different"
+    assert decide(k(80000), p(80000, hour="12PM")).relation == "different"
+    assert decide(k(2800, asset="KXETHD"), p(2800)).relation == "different"
+    assert decide(k(1, label="$73,200 to 73,299.99"), p(73200)).relation == "different"
+
+
+def test_decide_opposite_direction_maps_yes_to_no():
+    v = decide(k(80000), {**p(80000), "title": "Will the price of Bitcoin be less than $80,000 on October 20?"})
+    assert (v.relation, v.yes_maps_to) == ("different", "no")
+
+
+def test_decide_none_outside_the_rule():
+    fed = {"venue": "kalshi", "market_id": "KXFEDDECISION-26DEC-H25", "event_id": "KXFEDDECISION-26DEC",
+           "category": "fed_macro", "title": "x", "yes_label": "Yes", "yes_token": None, "close_time": H5}
+    assert decide(fed, p(80000)) is None
+    assert decide({"market_id": "a", "title": "x"}, {"market_id": "b", "title": "y"}) is None  # no category, no crash
+    assert decide(k(80000), {**p(80000), "title": "Bitcoin Up or Down - October 20, 5AM ET"}) is None

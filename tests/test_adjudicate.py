@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import UTC, date, datetime
 
 import anthropic
 import httpx
@@ -136,20 +136,20 @@ def test_today_spend():
 
 
 def test_daily_budget_even_split():
-    assert daily_budget(0, 0, date(2026, 10, 19)) == pytest.approx(20 / 13)
+    assert daily_budget(0, 0, date(2026, 10, 19), monthly=20) == pytest.approx(20 / 13)
 
 
 def test_daily_budget_nearly_spent_month():
-    assert daily_budget(19.99, 0, date(2026, 10, 19)) == pytest.approx(0.01 / 13)
+    assert daily_budget(19.99, 0, date(2026, 10, 19), monthly=20) == pytest.approx(0.01 / 13)
 
 
 def test_daily_budget_zero_once_allowance_used():
-    assert daily_budget(1.54, 1.54, date(2026, 10, 19)) == 0.0  # allowance (20-1.54+1.54)/13 = 1.538 < 1.54
-    assert daily_budget(25, 0, date(2026, 10, 19)) == 0.0
+    assert daily_budget(1.54, 1.54, date(2026, 10, 19), monthly=20) == 0.0  # allowance (20-1.54+1.54)/13 = 1.538 < 1.54
+    assert daily_budget(25, 0, date(2026, 10, 19), monthly=20) == 0.0
 
 
 def test_daily_budget_last_day_takes_all_remaining():
-    assert daily_budget(15, 1, date(2026, 10, 31)) == pytest.approx(5.0)  # 20 - 14 spent before today - 1 spent today
+    assert daily_budget(15, 1, date(2026, 10, 31), monthly=20) == pytest.approx(5.0)  # 20 - 14 spent before today - 1 spent today
 
 
 def test_ok_attempt_recorded_in_ledger():
@@ -315,3 +315,16 @@ def test_rule_second_run_is_cached():
     assert run(conn, _fed(), 0.0, call=FakeCall())["ruled"] == 1
     out = run(conn, _fed(), 0.0, call=FakeCall())
     assert out["ruled"] == 0 and out["cached"] == 1 and len(conn.inserts) == 1
+
+
+def test_crypto_ladder_pair_is_ruled_not_called():
+    t = datetime(2026, 10, 28, 22, tzinfo=UTC)  # 6 PM EDT
+    a = {**listing("KXBTCD-26OCT2818-T79999.99", "v1"), "venue": "kalshi", "event_id": "KXBTCD-26OCT2818",
+         "category": "crypto_price", "yes_label": "$80,000 or above", "yes_token": None, "close_time": t}
+    b = {**listing("0xp", "w1"), "venue": "polymarket", "event_id": "e", "category": "crypto_price",
+         "title": "Bitcoin above 80,000 on October 28, 6PM ET?", "yes_token": "tok", "close_time": t}
+    conn, call = FakeConn(), FakeCall()
+    out = run(conn, [(a, b)], 0.0, budget=0.0, call=call)
+    assert call.n == 0 and out["ruled"] == 1 and out["skipped_budget"] == 0 and conn.attempts == []
+    ins = conn.inserts[0]
+    assert "rule:crypto-v1" in ins and ins[7] == "near"
