@@ -111,11 +111,11 @@ def parse_strike(row: dict) -> Strike | None:
         if not 1 <= int(m["h"]) <= 12:
             return None
         at = _et(row, m, int(m["h"]) % 12 + (12 if m["ap"] == "PM" else 0))
-        return at and Strike("polymarket", row["market_id"], row["yes_token"], _ASSET[m[1]], at, "gt", _f(m[2]))
+        return at and Strike("polymarket", row["market_id"], row.get("yes_token"), _ASSET[m[1]], at, "gt", _f(m[2]))
     if (m := _P_DAILY.match(title)) and m[2] != "less than":
         level = _f(m[3]) if m[2] == "above" else round(_f(m[3]) - 0.01, 2)
         at = _et(row, m, 12)
-        return at and Strike("polymarket", row["market_id"], row["yes_token"], _ASSET[m[1]], at, "gt", level)
+        return at and Strike("polymarket", row["market_id"], row.get("yes_token"), _ASSET[m[1]], at, "gt", level)
     return None
 
 

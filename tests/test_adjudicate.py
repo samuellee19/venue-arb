@@ -322,7 +322,7 @@ def test_crypto_ladder_pair_is_ruled_not_called():
     a = {**listing("KXBTCD-26OCT2818-T79999.99", "v1"), "venue": "kalshi", "event_id": "KXBTCD-26OCT2818",
          "category": "crypto_price", "yes_label": "$80,000 or above", "yes_token": None, "close_time": t}
     b = {**listing("0xp", "w1"), "venue": "polymarket", "event_id": "e", "category": "crypto_price",
-         "title": "Bitcoin above 80,000 on October 28, 6PM ET?", "yes_token": "tok", "close_time": t}
+         "title": "Bitcoin above 80,000 on October 28, 6PM ET?", "close_time": t}  # match rows carry no yes_token
     conn, call = FakeConn(), FakeCall()
     out = run(conn, [(a, b)], 0.0, budget=0.0, call=call)
     assert call.n == 0 and out["ruled"] == 1 and out["skipped_budget"] == 0 and conn.attempts == []
