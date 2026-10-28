@@ -3,6 +3,8 @@
 import calendar
 import json
 import logging
+import time
+from contextlib import contextmanager, suppress
 from datetime import date
 from typing import Literal
 
@@ -83,15 +85,50 @@ def prompt_for(a: dict, b: dict) -> str:
     return f"{_INSTRUCTIONS}\n\n{_block('A (Kalshi)', a)}\n\n{_block('B (Polymarket)', b)}"
 
 
+@contextmanager
+def _traced():
+    """Root MLflow span around one call, tagged with the obs run id. A finished autolog trace is no longer
+    current, so the tag has to go on while the span is open. Off unless mlflow.anthropic.autolog() is on (the match
+    flow turns it on); telemetry never breaks the call."""
+    try:
+        import mlflow
+        from mlflow.utils.autologging_utils import autologging_is_disabled
+
+        on = not autologging_is_disabled("anthropic")
+    except Exception:  # noqa: BLE001
+        on = False
+    if not on:
+        yield
+        return
+    with mlflow.start_span(name="adjudicate"):
+        with suppress(Exception):  # obs.current() is None outside a run; CI has no obs
+            import obs
+
+            if run := obs.current():
+                mlflow.update_current_trace(tags={"obs.run_id": run.id})
+        yield
+
+
 def _call_claude(prompt: str) -> tuple[dict | None, int, int]:
     """Raw tool input (None if the model returned no tool call) and token usage; validation is the caller's job,
     so a billed call whose output is malformed still reports its usage."""
-    msg = anthropic.Anthropic().messages.create(  # key from ANTHROPIC_API_KEY
-        model=LLM_MODEL, max_tokens=1024, tools=[_TOOL],
-        tool_choice={"type": "tool", "name": "record_verdict"},
-        messages=[{"role": "user", "content": prompt}],
-    )
+    t0 = time.monotonic()
+    with _traced():
+        msg = anthropic.Anthropic().messages.create(  # key from ANTHROPIC_API_KEY
+            model=LLM_MODEL, max_tokens=1024, tools=[_TOOL],
+            tool_choice={"type": "tool", "name": "record_verdict"},
+            messages=[{"role": "user", "content": prompt}],
+        )
     block = next((b for b in msg.content if b.type == "tool_use"), None)
+    with suppress(Exception):  # counts only, never the prompt or the answer
+        import obs
+
+        with obs.step("claude_call", **{
+            "gen_ai.request.model": LLM_MODEL, "gen_ai.usage.input_tokens": msg.usage.input_tokens,
+            "gen_ai.usage.output_tokens": msg.usage.output_tokens,
+            "gen_ai.latency_ms": round((time.monotonic() - t0) * 1000),
+        }):
+            pass
     return (block.input if block else None), msg.usage.input_tokens, msg.usage.output_tokens
 
 

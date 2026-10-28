@@ -1,3 +1,4 @@
+import contextlib
 from datetime import UTC, date, datetime
 
 import anthropic
@@ -328,3 +329,70 @@ def test_crypto_ladder_pair_is_ruled_not_called():
     assert call.n == 0 and out["ruled"] == 1 and out["skipped_budget"] == 0 and conn.attempts == []
     ins = conn.inserts[0]
     assert "rule:crypto-v1" in ins and ins[7] == "near"
+
+
+# --- MLflow trace tag + obs step counts around the real call (fake client, no network) ---
+
+
+def _fake_client(monkeypatch):
+    from types import SimpleNamespace
+
+    from venue_arb.matching import adjudicate as mod
+
+    msg = SimpleNamespace(content=[SimpleNamespace(type="tool_use", input={"relation": "exact"})],
+                          usage=SimpleNamespace(input_tokens=11, output_tokens=7))
+    monkeypatch.setattr(mod.anthropic, "Anthropic",
+                        lambda: SimpleNamespace(messages=SimpleNamespace(create=lambda **kw: msg)))
+    return mod
+
+
+def _autolog(monkeypatch, on, calls):
+    import mlflow
+    from mlflow.utils import autologging_utils
+
+    monkeypatch.setattr(autologging_utils, "autologging_is_disabled", lambda name: not on)
+    monkeypatch.setattr(mlflow, "start_span", lambda **kw: contextlib.nullcontext())
+    monkeypatch.setattr(mlflow, "update_current_trace", lambda **kw: calls.append(kw))
+
+
+def test_call_claude_without_autolog_skips_trace(monkeypatch):
+    mod = _fake_client(monkeypatch)
+    calls = []
+    _autolog(monkeypatch, False, calls)
+    assert mod._call_claude("p") == ({"relation": "exact"}, 11, 7)
+    assert calls == []
+
+
+def test_call_claude_tags_trace_and_reports_counts(monkeypatch):
+    obs = pytest.importorskip("obs")
+    mod = _fake_client(monkeypatch)
+    calls, steps = [], []
+    _autolog(monkeypatch, True, calls)
+
+    @contextlib.contextmanager
+    def step(name, **attrs):
+        steps.append((name, attrs))
+        yield
+
+    monkeypatch.setattr(obs, "step", step)
+    with obs.run("venue-arb.test") as run:
+        assert mod._call_claude("p")[1:] == (11, 7)
+    assert calls == [{"tags": {"obs.run_id": run.id}}]
+    (name, attrs), = steps
+    assert name == "claude_call" and attrs["gen_ai.usage.input_tokens"] == 11
+    assert attrs["gen_ai.usage.output_tokens"] == 7 and attrs["gen_ai.request.model"] == mod.LLM_MODEL
+    assert all(k.startswith("gen_ai.") for k in attrs)  # counts only, never the prompt or the answer
+
+
+def test_call_claude_telemetry_failures_never_break_the_call(monkeypatch):
+    obs = pytest.importorskip("obs")
+    mod = _fake_client(monkeypatch)
+    calls = []
+    _autolog(monkeypatch, True, calls)
+    assert mod._call_claude("p")[1:] == (11, 7)  # autolog on, no obs run: no tag attempted
+    assert calls == []
+    import mlflow
+
+    monkeypatch.setattr(mlflow, "update_current_trace", lambda **kw: 1 / 0)  # e.g. no active trace
+    with obs.run("venue-arb.test"):
+        assert mod._call_claude("p")[1:] == (11, 7)

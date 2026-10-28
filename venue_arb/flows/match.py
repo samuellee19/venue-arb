@@ -5,6 +5,7 @@
 
 from datetime import UTC, datetime
 
+import mlflow
 import numpy as np
 import obs
 from pgvector.psycopg import register_vector
@@ -93,6 +94,11 @@ def match_flow(limit: int = 500) -> dict:
             pairs = unadjudicated(cands, kal, pmr, done, limit)
             m = adjudicate.month_spend(conn)
             budget = m + adjudicate.daily_budget(m, adjudicate.today_spend(conn), datetime.now(UTC).date())
+            try:  # Claude call traces; adjudicate._traced tags each with this obs run id. Telemetry never breaks the flow
+                mlflow.set_experiment("venue-arb")
+                mlflow.anthropic.autolog()
+            except Exception as e:  # noqa: BLE001
+                log.warning("MLflow tracing off: %s", type(e).__name__)
             out = adjudicate.run(conn, pairs, month_spend=m, budget=budget) | {"candidates": len(cands)}
             (n,) = conn.execute(
                 "SELECT count(*) FROM venue_arb.adjudications d "
