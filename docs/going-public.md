@@ -26,8 +26,12 @@ Before the repo's visibility changes (Sam's action, after every box is ticked). 
   (`tests/test_dashboard_static.py`). Change the default if the repository gets another name.
 - [x] **Page footer links the repo** (footer, wordmark and research-note links all read the injected value). Verify after
   deploy that the link opens the public repo.
-- [ ] **Serve from a domain or `<ip>.sslip.io`** (Let's Encrypt) before linking from a resume: a bare IP shows a
-  self-signed warning. Commands under "Steps that need Sam" below.
+- [x] **Serve from a domain** (2026-10-28). `https://venue-arb.samuel-shlee.com/` serves with a Let's Encrypt certificate
+  (TLS-ALPN challenge on 443; port 80 stays closed). The A record was added by Sam in the Squarespace DNS panel (TTL
+  1 h); the Caddyfile on the VM was written by hand with two site blocks, the domain and the bare IP (`tls internal`,
+  kept so the old address keeps answering), then `systemctl reload caddy`; the previous file is
+  `/etc/caddy/Caddyfile.ip-only.bak`. A later `provision.sh` run with the domain rewrites the file with the domain block
+  only, which is fine once nothing links the IP.
 - [ ] **Repo links the page.** `README.md` "Live dashboard" names `https://venue-arb.samuel-shlee.com/` with the IP as
   the interim address (2026-10-28); once the record and certificate are in place, drop the IP and check that it opens.
 - [ ] **Backlog (2026-10-22): decimate `exec_hourly` to daily past 60 days** (research section passes 150 KB around
@@ -60,7 +64,7 @@ Before the repo's visibility changes (Sam's action, after every box is ticked). 
 Everything the branch could not do without an external action, with the commands. Sam approves anything that touches
 the VM or DNS.
 
-1. **Point DNS at the VM (Sam).** The domain is `samuel-shlee.com` (nameservers `ns-cloud-d*.googledomains.com`, the
+1. **Done 2026-10-28. Point DNS at the VM (Sam).** The domain is `samuel-shlee.com` (nameservers `ns-cloud-d*.googledomains.com`, the
    zone Google Domains handed to Squarespace). Its apex and `www` already serve the GitHub Pages site
    (`samuellee19.github.io`, checked 2026-10-28), so the dashboard takes a subdomain. Add one record in the domain's
    DNS panel:
@@ -70,7 +74,7 @@ the VM or DNS.
    | A | `venue-arb` | `34.127.95.87` | 300 |
 
    Wait until `dig +short venue-arb.samuel-shlee.com` prints the IP. Nothing else in the zone changes.
-2. **Switch Caddy from `tls internal` to a public certificate.** `deploy/server/provision.sh` writes
+2. **Done 2026-10-28 (Caddyfile written by hand, see the ticked box above). Switch Caddy from `tls internal` to a public certificate.** `deploy/server/provision.sh` writes
    `/etc/caddy/Caddyfile` from its second argument: a bare IP gets `tls internal` and `default_sni`, a domain gets
    neither and Caddy fetches a Let's Encrypt certificate. On the VM. 443 is already open, which is enough: Caddy
    also tries the TLS-ALPN challenge on 443, so port 80 need not be opened (open it in the GCP firewall rule only if
@@ -104,7 +108,8 @@ the VM or DNS.
    curl -sS https://venue-arb.samuel-shlee.com/ | grep -o 'meta name="repo" content="[^"]*"'   # the injected URL
    ```
 
-   If the VM's checkout does not pull from a remote it can reach, rsync the checkout as `deploy/server/README.md` says,
-   then restart.
+   The VM's `/srv/venue-arb/app` is an rsync copy, not a git checkout (checked 2026-10-28), so the update is a rsync of
+   the OptiPlex `main` checkout as `deploy/server/README.md` says (the Mac reaches the VM as `ssh venue-arb-vm`, user
+   `sammy96119`, key `~/.ssh/venue-arb-vm`), then the restart.
 5. **Decisions still open above:** `BWS_PROJECT_ID` in the units (identifier, not a secret), the manual exclusion review
    after a week of oracle-check reports, and the `exec_hourly` decimation backlog.
