@@ -43,6 +43,17 @@ def test_rule_pairs_month_word_boundary():
     assert rule_pairs(k, [row("p", title="Maybe a Fed cut in 2026?")]) == []
 
 
+def test_rule_pairs_need_a_fed_word():
+    # gas-price, Treasury-yield and CPI titles share the fed_macro tag and the month, but are not Fed decisions
+    k = [row("k", event_id="KXFED-26OCT")]
+    for t in ("Will the US national average gas price be between $4.2500 and $4.2599 on October 29?",
+              "Will the 10-year Treasury yield hit 4% in October?", "Will annual inflation be 3% in October?"):
+        assert rule_pairs(k, [row("p", title=t)]) == []
+    for t in ("Will the upper bound of the target federal funds rate be 4.00% at the end of October?",
+              "Will the Fed\u2019s lower bound reach 3.50% or lower before October 31?", "FOMC hold in October?"):
+        assert rule_pairs(k, [row("p", title=t)]) == [("k", "p", 1.0)]
+
+
 def test_merge_prefers_rule():
     out = merge([("k", "p", 1.0)], [("k", "p", 0.8), ("k", "q", 0.9)])
     assert sorted(out) == [("k", "p", 1.0, "rule"), ("k", "q", 0.9, "embed")]

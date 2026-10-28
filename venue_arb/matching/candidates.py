@@ -2,6 +2,7 @@ import calendar
 import re
 
 _FED_ID = re.compile(r"^KXFED[A-Z]*-(\d\d)([A-Z]{3})")
+_FED_WORD = re.compile(r"\b(fed|fomc|federal funds)\b", re.IGNORECASE)  # the tag alone admits gas, yields, CPI
 
 
 def _days(a: dict, b: dict) -> float:
@@ -20,8 +21,8 @@ def rule_pairs(kalshi: list[dict], pm: list[dict]) -> list[tuple[str, str, float
             continue
         name = calendar.month_name[month]
         for p in pm:
-            if (p["category"] != "fed_macro" or not re.search(rf"\b{name}\b", p["title"], re.IGNORECASE)
-                    or _days(k, p) > 2):
+            if (p["category"] != "fed_macro" or not _FED_WORD.search(p["title"])
+                    or not re.search(rf"\b{name}\b", p["title"], re.IGNORECASE) or _days(k, p) > 2):
                 continue
             # year must be in the title, else fall back to the Polymarket close_time year
             years = re.findall(r"\b(20\d\d)\b", p["title"]) or [str(p["close_time"].year)]
