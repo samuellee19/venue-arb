@@ -150,6 +150,13 @@ did not settle when fetched is marked "unverified". Re-check before relying on a
 ### Public data terms (2026-10-20)
 - **Decision: `DASHBOARD_SHOW_BOOKS = False`.** On 2026-10-20 the Terms of Use could not be fetched. Sam read them on
   2026-10-23: they restrict use and redistribution of the data; see "Terms record (2026-10-23)" below.
+- **Decision (Sam, 2026-10-28): recorded, public page kept as is.** The Terms of Use (effective 2026-08-11, read
+  2026-10-23) limit US persons to the Content Features, bar robots and scrapers from removing data from the Site and
+  Interfaces without written consent, and bar market-data distributors and Capital Market Clients from using the Data
+  (raw, derived or aggregated) or receiving it. The project is a non-commercial personal research page that reads the
+  public CLOB API, so Sam takes the same posture as for Kalshi (see "Developer Agreement (2026-10-27)" above): derived
+  figures stay on the page, raw quotes stay withheld (`DASHBOARD_SHOW_BOOKS = False`), nothing is redistributed to a
+  distributor, and written consent is the route to anything more. Revisit if Polymarket objects or before commercial use.
 - 2026-10-20 fetch attempt: <https://polymarket.com/tos> fetched 2026-10-20 by curl (HTTP 200, 343 KB) and in the browser pane: the document
   body does not render, only the site shell (and no clause text is in the raw HTML either). The only text is the meta
   description, "By using Polymarket you agree to our Terms of Use."

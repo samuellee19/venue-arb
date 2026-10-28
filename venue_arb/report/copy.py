@@ -31,9 +31,9 @@ METHOD: dict[str, str] = {
         "leg pays out in every state, as long as the indexes stay within that measured range."),
     "not_shown": (
         "The page does not show either venue's quotes or order books, only numbers derived from them, such as net "
-        "edge, fees and fillable size. Kalshi's data terms do not permit public display of its prices without "
-        "written permission, and Polymarket's terms could not be read, so quotes from both venues are withheld until "
-        "that is settled. Kalshi's taker fee coefficient is secondhand and unverified, because its fee schedule could "
+        "edge, fees and fillable size. Neither venue's data terms permit public display of its prices without "
+        "written permission, so quotes from both venues are withheld. "
+        "Kalshi's taker fee coefficient is secondhand and unverified, because its fee schedule could "
         "not be fetched, and Polymarket's fee rounding rule is unverified, so an edge could be off by up to about a "
         "cent per contract."),
     "stock_perps": (
