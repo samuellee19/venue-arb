@@ -26,15 +26,15 @@ Before the repo's visibility changes (Sam's action, after every box is ticked). 
   (`tests/test_dashboard_static.py`). Change the default if the repository gets another name.
 - [x] **Page footer links the repo** (footer, wordmark and research-note links all read the injected value). The repo
   URL, `/blob/main/reports/research-note-v1.md`, `/blob/main/LICENSE` and `/blob/main/docs/terms.md` all answer 200
-  (2026-10-28). The live page still carries the old hardcoded link to the same URL until the VM code update below.
+  (2026-10-28). Deployed the same day: the live page's `<meta name="repo">` reads `https://github.com/samuellee19/venue-arb`.
 - [x] **Serve from a domain** (2026-10-28). `https://venue-arb.samuel-shlee.com/` serves with a Let's Encrypt certificate
   (TLS-ALPN challenge on 443; port 80 stays closed). The A record was added by Sam in the Squarespace DNS panel (TTL
   1 h); the Caddyfile on the VM was written by hand with two site blocks, the domain and the bare IP (`tls internal`,
   kept so the old address keeps answering), then `systemctl reload caddy`; the previous file is
   `/etc/caddy/Caddyfile.ip-only.bak`. A later `provision.sh` run with the domain rewrites the file with the domain block
   only, which is fine once nothing links the IP.
-- [ ] **Repo links the page.** `README.md` "Live dashboard" names `https://venue-arb.samuel-shlee.com/` with the IP as
-  the interim address (2026-10-28); once the record and certificate are in place, drop the IP and check that it opens.
+- [x] **Repo links the page.** `README.md` "Live dashboard" names `https://venue-arb.samuel-shlee.com/`; it opens with a
+  valid certificate (2026-10-28). The IP stays mentioned as a fallback address.
 - [ ] **Backlog (2026-10-22): decimate `exec_hourly` to daily past 60 days** (research section passes 150 KB around
   early Feb 2027; `research_bytes` warns).
 - [x] **Stock-perp terms read (2026-10-23).** Record in `docs/venues.md`, "Terms record (2026-10-23)". Hyperliquid's and
@@ -100,7 +100,7 @@ the VM or DNS.
    If the repository gets another name, change `REPO_URL` in `venue_arb/config.py` (or set `VENUE_ARB_REPO_URL` in the
    web unit) in one commit through the usual CI path, and put the real URL in `README.md`'s "Live dashboard" and
    `deploy/server/README.md`'s `REPO_URL` example.
-4. **Deploy the page copy and restart the web service.** The footer, wordmark and research-note links come from
+4. **Done 2026-10-28 (main at 5a73350 shipped with `git archive main | ssh venue-arb-vm 'sudo tar -x --no-same-owner -C /srv/venue-arb/app'`, backup `/srv/venue-arb/app-backup-20261028-1844.tgz` without the venv, then the restart; the Mac key for the VM lives in the instance's SSH-keys metadata, since the guest agent rewrites `authorized_keys` from it). Deploy the page copy and restart the web service.** The footer, wordmark and research-note links come from
    `REPO_URL`, injected by the server, so the VM needs the new code:
 
    ```bash
