@@ -1,89 +1,119 @@
 # venue-arb
 
-When Kalshi and Polymarket list the same contract, do their prices leave money on the table after taker fees and
-order-book depth? venue-arb catalogs both venues, matches equivalent contracts with rules and an LLM adjudicator,
-snapshots order books for the matched pairs every 60 seconds, and measures the gap. It places no orders and has no
-code path that calls an order, account or position endpoint. Design: `docs/superpowers/specs/2026-10-19-venue-arb-design.md`.
+Cross-venue market matching and arbitrage research. When two venues price the same thing, is there money left after
+fees and depth, and for whom? venue-arb catalogs the venues, matches equivalent contracts with rules and an LLM
+adjudicator, snapshots order books every 60 seconds, scores the gap net of taker fees and fillable size, and publishes
+the derived figures on a live page. It places no orders and has no code path that calls an order, account or position
+endpoint on any venue. Design: `docs/superpowers/specs/2026-10-19-venue-arb-design.md`.
 
-## What it measures
+## What it asked
 
-Listings from both venues are placed in a shared hierarchy (category, event, market, outcome) and compared only
-inside a branch. Matching runs top-down: deterministic rules where a venue exposes structure (Kalshi tickers,
-Polymarket slugs, a 25 bp grid for Fed decisions), then an LLM adjudicator for the rest. Each pair gets a verdict
-and a plain-words reason.
+Three questions, each with its own tier of data:
 
-- **Exact matches** (both Yes outcomes pay in the same states of the world): scored as arbitrage. Both ask ladders
-  are walked together with taker fees on each leg, so the edge is net of fees and of the depth available at that
-  price. An episode is a net edge of at least $0.01 per $1 contract, at least $100 executable, in two or more
-  consecutive snapshots.
-- **Near matches** (the Yes outcomes overlap but differ in window, threshold or resolving authority): priced as
-  relative value, with the difference stated, and never called arbitrage.
-- **Same-instant crypto ladders** (Kalshi `KXBTCD`/`KXETHD` against Polymarket "above X" contracts that settle at
-  the same instant): a model-free tier. A cross-strike spread pays in every state only if the two settlement
-  indices (CF Benchmarks BRTI and the Binance candle close) stay within a measured basis bound, so each spread is
-  checked against a bound taken from 30 days of hourly differences.
-- **Stock perpetuals** (a separate tier: Hyperliquid's trade.xyz perps against the stocks they track). The public view
-  uses Hyperliquid data only: basis is the perp's mark against the trade.xyz venue oracle, in bps, with the oracle's
-  age on every row. Its net takes off the perp-side costs of a 24-hour hold (two taker fees, the perp's exit
-  half-spread and funding), before any stock-leg cost; borrow is shown as a sensitivity only. Outside a name's external
-  session the oracle follows the perp, so those rows read "Oracle internal · market closed" and are not scored. An
-  episode needs net ≥ 10 bps, at least $100 of perp depth and two consecutive snapshots. A private two-leg tier,
-  never published, scores the same perps against live stock quotes (stock spread and borrow included), and a private
-  daily check measures how far the oracle sits from those quotes (below). The weekend tier is a forecast test, not an arbitrage: how much of Monday's move the weekend
-  perp had already made. Details: `docs/venues.md` (Hyperliquid), the design
-  `docs/superpowers/specs/2026-10-22-venue-arb-stock-perp-basis-design.md`.
-- **The honest denominator.** Every admissible check is counted, scored or not, so a count of opportunities always
-  has the number of looks it came from. The screened (hourly history) and executable (our own books) tiers are
-  never combined, and screened rows are never called arbitrage.
+1. **Prediction markets.** When Kalshi and Polymarket list the same contract, do their prices leave money on the table
+   after taker fees and order-book depth, and can a US person take it?
+2. **Stock perpetuals.** Do Hyperliquid's trade.xyz stock perps trade away from the stocks they track by more than a
+   round trip costs?
+3. **Pre-IPO perps.** Several venues price the same unlisted company (Anthropic on five markets). Is the gap between
+   them a spread?
 
-## Results so far
+## What it found
 
-From `reports/research-note-v1.md`, generated 2026-10-20. This is v1: the executable window is 16.1 hours, and the
-note is re-run once about four weeks of snapshots exist.
+- **No executable cross-venue edge after fees for a US person on prediction markets.** From
+  `reports/research-note-v1.md` (generated 2026-10-22, 15 human-reviewed exact Fed-decision pairs, 60 s cadence):
+  62,099 aligned pair-snapshots over 69.1 h gave 13 opportunity episodes, with the largest top-of-book edge after fees at
+  0.0432 per $1 against the 0.01 threshold, and 0 of the 13 executable within the US, because Polymarket International
+  blocks US trading. The hourly screened tier (not executable) has a median net gap of -0.032 and 3.5% of 27,043 rows
+  at or above 0.01, a count biased in both directions. On same-instant crypto ladders, 2 of 1,469,130 admissible
+  cross-strike checks cleared 0.01 after fees and 0 episodes formed in 47.6 h; the two settlement indexes (BRTI, Binance
+  close) sit about 6 bps apart at the settle, so same-strike pairs are not arbitrage. Nothing generalizes beyond Fed
+  decisions yet; the note is re-run once about four weeks of snapshots exist.
+- **Stock-perp basis on trade.xyz tracks the venue oracle within a few bps.** The public view scores the perp's mark
+  against the venue oracle, net of two taker fees (18 bp on a standard name, under 2 bp in growth mode), the exit
+  half-spread and 24 h of funding, before any stock-leg cost; an episode needs net ≥ 10 bps, $100 of perp depth and two
+  consecutive snapshots. Outside a name's external session the oracle follows the perp itself, so those rows are never
+  scored. A private daily check (below) found the oracle within about 10 bps p95 of the consolidated market for the
+  typical name during regular hours, which is why the public view can use the oracle as its reference at all. The live
+  count of episodes is on the page's Research tab; the stock perp is not executable from the US in any case.
+- **The pre-IPO cross-unit gap is a share-count assumption, not a spread.** `docs/research/2026-10-pre-ipo-divergence.md`
+  (2026-10-27): Anthropic trades per share on trade.xyz and Paragon (115.32 vs 115.05, a 0.2% gap) and in billions of
+  dollars of market cap on Entropy, Binance and Coinbase (1,876 to 1,884, a 0.3% gap). No venue publishes a share count
+  and the S-1 leaves it blank, so the cross-unit gap moves from +1.2% to +6.2% across defensible counts, 20 times any
+  same-unit divergence. It becomes a spread the day a count exists (the 424B4, or a venue's rebase); until then the only
+  honest row is same-unit, and the one qualifying public pair (`xyz:ANT` vs `para:ANTH`) has about $2.3K of open
+  interest on the Paragon leg, so it is informational.
 
-- **Executable tier.** 14,475 aligned pair-snapshots over 15 exact Fed-decision pairs (`KXFEDDECISION`), 60 s
-  cadence. 3 opportunity episodes (median duration 121 min, median capacity $834); the largest top-of-book edge
-  after fees was 0.0192 per $1 against the 0.01 threshold. 0 of the 3 are executable within the US, because
-  Polymarket International blocks US trading. 16 hours says little about weeks.
-- **Screened tier** (hourly history, not executable). Median net gap -0.032; 3.5% of 27,043 rows reached
-  0.01, and 31.4% of those fall in a pair's first 7 days. The count is biased in both directions (the one-contract
-  fee ceiling pushes it down, the Polymarket mid/last price pushes it up).
-- **Ladders.** No ladder snapshots existed at generation time, so no spread has been scored: an absence of data,
-  not a negative result. The measured basis is already informative: BRTI sits below Binance at the settle by about
-  6 bps on average (BTC -$48.06, ETH -$1.52), so same-strike pairs are not arbitrage. The 0.999 bounds are BTC
-  +$182 / -$152 and ETH +$6 / -$7 per settle.
-- **Stock perps.** No results yet: the tier is not deployed at this commit.
-- **Limits.** 15 of 15 pairs human-reviewed; match review precision 1.00 on 31 labels (20 Oct 2026); the Kalshi fee coefficient is unverified (below); nothing here
-  generalizes beyond Fed decisions yet.
+## How it knows
+
+- **Collectors.** `venue_arb.collect` snapshots Kalshi and Polymarket order books for every matched pair every 60 s
+  (top 10 levels a side) into ClickHouse `venue_arb.book_levels_v2`; `venue_arb.collect_perps` does the same for the
+  trade.xyz perps from Hyperliquid's public info endpoint, plus private Schwab reference quotes that never leave the
+  OptiPlex. Public read endpoints only, under each venue's documented rate limits (`docs/venues.md`).
+- **Matching.** Listings from both venues are placed in a shared hierarchy (category, event, market, outcome) and
+  compared only inside a branch. Deterministic rules go first where a venue exposes structure (Fed decisions on a 25 bp
+  grid, crypto strikes by asset, strike and settlement instant); the rest goes to an LLM adjudicator at a monthly
+  spend cap, with hand review sittings (precision 1.00 on 31 labels, 2026-10-20). Each pair gets a verdict and a
+  plain-words reason.
+- **Scoring tiers, never combined.** *Exact* pairs (both Yes outcomes pay in the same states) are scored as arbitrage
+  by walking both ask ladders together with taker fees on each leg; *near* pairs are priced as relative value and never
+  called arbitrage; *same-instant crypto ladders* are a model-free tier where a cross-strike spread counts only if the
+  strikes sit further apart than the 99.9th percentile of 30 days of settlement-index differences; the *screened* tier
+  (hourly history) says where gaps tended to appear, not that they were executable; *stock perps* score the perp
+  against the venue oracle; *weekends* test how much of Monday's move the weekend perp had already made. Every
+  admissible check is counted, scored or not, so a count of opportunities always has the number of looks it came from.
+- **Oracle check.** A private daily flow compares the trade.xyz oracle with the stock reference per name and day,
+  during regular and extended sessions separately, and warns when a name's trailing 5-day regular-session p95 exceeds
+  10 bps. Its reports live in `data/private/` and are never pushed; a name leaves the public page only by hand, with a
+  neutral comment (Operations, below).
+- **CI and observability.** Every push runs `uv run ruff check .` and `uv run pytest -m "not integration"` in a CI
+  worktree on the OptiPlex before it can fast-forward `main`; the unit suite needs no secrets and no stack, and pins
+  the deploy units, the page copy, the Schwab-free rule for every public file and the bundle schema. Flows run under
+  Prefect with per-run checks recorded in `qa.check_results` (the SQL checks are in `sql_checks/`); error-severity
+  checks reach Telegram through the platform alerter; the publisher stamps every bundle with the last green run, and the
+  page greys its figures when the bundle goes stale.
 
 ## Live dashboard
 
-`https://<server>` (placeholder, filled in at deploy), titled "venue-arb · Prediction Market Arbitrage", with three
-tabs: **Scanner** (one row per matched pair, sortable, by category), **Explorer** (one pair's edge history, verdict
-and cost) and **Research** (the research note's headline numbers, recomputed hourly). While the venues' data terms
-are unresolved the page does not show quotes: it shows edges, capacities and episodes, and the per-leg book boxes
-collapse to one derived cost panel. The stock-perp category is public since 2026-10-25 (`DASHBOARD_SHOW_STOCK_PERPS = True`)
-until the terms reads in `docs/going-public.md` are done.
+<https://34.127.95.87/> (a bare IP with a self-signed certificate until a domain is attached; `docs/going-public.md`),
+titled "venue-arb · Prediction Market Arbitrage", with three tabs: **Scanner** (one row per matched pair, sortable, by
+category), **Explorer** (one pair's edge history, verdict and cost) and **Research** (the research note's headline
+numbers, recomputed hourly). The page shows edges, capacities, bases and episodes, never quotes or order books: the
+per-leg book boxes collapse to one derived cost panel. The stock-perp category is public since 2026-10-25
+(`DASHBOARD_SHOW_STOCK_PERPS = True`); pre-IPO names show price and funding only.
+
+## Terms
+
+Every venue's terms have been read and recorded with dates and quotes: `docs/terms.md` is the one table (document,
+date read, what it allows for read-only collection, display of derived figures, redistribution, US persons, and the
+decision taken). The posture, Sam's decision of 2026-10-27 and 2026-10-28, is non-commercial personal research: derived
+figures stay on the page, raw quotes are withheld (`DASHBOARD_SHOW_BOOKS = False`), nothing is redistributed, and
+written authorization from a venue is the route to anything more. Nothing derived from Schwab data leaves the OptiPlex
+(Schwab's agreement bars third-party use and derivative works). Kalshi's taker fee coefficient (0.07) is secondhand and
+unverified, as are the jurisdictions each venue admits; both are recorded with sources in `docs/venues.md`. A reading,
+not legal advice.
 
 ## Architecture
 
 ```
-OptiPlex (home, outbound only)                      Oracle Always Free VM (public)
+OptiPlex (home, outbound only)                      public VM
 ┌─────────────────────────────────┐   rsync/ssh    ┌──────────────────────────────────┐
-│ collector (60 s books)          │ ─────────────▶ │ /srv/venue-arb/bundle/live.json  │
+│ collectors (60 s books)         │ ─────────────▶ │ /srv/venue-arb/bundle/live.json  │
 │ Prefect flows (hourly scoring)  │   every 60 s   │ /srv/venue-arb/bundle/history/   │
 │ publish loop:                   │   + hourly     │   pairs-YYYYMMDDHH.parquet       │
 │   live bundle (~70–100 KB JSON) │                │ app: FastAPI + DuckDB + static   │
-│   history Parquet (hourly)      │                │ Caddy (auto-HTTPS) → :443        │
+│   history Parquet (hourly)      │                │ Caddy (HTTPS) → :443             │
 └─────────────────────────────────┘                └──────────────────────────────────┘
 ```
 
-The live bundle is ~70–100 KB today (research included). Collector, Postgres, ClickHouse and Prefect run at home;
-the server never connects back. The server holds no
-database: the bundle directory is the state, and its one computation (`/api/walk`) imports `venue_arb.edges`, so
-the walk is a single implementation. Repo layout: `venue_arb/` (pipeline, `publish.py` producer), `dashboard/`
-(`api/`, `static/`, `sample/`), `deploy/` (OptiPlex units; `deploy/server/` for the VM), `docs/`, `reports/`,
-`labels/`, `sql_checks/`, `tests/`.
+Collectors, Postgres, ClickHouse and Prefect run at home; the server never connects back and holds no database: the
+bundle directory is the state, and its one computation (`/api/walk`) imports `venue_arb.edges`, so the walk is a single
+implementation. Repo layout: `venue_arb/` (pipeline, `publish.py` producer), `dashboard/` (`api/`, `static/`,
+`sample/`), `deploy/` (OptiPlex units; `deploy/server/` for the VM), `docs/` (`terms.md`, `venues.md`,
+`going-public.md`, `research/`), `reports/`, `labels/`, `sql_checks/`, `tests/`. License: MIT (`LICENSE`).
+
+---
+
+Everything below is operational: how to run the pipeline, the dashboard, the tests and the services.
 
 ## How to run
 
@@ -135,6 +165,10 @@ server's setup is in `deploy/server/README.md`.
 uv run pytest -m "not integration"      # unit: no secrets, no stack (what CI runs, after `uv run ruff check .`)
 secrets uv run pytest -m integration    # needs the stack up
 ```
+
+CI is the worktree `~/projects/venue-arb-ci` on the OptiPlex: push the branch to origin, run both commands there with
+`set -o pipefail`, and fast-forward `main` only on green. The Mac clone lives under iCloud, where pytest hangs on
+evicted venv files, so the Mac is for editing, not for the suite.
 
 ## Operations
 
@@ -310,12 +344,3 @@ live rows, sparklines, history, research block and episode counts; its rows stay
 History hours already pushed keep the name until rewritten: with `DASHBOARD_SHOW_STOCK_PERPS` on, run `secrets uv run python -m venue_arb.publish history --hours 240` (the server keeps about 10 days of hour files; the run rewrites and pushes them); with the flag off the hour files hold no stock rows, so there is nothing to rewrite. Asian exchange holidays are not in the session calendar, so
 on such a day a name may read external against a stale oracle.
 
-## Data terms and caveats
-
-Quotes are not displayed publicly: `DASHBOARD_SHOW_BOOKS = False`, because Kalshi's data terms forbid public
-display without written authorization and Polymarket's terms, read on 2026-10-23, restrict the data (`docs/venues.md`, terms record). Kalshi's taker fee coefficient
-(0.07) is secondhand and unverified, as are the jurisdictions each venue admits; both are recorded with sources in
-`docs/venues.md`, and the going-public checklist is `docs/going-public.md`. The stock-perp figures are held back for the same reason:
-the public view sits behind `DASHBOARD_SHOW_STOCK_PERPS` (on since 2026-10-25; the oracle-check reports stay the private yardstick). Schwab's agreement
-bars third-party use of its data, so nothing derived from it is published (terms record in `docs/venues.md`, a reading,
-not legal advice).
