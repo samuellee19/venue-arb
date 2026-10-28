@@ -96,7 +96,7 @@ Follow `~/platform/docs/NEW_PROJECT.md` (platform checkout, `secrets` wrapper, `
 
 Adjudicator prompt v3: `near` needs overlapping Yes outcomes; mutually exclusive brackets of one meeting (hold vs +25) are `different`; Fed moves are on a 25 bp grid, so off-grid and rounding clauses are tail risks.
 
-Fed rate-decision pairs (Kalshi `KXFEDDECISION-*` vs a Polymarket bracket title) skip the LLM: `matching/fed_rule.py` compares the two outcome sets on the 25 bp grid (equal = exact, overlapping = near, disjoint or different meeting = different) and stores them with `model = 'rule:fed-v1'`, cost 0 and no `llm_attempts` row. Every other pair still goes to the LLM adjudicator.
+Fed rate-decision pairs (Kalshi `KXFEDDECISION-*` vs a Polymarket bracket title) skip the LLM: `matching/fed_rule.py` compares the two outcome sets on the 25 bp grid (equal = exact, overlapping = near, disjoint or different meeting = different) and stores them with `model = 'rule:fed-v1'`, cost 0 and no `llm_attempts` row. Crypto strike pairs (Kalshi `KXBTC*`/`KXETH*` "$X or above" vs Polymarket hourly/daily "above X" titles, the shapes `matching/crypto_rule.py` parses) skip it too since 2026-10-28, stored as `rule:crypto-v1`: never exact (the venues settle on different sources), near for the same asset, printed strike and instant, otherwise different. Before that rule the hourly ladders were 97% of LLM calls (~$1.60/day) and never produced an exact pair. `matching/rules.py` lists the rules in order; every other pair still goes to the LLM adjudicator.
 
 ```bash
 secrets uv run python -m venue_arb.flows.catalog      # listings from both venues

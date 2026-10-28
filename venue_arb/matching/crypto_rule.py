@@ -22,7 +22,10 @@ from datetime import UTC, date, datetime
 from typing import Literal, NamedTuple
 from zoneinfo import ZoneInfo
 
+from venue_arb.matching.adjudicate import Verdict
+
 ET = ZoneInfo("America/New_York")
+RULE_MODEL = "rule:crypto-v1"
 _ASSET = {"KXBTC": "BTC", "KXBTCD": "BTC", "KXETH": "ETH", "KXETHD": "ETH", "Bitcoin": "BTC", "Ethereum": "ETH"}
 _N = r"\$?([\d,]+(?:\.\d+)?)"
 _MONTH = {m.lower(): i for i, m in enumerate(month_name) if m}
@@ -134,3 +137,32 @@ def clip(ladder: Ladder, pad: float) -> Ladder:
     levels = [s.level for s in ladder["polymarket"]]
     lo, hi = min(levels) - pad, max(levels) + pad
     return {**ladder, "kalshi": [s for s in ladder["kalshi"] if lo <= s.level <= hi]}
+
+
+_SOURCES = ("Kalshi settles on the CF Benchmarks real-time index (60-second average), Polymarket on a Binance candle "
+            "close")
+
+
+def decide(a: dict, b: dict) -> Verdict | None:
+    """Verdict for a Kalshi (a) / Polymarket (b) pair, or None unless both are crypto_price listings this module parses.
+
+    Never "exact": the two venues settle on different sources (see _SOURCES; the ladder tier treats same-strike,
+    same-instant pairs as near-exact basis exposure). "near" only for the same asset, printed strike and settlement
+    instant; everything else is "different". Shapes parse() does not read (Up/Down, reach/dip, ...) go to the LLM.
+    """
+    if a.get("category") != "crypto_price" or b.get("category") != "crypto_price":
+        return None
+    pa, pb = parse(a), parse(b)
+    if not (pa and pb):
+        return None
+    sa, sb = parse_strike(a), parse_strike(b)
+    # ponytail: ranges never match (parse_strike reads strikes only); same-bounds same-instant ranges are "different"
+    same = sa is not None and sb is not None and sa.asset == sb.asset and sa.instant == sb.instant and pa[3] == pb[3]
+    yes_maps_to = "no" if {pa[2], pb[2]} == {"above", "below"} else "yes"
+    if same:
+        reason = f"Rule: same {sa.asset} strike {pa[3]:,} at the same instant, but {_SOURCES}, so the outcomes can differ: near."
+    else:
+        reason = (f"Rule: {pa[0]} {pa[2]} {pa[3]:,} on {pa[1]} vs {pb[0]} {pb[2]} {pb[3]:,} on {pb[1]}: not the same "
+                  f"strike, instant and shape, and {_SOURCES}: different.")
+    return Verdict(relation="near" if same else "different", yes_maps_to=yes_maps_to, confidence=1.0, reason=reason,
+                   tail_risks=None)

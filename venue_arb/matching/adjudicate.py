@@ -167,19 +167,19 @@ def _upsert(conn, key: tuple, model: str, v: Verdict, cost: float) -> None:
 
 def run(conn, pairs: list[tuple[dict, dict]], month_spend: float, budget: float = MONTHLY_LLM_BUDGET_USD,
         call=_call_claude) -> dict:
-    from venue_arb.matching import fed_rule  # local: fed_rule imports Verdict from this module
+    from venue_arb.matching import rules  # local: the rule modules import Verdict from this module
 
     out = {"ruled": 0, "adjudicated": 0, "cached": 0, "skipped_budget": 0, "skipped_failing": 0, "errors": 0, "spend": 0.0}
     streak = 0
     for a, b in pairs:
         key = ("kalshi", a["market_id"], a["version"], "polymarket", b["market_id"], b["version"])
-        rv = fed_rule.decide(a, b)
-        if rv is not None:  # deterministic Fed bracket rule: no LLM call, no budget, no llm_attempts row
+        if ruled := rules.decide(a, b):  # deterministic rule (Fed brackets, crypto strikes): no LLM call, no budget, no ledger row
+            model, rv = ruled
             if conn.execute(f"SELECT 1 FROM venue_arb.adjudications WHERE {_KEY} AND prompt_version = %s AND model = %s",
-                            (*key, PROMPT_VERSION, fed_rule.RULE_MODEL)).fetchone():
+                            (*key, PROMPT_VERSION, model)).fetchone():
                 out["cached"] += 1
             else:
-                _upsert(conn, key, fed_rule.RULE_MODEL, rv, 0.0)
+                _upsert(conn, key, model, rv, 0.0)
                 out["ruled"] += 1
             continue
         if conn.execute(f"SELECT 1 FROM venue_arb.adjudications WHERE {_KEY} AND prompt_version = %s",

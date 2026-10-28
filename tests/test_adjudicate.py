@@ -94,7 +94,7 @@ def test_cache_miss_on_new_version():
 def test_budget_stops_adjudication():
     pairs = [(listing(f"k{i}", "v"), listing(f"p{i}", "w")) for i in range(3)]
     call = FakeCall()
-    out = run(FakeConn(), pairs, 19.999, call=call)
+    out = run(FakeConn(), pairs, 19.999, budget=20.0, call=call)
     assert call.n == 0 and out["adjudicated"] == 0 and out["skipped_budget"] == 3
 
 

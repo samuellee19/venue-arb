@@ -30,7 +30,7 @@ from venue_arb.exact import MIN_CONFIDENCE, ExactPair
 from venue_arb.fees import FEE_VERSION, KALSHI_RATE, TRANSFER, US_EXECUTABLE
 from venue_arb.ladder_edges import COUNT_INTERVAL, K_NEAREST, NEAR_EXACT_TOL
 from venue_arb.matching.adjudicate import PROMPT_VERSION
-from venue_arb.matching.fed_rule import RULE_MODEL
+from venue_arb.matching.rules import RULE_MODELS
 from venue_arb.report.copy import METHOD
 
 NOTE = "research-note-v1.md"
@@ -621,8 +621,8 @@ def render(summary: dict, out_dir: Path) -> Path:
     cap_ex = _chart_executable(ex, out_dir / EXEC_PNG)
     tr = s["fees"]["transfer"]
     models = sorted({(p.get("model"), p.get("prompt_version")) for p in s["pair_list"] if p.get("model")})
-    llm = [f"{m} (prompt {v})" for m, v in models if m != RULE_MODEL]
-    rule = [f"{m} (prompt {v})" for m, v in models if m == RULE_MODEL]
+    llm = [f"{m} (prompt {v})" for m, v in models if m not in RULE_MODELS]
+    rule = [f"{m} (prompt {v})" for m, v in models if m in RULE_MODELS]
     parts = ([f"by an LLM ({', '.join(llm)})"] if llm else [])
     parts += [f"by a deterministic rule ({', '.join(rule)})"] if rule else []
     adj_txt = ", or, for Fed decision brackets, ".join(parts) if len(parts) == 2 else (parts or ["by an unrecorded method"])[0]
