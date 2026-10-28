@@ -1,7 +1,9 @@
 # Venue notes
 
-Research notes for the two venues in scope. Each entry is dated and links the venue's own docs. Anything the docs
-did not settle when fetched is marked "unverified". Re-check before relying on a number: fees and geoblocks change.
+API facts and dated reading notes per venue (endpoints, rate limits, fees, sessions, access). Each entry is dated and
+links the venue's own docs. Anything the docs did not settle when fetched is marked "unverified". Re-check before
+relying on a number: fees and geoblocks change. The terms of every venue, in one table with the decisions taken, are in
+`docs/terms.md`; the clause quotes there come from the sections below.
 
 ## Kalshi
 
