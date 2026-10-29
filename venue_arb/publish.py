@@ -19,12 +19,13 @@ import time
 import uuid
 from bisect import bisect_left
 from dataclasses import replace
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from itertools import groupby, pairwise
 from operator import itemgetter
 from pathlib import Path
 
 import pyarrow as pa
+import pyarrow.compute as pc
 import pyarrow.parquet as pq
 
 from venue_arb import bundle, catalog, config, stock_perps
@@ -56,6 +57,11 @@ HISTORY_SIZE_BUDGET_MB = 50
 HISTORY_KEEP = timedelta(days=HISTORY_DAYS + 1)
 # measured 868 KB at 399 pair rows on 2026-10-22 (before stock perps; ~2.2 KB per row); room for ~100 stock-perp rows
 LIVE_BYTES_BUDGET = 1_200_000
+# hour files are sorted by key in row groups of this many rows, so a key filter can skip most of a file by statistics
+HISTORY_ROW_GROUP = 4096
+# daily-YYYYMMDD.parquet: hourly means per key for one UTC day, the server's "all" range; kept far longer than the
+# one-minute hour files (the server's prune cron keeps them 181 days)
+DAILY_KEEP = timedelta(days=180)
 HISTORY_LAG = timedelta(minutes=55)  # an hour is written once score (:40) and ladder_score (:50) have scored it
 GAP = timedelta(minutes=3)
 RESEARCH_TIMEOUT_WARN_S = 30  # the hourly research summary blocks one cycle; warn when it takes longer
@@ -307,9 +313,31 @@ def write_history_hour(ch, out_dir: Path, hour: datetime, sides: dict | None = N
     if config.DASHBOARD_SHOW_STOCK_PERPS:  # the parquet is public output: gated like the bundle rows
         stock = ch.query(STOCK_PERP_HOUR_SQL, parameters={"lo": lo, "hi": hi, "ex": hidden()}).result_rows
     buf = io.BytesIO()
-    pq.write_table(history_table(edge, lad, books, sides, stock), buf, compression="zstd")
+    table = history_table(edge, lad, books, sides, stock).sort_by([("key", "ascending"), ("ts", "ascending")])
+    pq.write_table(table, buf, compression="zstd", row_group_size=HISTORY_ROW_GROUP)
     path = _hour_file(out_dir, lo)
     path.parent.mkdir(parents=True, exist_ok=True)
+    write_atomic(path, buf.getvalue())
+    return path
+
+
+DAILY_COLS = [c for c in HISTORY_SCHEMA.names if c not in ("ts", "key", "kind", "direction")]
+
+
+def write_daily(out_dir: Path, day: date) -> Path | None:
+    """<out_dir>/history/daily-YYYYMMDD.parquet: hourly means per (key, kind, direction) of that UTC day's hour files,
+    sorted by key then hour; rewritten whole. None when the day has no hour files."""
+    files = sorted((out_dir / "history").glob(f"pairs-{day:%Y%m%d}??.parquet"))
+    if not files:
+        return None
+    t = pa.concat_tables([pq.read_table(f, schema=HISTORY_SCHEMA) for f in files])
+    t = t.set_column(0, "ts", pc.floor_temporal(t.column("ts"), unit="hour"))
+    g = t.group_by(["key", "kind", "direction", "ts"]).aggregate([(c, "mean") for c in DAILY_COLS])
+    g = g.rename_columns([n.removesuffix("_mean") for n in g.column_names])
+    g = g.select(HISTORY_SCHEMA.names).cast(HISTORY_SCHEMA).sort_by([("key", "ascending"), ("ts", "ascending")])
+    buf = io.BytesIO()
+    pq.write_table(g, buf, compression="zstd", row_group_size=HISTORY_ROW_GROUP)
+    path = out_dir / "history" / f"daily-{day:%Y%m%d}.parquet"
     write_atomic(path, buf.getvalue())
     return path
 
@@ -342,9 +370,12 @@ def history_due(out_dir: Path, now: datetime, written: datetime | None) -> list[
 
 
 def prune_history(out_dir: Path, now: datetime) -> list[Path]:
-    """Delete local hour files older than HISTORY_KEEP (see its comment for the server cron's cutoff)."""
+    """Delete local hour files older than HISTORY_KEEP and daily rollups older than DAILY_KEEP (see their comments for
+    the server cron's cutoffs)."""
     cutoff = _hour_file(out_dir, _hour(now - HISTORY_KEEP)).name
     old = [f for f in (out_dir / "history").glob("pairs-*.parquet") if f.name < cutoff]
+    day_cut = f"daily-{now - DAILY_KEEP:%Y%m%d}.parquet"
+    old += [f for f in (out_dir / "history").glob("daily-*.parquet") if f.name < day_cut]
     for f in old:
         f.unlink()
     return old
@@ -716,6 +747,8 @@ def cycle(state: dict, readers: dict, out_dir: Path, dest: str | None, now: date
             ch = db.ch()
             for hour in due:
                 write_history_hour(ch, out_dir, hour, sides)
+            for day in sorted({h.date() for h in due}):
+                write_daily(out_dir, day)
             state["history_hour"] = history_hour(now)
             prune_history(out_dir, now)
             pending += _history_results(checks, out_dir, now)
@@ -819,8 +852,11 @@ def main(argv=None) -> None:
     with db.pg() as conn:
         sides = load_sides(conn)
     last = history_hour(datetime.now(UTC))
-    for h in range(args.hours - 1, -1, -1):  # oldest first; rewriting an hour is idempotent
-        log.info("history %s", write_history_hour(db.ch(), args.out, last - timedelta(hours=h), sides))
+    hours = [last - timedelta(hours=h) for h in range(args.hours - 1, -1, -1)]  # oldest first; idempotent rewrites
+    for hour in hours:
+        log.info("history %s", write_history_hour(db.ch(), args.out, hour, sides))
+    for day in sorted({h.date() for h in hours}):
+        log.info("daily %s", write_daily(args.out, day))
     if dest and not push(args.out, dest):
         raise SystemExit(1)
 

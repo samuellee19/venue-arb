@@ -249,7 +249,7 @@ def test_history_responses_are_cached_until_the_hour_files_change(monkeypatch, t
     a = c.get(url, params={"range": "24h"})
     b = c.get(url, params={"range": "24h"})
     assert a.json() == b.json() and len(calls) == 1
-    newest = sorted((tmp_path / "history").glob("pairs-*.parquet"))[-1]
+    newest = max((tmp_path / "history").glob("pairs-*.parquet"))
     os.utime(newest, ns=(newest.stat().st_atime_ns, newest.stat().st_mtime_ns + 10**9))  # the publisher rewrote it
     c.get(url, params={"range": "24h"})
     assert len(calls) == 2

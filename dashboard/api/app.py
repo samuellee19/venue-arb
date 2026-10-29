@@ -9,7 +9,9 @@ GET /api/walk?key&size            -> edges.fill on the pair's published books (s
 GET /healthz                      -> {"ok": true, "age_s": float, "pairs": n}; 503 as /api/live
 Keys travel path-encoded: urllib.parse.quote(key, safe="").
 """
+import json
 import os
+from collections import OrderedDict
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
@@ -51,6 +53,12 @@ def index():
     return HTMLResponse(page.read_text(encoding="utf-8").replace("__REPO_URL__", REPO_URL))
 
 
+LIVE_CACHE = "public, max-age=15"  # the publisher pushes every 60 s; the page polls every 30 s
+HISTORY_CACHE = "public, max-age=300"  # history changes once an hour, when the publisher writes the next hour file
+HISTORY_MAX = 128  # cached history responses (serialised bytes; ~100 KB each at most, so ~12 MB)
+_history: OrderedDict[tuple, bytes] = OrderedDict()
+
+
 @app.get("/api/live")
 def live():
     try:
@@ -58,7 +66,7 @@ def live():
     except NoBundle:
         raise HTTPException(503, "no bundle yet") from None
     return Response(b'{"bundle":' + body + b',"age_s":' + repr(float(age)).encode() + b"}",
-                    media_type="application/json")
+                    media_type="application/json", headers={"Cache-Control": LIVE_CACHE})
 
 
 @app.get("/healthz")
@@ -69,14 +77,25 @@ def healthz():
 
 @app.get("/api/pair/{key}/history")
 def history(key: str, range: Literal["1h", "24h", "7d", "all"] = "24h"):
+    """Served from a bounded cache of serialised responses until a history file changes; empty results are not cached
+    (a key that is neither live nor in history is a 404 below)."""
+    ck = (str(store.dir), key, range, store.signature())
+    if (body := _history.get(ck)) is not None:
+        _history.move_to_end(ck)
+        return Response(body, media_type="application/json", headers={"Cache-Control": HISTORY_CACHE})
     out = store.history(key, range)
-    if not out:
-        try:
-            known = any(p.key == key for p in store.live()[0].pairs)
-        except NoBundle:
-            known = False
-        if not known:
-            raise HTTPException(404, "unknown key")
+    if out:
+        body = json.dumps(out, separators=(",", ":")).encode()
+        _history[ck] = body
+        while len(_history) > HISTORY_MAX:
+            _history.popitem(last=False)
+        return Response(body, media_type="application/json", headers={"Cache-Control": HISTORY_CACHE})
+    try:
+        known = any(p.key == key for p in store.live()[0].pairs)
+    except NoBundle:
+        known = False
+    if not known:
+        raise HTTPException(404, "unknown key")
     return out
 
 

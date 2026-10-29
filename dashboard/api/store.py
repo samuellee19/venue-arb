@@ -4,8 +4,9 @@ Response shapes (dashboard/static reads them):
 - history(key, range_) -> columns -> lists, every list the same length, oldest first:
   {"ts": ["2026-10-20T14:00:00Z", ...], "net_edge_cents": [...], "capacity_usd": [...], "k_ask": [...],
    "k_size": [...], "pm_ask": [...], "pm_size": [...], "fees_cents": [...]}; values may be null.
-  "1h"/"24h"/"7d" = rows with ts >= (newest ts in the whole history) - interval, inclusive; "all" = hourly averages,
-  ts = the hour. {} when there is no history (no history/ dir, no files, or no rows for the key).
+  "1h"/"24h"/"7d" = rows with ts >= (newest ts in the whole history) - interval, inclusive; "7d" as 15-minute
+  averages (ts = the bucket start), "1h"/"24h" every row; "all" = hourly averages, ts = the hour, read from the daily
+  rollups (daily-YYYYMMDD.parquet, 180 days) when any exist, else from the hour files. {} when there is no history (no history/ dir, no files, or no rows for the key).
 - snapshot(key, ts) -> the same columns as one row {"ts": ..., "net_edge_cents": ..., ...}, the row nearest ts
   within 90 s, or None.
 Timestamps are UTC ISO strings with a Z suffix.
@@ -26,6 +27,7 @@ COLS = ("net_edge_cents", "capacity_usd", "k_ask", "k_size", "pm_ask", "pm_size"
 RANGES = {"1h": "1 hour", "24h": "24 hours", "7d": "7 days"}
 SNAPSHOT_MAX_S = 90
 SPANS = {"1h": timedelta(hours=1), "24h": timedelta(hours=24), "7d": timedelta(days=7)}
+BUCKETS = {"7d": "15 minutes"}  # a chart ~800 px wide cannot show 10,000 one-minute points: 7d sends 672 at most
 # the VM is an e2-micro (1 GB, 2 vCPU): bound DuckDB so a burst of history requests cannot take the box down
 DUCKDB_CONFIG = {"memory_limit": os.environ.get("DUCKDB_MEMORY_LIMIT", "192MB"), "threads": 1}
 ISO = "strftime(ts, '%Y-%m-%dT%H:%M:%SZ')"
@@ -70,6 +72,14 @@ class Store:
         hi = f"pairs-{until:%Y%m%d%H}.parquet" if until else "~"
         return sorted(f for f in (self.dir / "history").glob("pairs-*.parquet") if lo <= f.name <= hi)
 
+    def signature(self) -> tuple:
+        """Changes whenever the publisher adds or rewrites a history file (it rewrites the newest two each hour)."""
+        files = sorted((self.dir / "history").glob("*.parquet"))
+        return (len(files), *((f.name, f.stat().st_mtime_ns) for f in files[-2:])) if files else ()
+
+    def _daily(self) -> list[Path]:
+        return sorted((self.dir / "history").glob("daily-*.parquet"))
+
     @staticmethod
     def _hour(f: Path) -> datetime:
         return datetime.strptime(f.name[6:16], "%Y%m%d%H").replace(tzinfo=UTC)
@@ -110,12 +120,19 @@ class Store:
         files = self._files()
         if range_ != "all" and files:
             files = self._files(since=self._hour(files[-1]) - SPANS[range_])
-        if (src := self._src(files)) is None:
+        daily = self._daily() if range_ == "all" else []
+        if (src := self._src(daily or files)) is None:
             return {}
-        if range_ == "all":
-            avgs = ", ".join(f"avg({c}) AS {c}" for c in COLS)
+        avgs = ", ".join(f"avg({c}) AS {c}" for c in COLS)
+        if daily:  # already hourly means, one row per key and hour
+            sql = f"SELECT {ISO} AS ts, {', '.join(COLS)} FROM {src} WHERE key = ? ORDER BY ts"
+        elif range_ == "all":
             sql = (f"SELECT {ISO} AS ts, {', '.join(COLS)} FROM (SELECT date_trunc('hour', ts) AS ts, {avgs} "
                    f"FROM {src} WHERE key = ? GROUP BY 1) ORDER BY 1")
+        elif range_ in BUCKETS:
+            sql = (f"SELECT {ISO} AS ts, {', '.join(COLS)} FROM (SELECT time_bucket(INTERVAL '{BUCKETS[range_]}', ts) "
+                   f"AS ts, {avgs} FROM {src} WHERE key = ? AND ts >= (SELECT max(ts) FROM {src}) - "
+                   f"INTERVAL '{RANGES[range_]}' GROUP BY 1) ORDER BY 1")
         else:
             sql = (f"SELECT {ISO} AS ts, {', '.join(COLS)} FROM {src} WHERE key = ? "
                    f"AND ts >= (SELECT max(ts) FROM {src}) - INTERVAL '{RANGES[range_]}' ORDER BY ts")
