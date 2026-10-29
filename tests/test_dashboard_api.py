@@ -172,3 +172,37 @@ def test_server_imports_without_pipeline_deps():
             "import venue_arb.edges, venue_arb.bundle, dashboard.api.app\n")
     r = subprocess.run([sys.executable, "-c", shim], cwd=ROOT, capture_output=True, text=True, check=False)
     assert r.returncode == 0, r.stderr
+
+
+def test_ranged_reads_open_only_the_hours_they_need(monkeypatch, tmp_path):
+    # an unreadable hour file far outside the range must not matter to 1h/24h or a snapshot: they read only the hour
+    # files their window covers (the VM holds ~340 hour files; a scan of all of them per request took 18-25 s)
+    shutil.copytree(SAMPLE, tmp_path, dirs_exist_ok=True)
+    (tmp_path / "history" / "pairs-2026100100.parquet").write_bytes(b"not a parquet file")
+    c = _client(monkeypatch, tmp_path)
+    day = c.get(f"/api/pair/{_p(CPI_KEY)}/history", params={"range": "24h"}).json()
+    assert len(day["ts"]) == 120
+    assert len(c.get(f"/api/pair/{_p(CPI_KEY)}/history", params={"range": "1h"}).json()["ts"]) == 61
+    assert c.get(f"/api/pair/{_p(CPI_KEY)}/snapshot", params={"ts": "2026-10-20T15:10:40Z"}).status_code == 200
+    # "all" still reads every hour, so the bad file empties it as before
+    assert c.get(f"/api/pair/{_p(CPI_KEY)}/history", params={"range": "all"}).json() == {}
+
+
+def test_duckdb_is_bounded(tmp_path):
+    con = Store(tmp_path)._con
+    assert con.execute("SELECT current_setting('threads')").fetchone()[0] == 1
+    limit = con.execute("SELECT current_setting('memory_limit')").fetchone()[0]
+    assert limit.endswith("MiB") and float(limit.split()[0]) <= 256  # the VM has 1 GB in all
+
+
+def test_live_serialises_each_bundle_once(monkeypatch, client):
+    from venue_arb.bundle import LiveBundle
+
+    calls = []
+    real = LiveBundle.model_dump_json
+    monkeypatch.setattr(LiveBundle, "model_dump_json", lambda self, **kw: calls.append(1) or real(self, **kw))
+    monkeypatch.setattr(LiveBundle, "model_dump", lambda self, **kw: pytest.fail("live re-serialised per request"))
+    first = client.get("/api/live").json()
+    second = client.get("/api/live").json()
+    assert first["bundle"] == second["bundle"] and len(calls) <= 1
+    assert set(first) == {"bundle", "age_s"} and isinstance(first["age_s"], float)

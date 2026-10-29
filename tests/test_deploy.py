@@ -56,3 +56,15 @@ def test_readme_mentions_oracle_check():
 def test_readme_documents_the_listing_day_edit():
     text = (ROOT / "README.md").read_text()
     assert "kind" in text and "listing day" in text.lower() and "publish history --hours 240" in text
+
+
+def test_server_unit_caps_memory_and_restarts():
+    text = (ROOT / "deploy" / "server" / "venue-arb-web.service").read_text()
+    # a spike must kill the server (restarted in 5 s), not freeze the 1 GB VM as on 2026-10-29
+    assert "MemoryMax=" in text and "MemoryHigh=" in text and "Restart=always" in text
+
+
+def test_provision_adds_a_swapfile_once():
+    text = (ROOT / "deploy" / "server" / "provision.sh").read_text()
+    assert "/swapfile" in text and "swapon" in text and "/etc/fstab" in text
+    assert "grep -q" in text  # idempotent: a re-run neither recreates the file nor duplicates the fstab line
