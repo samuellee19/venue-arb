@@ -1,7 +1,7 @@
 """Stock-perp snapshot collector. Run: secrets uv run python -m venue_arb.collect_perps
 
-Every tick: one Hyperliquid contexts call, one book per perp (thread pool), one Schwab quotes call for the perps with a
-stock reference. tick() and flush() are plain functions (fetchers, loader and recorder injected) so tests need no stack
+Every tick: one Hyperliquid contexts call per labelled deployer (trade.xyz whole, other deployers' labelled names
+only), one book per perp (thread pool), one Schwab quotes call for the perps with a stock reference. tick() and flush() are plain functions (fetchers, loader and recorder injected) so tests need no stack
 or network; qa and obs are imported lazily in run_forever.
 """
 
@@ -193,7 +193,7 @@ def run_forever(interval_s: int = SNAPSHOT_INTERVAL_S, flush_every: int = 5) -> 
     stats = {**{k: [0, 0, 0] for k in TABLES}, "schwab_auth": 0, "schwab_fetch_errors": 0, "unlabelled": []}
 
     def fetch_ctxs():
-        return [c for c in hyperliquid.fetch_ctxs(post=post) if c.symbol not in excluded]
+        return [c for c in hyperliquid.fetch_ctxs_for(labels, post=post) if c.symbol not in excluded]
 
     def loader_for(key):
         cols = list(CONTRACTS[key])

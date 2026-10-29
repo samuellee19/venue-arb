@@ -107,3 +107,6 @@ xyz:ANT,none,,,USD,Anthropic (pre-IPO),pre_ipo
 xyz:SPCX,schwab,SPCX,NASDAQ,USD,SpaceX,equity
 xyz:QNT,schwab,QNT,NASDAQ,USD,Quantinuum,equity
 xyz:CBRS,schwab,CBRS,NASDAQ,USD,Cerebras,equity
+para:ANTH,none,,,USD,Anthropic (pre-IPO; Paragon per-share contract; private),pre_ipo
+io:ANTH,none,,,USD,Anthropic (pre-IPO; Entropy $1 = $1B market cap; private),pre_ipo
+io:OAI,none,,,USD,OpenAI (pre-IPO; Entropy $1 = $1B market cap; private),pre_ipo

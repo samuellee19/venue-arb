@@ -286,6 +286,14 @@ Deploying the `kind` change (stock-perp pair keys went from `{perp}~{stock}~stoc
    history lookups miss for every stock perp.
 5. Check `/api/live`: `categories` contains `"pre_ipo"` and no stock key has three parts.
 
+Private collection from other deployers (2026-10-28): a `pre_ipo` label whose perp carries another builder-dex prefix
+(`para:ANTH`, `io:ANTH`, `io:OAI`) is collected by `venue_arb.collect_perps` from that deployer's own `metaAndAssetCtxs`
+call (labelled names only, so Paragon's and Entropy's other markets never trip `unlabelled_perps`), with the same tick
+contexts and books as trade.xyz names, into the same private tables. These rows exist for the Anthropic listing-day
+analysis and never reach the public page: `publish.read_perps` keeps trade.xyz symbols only, and the pre-IPO hide list
+covers every other public read. One-off history: `secrets uv run python -m venue_arb.flows.stock_perp_backfill
+para:ANTH io:ANTH io:OAI` (naming the symbols keeps the run inside the per-IP budget beside the collector).
+
 ### Dashboard publisher
 
 `venue-arb-publish` (`python -m venue_arb.publish`) writes `live.json` every 60 s and one history Parquet per clock

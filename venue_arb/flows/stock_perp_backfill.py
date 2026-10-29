@@ -1,6 +1,9 @@
 """One-off history load for the stock-perp tier, run once at deploy (and safe to re-run):
 
-    secrets uv run python -m venue_arb.flows.stock_perp_backfill
+    secrets uv run python -m venue_arb.flows.stock_perp_backfill [SYMBOL ...]
+
+With symbols, only those labels are loaded (a few new names beside the running collector; the whole set exhausts the
+per-IP budget).
 
 Hourly candles and funding of every labelled perp from the last 60 days into stock_perp_candles (a re-run rewrites
 the same hours: ReplacingMergeTree), and the daily stock opens of every Schwab-labelled perp into stock_perp_refs as
@@ -54,13 +57,19 @@ def _schwab_client(env=os.environ) -> schwab.Client | None:
     return schwab.Client(*(env[n] for n in names)) if all(env.get(n) for n in names) else None
 
 
-def main(now: datetime | None = None) -> int:
+def main(now: datetime | None = None, only: list[str] | None = None) -> int:
     # lazy, like the other entry points: tests import this module without the platform stack
     from qa import db
 
     now = now or datetime.now(UTC)
     start = now - timedelta(days=DAYS)
     labels, ch, client = hyperliquid.load_labels(), db.ch(), _schwab_client()
+    if only:
+        unknown = sorted(set(only) - labels.keys())
+        if unknown:
+            print(f"not in labels: {', '.join(unknown)}", file=sys.stderr)
+            return 2
+        labels = {s: labels[s] for s in only}
     failed = []
     for symbol, label in labels.items():
         try:
@@ -89,4 +98,4 @@ def main(now: datetime | None = None) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(only=sys.argv[1:] or None))

@@ -1,6 +1,8 @@
-"""Hyperliquid public info API (POST, no key): trade.xyz stock perps live on the `xyz` builder dex."""
+"""Hyperliquid public info API (POST, no key): trade.xyz stock perps live on the `xyz` builder dex; a label on another
+builder dex (`para:ANTH`, `io:ANTH`) is collected privately from that dex and never reaches the public page."""
 
 import csv
+import logging
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -84,8 +86,13 @@ def _ms(dt: datetime) -> int:
     return round(dt.timestamp() * 1000)
 
 
-def fetch_ctxs(post=post_json) -> list[PerpCtx]:
-    meta, ctxs = post({"type": "metaAndAssetCtxs", "dex": DEX})
+def dex_of(symbol: str) -> str:
+    """The builder-dex prefix of a perp symbol ("para:ANTH" -> "para"); "" for a bare main-dex coin."""
+    return symbol.split(":", 1)[0] if ":" in symbol else ""
+
+
+def fetch_ctxs(post=post_json, dex: str = DEX) -> list[PerpCtx]:
+    meta, ctxs = post({"type": "metaAndAssetCtxs", "dex": dex})
     return [
         PerpCtx(
             symbol=u["name"], mark=float(c["markPx"]), oracle=float(c["oraclePx"]), mid=_f(c.get("midPx")),
@@ -95,6 +102,19 @@ def fetch_ctxs(post=post_json) -> list[PerpCtx]:
         )
         for u, c in zip(meta["universe"], ctxs, strict=True)
     ]
+
+
+def fetch_ctxs_for(labels: dict[str, Label], post=post_json) -> list[PerpCtx]:
+    """Contexts for the collector: every perp on DEX (so catalog() can flag unlabelled trade.xyz listings), then only
+    the labelled perps of each other deployer in the label file, in label order. A deployer whose call fails is
+    skipped for this tick (logged by name, no body); DEX's own failure propagates as before."""
+    out = fetch_ctxs(post, DEX)
+    for dex in dict.fromkeys(d for s in labels if (d := dex_of(s)) and d != DEX):
+        try:
+            out += [c for c in fetch_ctxs(post, dex) if c.symbol in labels]
+        except Exception as e:  # noqa: BLE001 — one deployer down must not cost the trade.xyz tick
+            logging.getLogger(__name__).warning("contexts fetch failed dex=%s error=%s", dex, type(e).__name__)
+    return out
 
 
 def fetch_book(symbol: str, post=post_json) -> tuple[datetime, list[PerpLevel]]:

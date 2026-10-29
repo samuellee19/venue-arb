@@ -610,9 +610,12 @@ def load_sides(conn) -> dict[tuple[str, str], str]:
 
 
 def read_perps(ch) -> list:
-    """Per perp not in excluded(): the newest context within PERP_LOOKBACK_S and its books at that ts."""
+    """Per trade.xyz perp not in excluded(): the newest context within PERP_LOOKBACK_S and its books at that ts.
+    Perps collected from other deployers (para:, io:) are private research rows and never public."""
     ctxs, ex = {}, set(excluded())
     for ts, sym, mark, oracle, mid, fund, prem, oi, vol, growth in ch.query(PERP_CTX_SQL).result_rows:
+        if hyperliquid.dex_of(sym) != hyperliquid.DEX:
+            continue
         ctxs[sym] = (_utc(ts), PerpCtx(sym, mark, oracle, mid, fund, prem, oi, vol, bool(growth), 0))
     books: dict[tuple[str, datetime], list[PerpLevel]] = {}
     for ts, sym, side, level, price, size in ch.query(PERP_BOOKS_SQL).result_rows:
