@@ -17,7 +17,7 @@ from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import HTMLResponse, PlainTextResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from dashboard.api.store import NoBundle, Store
@@ -53,9 +53,12 @@ def index():
 
 @app.get("/api/live")
 def live():
-    bundle, age = _live()
-    # ponytail: re-serialised per request; cache the bytes per bundle if viewers ever load the box
-    return {"bundle": bundle.model_dump(mode="json"), "age_s": age}
+    try:
+        body, age = store.live_json()  # serialised once per bundle, not per request
+    except NoBundle:
+        raise HTTPException(503, "no bundle yet") from None
+    return Response(b'{"bundle":' + body + b',"age_s":' + repr(float(age)).encode() + b"}",
+                    media_type="application/json")
 
 
 @app.get("/healthz")

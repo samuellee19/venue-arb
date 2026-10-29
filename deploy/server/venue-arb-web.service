@@ -13,6 +13,10 @@ Environment=PYTHONPATH=/srv/venue-arb/app
 ExecStart=/srv/venue-arb/app/.venv/bin/uvicorn dashboard.api.app:app --host 127.0.0.1 --port 8000
 Restart=always
 RestartSec=5
+# the VM has 1 GB: past MemoryHigh the kernel reclaims hard, past MemoryMax it kills uvicorn and systemd restarts it
+# in 5 s. Without these an OOM froze the whole box on 2026-10-29 (sshd and Caddy included)
+MemoryHigh=320M
+MemoryMax=400M
 NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes

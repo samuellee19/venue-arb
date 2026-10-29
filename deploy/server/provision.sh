@@ -31,6 +31,16 @@ if ! command -v uv >/dev/null; then
   curl -fsSL https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin UV_NO_MODIFY_PATH=1 sh
 fi
 
+# 1 GB swapfile: the e2-micro has 1 GB of RAM and no swap, so a memory spike froze the whole box on 2026-10-29.
+# Created once; a re-run neither recreates the file nor duplicates the fstab line.
+if [[ ! -f /swapfile ]]; then
+  fallocate -l 1G /swapfile
+  chmod 600 /swapfile
+  mkswap /swapfile
+fi
+swapon --show=NAME --noheadings | grep -q '^/swapfile$' || swapon /swapfile
+grep -q '^/swapfile ' /etc/fstab || echo '/swapfile none swap sw 0 0' >>/etc/fstab
+
 # push user: locked password (key login only), and bash because sshd runs the forced rrsync command via the
 # login shell (nologin would refuse it); the root-owned authorized_keys line below is what confines the key
 id venue-arb >/dev/null 2>&1 || useradd --system --home-dir "$BASE" --shell /bin/bash venue-arb
