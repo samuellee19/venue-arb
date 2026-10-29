@@ -630,6 +630,12 @@ def test_excluded_labelled_symbol_reaches_no_public_path(monkeypatch, tmp_path):
     assert [c.symbol for c, _, _ in publish.read_perps(ch)] == ["xyz:NVDA"]  # the same reader without the exclusion
     monkeypatch.setattr(hyperliquid, "load_excluded", lambda: {"xyz:NVDA", "xyz:GOLD"})
     assert bundle.stock_perp_rows(publish.read_perps(ch), {}, SP_NOW) == []
+    # a privately collected deployer never reaches the live rows, excluded or not (the page is trade.xyz only)
+    monkeypatch.setattr(hyperliquid, "load_excluded", lambda: set())
+    other = (ts, "para:ANTH", 115.0, 114.7, 115.0, 0.0, 0.0, 1.0, 1.0, 1)
+    ch2 = _recording_ch(lambda sql: [ctx, other] if sql == publish.PERP_CTX_SQL else [], [])
+    assert [c.symbol for c, _, _ in publish.read_perps(ch2)] == ["xyz:NVDA"]
+    monkeypatch.setattr(hyperliquid, "load_excluded", lambda: {"xyz:NVDA", "xyz:GOLD"})
     # every stock_perp_edges query gets the list as a server-side parameter
     pre = sorted(s for s, lb in hyperliquid.load_labels().items() if lb.kind == "pre_ipo")
     assert pre

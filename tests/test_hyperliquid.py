@@ -149,6 +149,61 @@ def test_label_or_none_defaults_to_equity():
 def test_labels_file_has_a_kind_on_every_row_and_the_pre_ipo_names():
     labels = hl.load_labels()
     pre = sorted(s for s, lb in labels.items() if lb.kind == "pre_ipo")
-    assert {"xyz:ANT", "xyz:JIO"} <= set(pre)  # YMTC is delisted on the venue and excluded
+    assert {"xyz:ANT", "xyz:JIO", "para:ANTH", "io:ANTH", "io:OAI"} <= set(pre)  # YMTC is delisted on the venue and excluded
     assert all(lb.exchange for lb in labels.values() if lb.kind == "equity")
     assert all(lb.ref_kind == "none" and not lb.ref_symbol and not lb.exchange for lb in labels.values() if lb.kind == "pre_ipo")
+
+
+def _ctx(name, px="100"):
+    u = {"name": name, "szDecimals": 3, "maxLeverage": 10, "growthMode": "enabled"}
+    c = {"funding": "0.0", "openInterest": "1", "prevDayPx": px, "dayNtlVlm": "1", "premium": "0", "oraclePx": px,
+         "markPx": px, "midPx": px, "impactPxs": [px, px]}
+    return u, c
+
+
+def _dex_post(payloads):
+    sent = []
+
+    def post(body):
+        sent.append(body)
+        us, cs = zip(*payloads[body["dex"]], strict=True)
+        return [{"universe": list(us)}, list(cs)]
+    return post, sent
+
+
+def test_dex_of_reads_the_prefix():
+    assert hl.dex_of("para:ANTH") == "para" and hl.dex_of("xyz:NVDA") == "xyz"
+    assert hl.dex_of("ANTH") == ""  # a bare coin lives on the main dex; never labelled here
+
+
+def test_fetch_ctxs_for_queries_each_labelled_dex_and_keeps_only_labelled_names_off_xyz():
+    labels = {"xyz:NVDA": hl.Label("xyz:NVDA", "schwab", "NVDA", "NASDAQ", "USD", "Nvidia"),
+              "para:ANTH": hl.Label("para:ANTH", "none", None, "", "USD", "Anthropic", "pre_ipo"),
+              "io:ANTH": hl.Label("io:ANTH", "none", None, "", "USD", "Anthropic", "pre_ipo")}
+    post, sent = _dex_post({"xyz": [_ctx("xyz:NVDA"), _ctx("xyz:NEW")],
+                            "para": [_ctx("para:ANTH"), _ctx("para:UNITREE")],
+                            "io": [_ctx("io:ANTH"), _ctx("io:OAI")]})
+    ctxs = hl.fetch_ctxs_for(labels, post=post)
+    assert [b["dex"] for b in sent] == ["xyz", "para", "io"] and all(b["type"] == "metaAndAssetCtxs" for b in sent)
+    # xyz comes back whole (catalog flags xyz:NEW as unlabelled); the other deployers contribute labelled names only
+    assert [c.symbol for c in ctxs] == ["xyz:NVDA", "xyz:NEW", "para:ANTH", "io:ANTH"]
+    kept, unlabelled = hl.catalog(ctxs, labels)
+    assert [c.symbol for c in kept] == ["xyz:NVDA", "para:ANTH", "io:ANTH"] and unlabelled == ["xyz:NEW"]
+
+
+def test_fetch_ctxs_for_with_xyz_labels_only_makes_one_call():
+    labels = {"xyz:NVDA": hl.Label("xyz:NVDA", "schwab", "NVDA", "NASDAQ", "USD", "Nvidia")}
+    post, sent = _dex_post({"xyz": [_ctx("xyz:NVDA")]})
+    assert [c.symbol for c in hl.fetch_ctxs_for(labels, post=post)] == ["xyz:NVDA"] and len(sent) == 1
+
+
+def test_fetch_ctxs_for_survives_one_deployer_failing():
+    labels = {"xyz:NVDA": hl.Label("xyz:NVDA", "schwab", "NVDA", "NASDAQ", "USD", "Nvidia"),
+              "para:ANTH": hl.Label("para:ANTH", "none", None, "", "USD", "Anthropic", "pre_ipo")}
+    post, _ = _dex_post({"xyz": [_ctx("xyz:NVDA")]})  # no "para" payload: that call raises
+
+    def flaky(body):
+        if body["dex"] == "para":
+            raise RuntimeError("POST info metaAndAssetCtxs failed")
+        return post(body)
+    assert [c.symbol for c in hl.fetch_ctxs_for(labels, post=flaky)] == ["xyz:NVDA"]
