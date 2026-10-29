@@ -68,3 +68,9 @@ def test_provision_adds_a_swapfile_once():
     text = (ROOT / "deploy" / "server" / "provision.sh").read_text()
     assert "/swapfile" in text and "swapon" in text and "/etc/fstab" in text
     assert "grep -q" in text  # idempotent: a re-run neither recreates the file nor duplicates the fstab line
+
+
+def test_server_prune_cron_keeps_daily_rollups_longer():
+    text = (ROOT / "deploy" / "server" / "prune.cron").read_text()
+    assert "'pairs-*.parquet' -mtime +9" in text  # unchanged: one-minute hour files, ~9 days
+    assert "'daily-*.parquet' -mtime +181" in text  # hourly rollups: the publisher keeps 180 days of them

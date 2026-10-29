@@ -743,3 +743,58 @@ def test_hidden_adds_pre_ipo_labels(monkeypatch):
     monkeypatch.setattr(hyperliquid, "load_excluded", lambda: {"xyz:GOLD"})
     assert {"xyz:GOLD", pre} <= set(publish.hidden())
     assert publish.excluded() == ["xyz:GOLD"]  # the collector's list is unchanged
+
+
+def _hour_rows(hour, keys, edge):
+    return [{"ts": hour + timedelta(minutes=m), "key": k, "kind": "pair", "direction": "k_yes_pm_no",
+             "net_edge_cents": edge + m, "capacity_usd": 1.0, "k_ask": None, "k_size": None, "pm_ask": None,
+             "pm_size": None, "fees_cents": 1.0, "basis_bps": None, "net_bps": None} for k in keys for m in (0, 30)]
+
+
+def test_hour_files_are_sorted_by_key_in_small_row_groups(tmp_path, monkeypatch):
+    import pyarrow.parquet as pq
+
+    monkeypatch.setattr(config, "DASHBOARD_SHOW_STOCK_PERPS", False)
+    monkeypatch.setattr(publish, "HISTORY_ROW_GROUP", 2)
+    hour = datetime(2026, 10, 20, 15, tzinfo=UTC)
+    rows = [(hour + timedelta(seconds=s), k, "P1", "k_yes_pm_no", 0.02, 300.0) for s in (20, 10) for k in ("K2", "K1")]
+    results = {"venue_arb.edges": rows, "venue_arb.ladder_edges": [], "venue_arb.book_levels_v2": []}
+    ch = SimpleNamespace(query=lambda sql, parameters=None: SimpleNamespace(
+        result_rows=next(v for k, v in results.items() if f"FROM {k} " in sql)))
+    f = pq.ParquetFile(publish.write_history_hour(ch, tmp_path, hour, sides={}))
+    t = f.read()
+    keys, ts = t.column("key").to_pylist(), t.column("ts").to_pylist()
+    assert list(zip(keys, ts)) == sorted(zip(keys, ts))  # key first, then time
+    assert f.metadata.num_row_groups == 2  # min/max statistics per group let a key filter skip the rest
+
+
+def test_daily_rollup_is_hourly_means_of_that_days_hour_files(tmp_path):
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    (tmp_path / "history").mkdir()
+    day = datetime(2026, 10, 20, tzinfo=UTC)
+    for h, edge in ((3, 1.0), (4, 5.0)):
+        pq.write_table(pa.Table.from_pylist(_hour_rows(day + timedelta(hours=h), ["B", "A"], edge),
+                                            schema=publish.HISTORY_SCHEMA),
+                       tmp_path / "history" / f"pairs-202610200{h}.parquet")
+    pq.write_table(pa.Table.from_pylist(_hour_rows(day + timedelta(days=1), ["A"], 9.0), schema=publish.HISTORY_SCHEMA),
+                   tmp_path / "history" / "pairs-2026102100.parquet")  # the next day: not in this rollup
+    path = publish.write_daily(tmp_path, day.date())
+    assert path == tmp_path / "history" / "daily-20261020.parquet"
+    out = pq.read_table(path).to_pylist()
+    assert [(r["key"], r["ts"].hour, r["net_edge_cents"]) for r in out] == [
+        ("A", 3, 16.0), ("A", 4, 20.0), ("B", 3, 16.0), ("B", 4, 20.0)]  # mean of minutes 0 and 30, sorted by key
+    assert out[0]["k_ask"] is None and out[0]["fees_cents"] == 1.0
+
+
+def test_prune_keeps_daily_rollups_longer_than_hour_files(tmp_path):
+    now = datetime(2026, 10, 20, 15, 56, tzinfo=UTC)
+    (tmp_path / "history").mkdir()
+    old = now - publish.HISTORY_KEEP - timedelta(days=2)
+    stale = now - publish.DAILY_KEEP - timedelta(days=2)
+    for name in (f"pairs-{old:%Y%m%d%H}.parquet", f"daily-{old:%Y%m%d}.parquet", f"daily-{stale:%Y%m%d}.parquet"):
+        (tmp_path / "history" / name).write_bytes(b"x")
+    gone = sorted(p.name for p in publish.prune_history(tmp_path, now))
+    assert gone == sorted([f"pairs-{old:%Y%m%d%H}.parquet", f"daily-{stale:%Y%m%d}.parquet"])
+    assert publish.DAILY_KEEP >= timedelta(days=180)

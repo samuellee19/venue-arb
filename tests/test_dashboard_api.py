@@ -1,4 +1,5 @@
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -206,3 +207,55 @@ def test_live_serialises_each_bundle_once(monkeypatch, client):
     second = client.get("/api/live").json()
     assert first["bundle"] == second["bundle"] and len(calls) <= 1
     assert set(first) == {"bundle", "age_s"} and isinstance(first["age_s"], float)
+
+
+def test_seven_day_history_is_fifteen_minute_buckets(client):
+    week = client.get(f"/api/pair/{_p(CPI_KEY)}/history", params={"range": "7d"}).json()
+    # the sample holds two hours of one-minute rows: 7d returns 15-minute averages, 24h keeps every row
+    assert week["ts"] == [f"2026-10-20T{h}:{m}:00Z" for h in ("14", "15") for m in ("00", "15", "30", "45")]
+    day = client.get(f"/api/pair/{_p(CPI_KEY)}/history", params={"range": "24h"}).json()
+    first = [x for t, x in zip(day["ts"], day["net_edge_cents"]) if t < "2026-10-20T14:15" and x is not None]
+    assert week["net_edge_cents"][0] == pytest.approx(sum(first) / len(first))
+
+
+def _daily(tmp_path: Path) -> Path:
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    shutil.copytree(SAMPLE, tmp_path, dirs_exist_ok=True)
+    rows = [{"ts": datetime(2026, 9, 1, h, tzinfo=UTC), "key": CPI_KEY, "kind": "pair", "direction": "k_yes_pm_no",
+             "net_edge_cents": float(h), "capacity_usd": 1.0, "k_ask": None, "k_size": None, "pm_ask": None,
+             "pm_size": None, "fees_cents": 1.0, "basis_bps": None, "net_bps": None} for h in (3, 4)]
+    pq.write_table(pa.Table.from_pylist(rows), tmp_path / "history" / "daily-20260901.parquet")
+    return tmp_path
+
+
+def test_all_history_reads_the_daily_rollups_when_present(monkeypatch, tmp_path):
+    c = _client(monkeypatch, _daily(tmp_path))
+    every = c.get(f"/api/pair/{_p(CPI_KEY)}/history", params={"range": "all"}).json()
+    # rollups reach back past the hour files (the VM keeps ~9 days of those, the rollups 180)
+    assert every["ts"] == ["2026-09-01T03:00:00Z", "2026-09-01T04:00:00Z"] and every["net_edge_cents"] == [3.0, 4.0]
+    # the ranged views still read the one-minute hour files
+    assert len(c.get(f"/api/pair/{_p(CPI_KEY)}/history", params={"range": "1h"}).json()["ts"]) == 61
+
+
+def test_history_responses_are_cached_until_the_hour_files_change(monkeypatch, tmp_path):
+    shutil.copytree(SAMPLE, tmp_path, dirs_exist_ok=True)
+    c = _client(monkeypatch, tmp_path)
+    calls = []
+    real = app_mod.store.history
+    monkeypatch.setattr(app_mod.store, "history", lambda k, r: calls.append((k, r)) or real(k, r))
+    url = f"/api/pair/{_p(CPI_KEY)}/history"
+    a = c.get(url, params={"range": "24h"})
+    b = c.get(url, params={"range": "24h"})
+    assert a.json() == b.json() and len(calls) == 1
+    newest = sorted((tmp_path / "history").glob("pairs-*.parquet"))[-1]
+    os.utime(newest, ns=(newest.stat().st_atime_ns, newest.stat().st_mtime_ns + 10**9))  # the publisher rewrote it
+    c.get(url, params={"range": "24h"})
+    assert len(calls) == 2
+
+
+def test_cache_headers(client):
+    assert "max-age" in client.get("/api/live").headers["cache-control"]
+    assert "max-age" in client.get(f"/api/pair/{_p(CPI_KEY)}/history", params={"range": "24h"}).headers["cache-control"]
+    assert "cache-control" not in client.get("/healthz").headers  # a health probe always sees the server itself
