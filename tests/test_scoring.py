@@ -6,7 +6,7 @@ from venue_arb import scoring
 from venue_arb.episodes import Episode
 from venue_arb.exact import ExactPair
 
-T0 = datetime(2026, 1, 1)  # noqa: DTZ001 - ClickHouse may hand back naive UTC
+T0 = datetime(2026, 1, 1)  # naive on purpose: ClickHouse may hand back naive UTC
 FEE0 = {"fee_type": "quadratic", "fee_multiplier": 0}
 PAIR = ExactPair("K", "P", "tok", "yes", datetime(2026, 2, 1, tzinfo=UTC), "KXS", None, False, 0.9, False)
 
