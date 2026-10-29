@@ -14,7 +14,7 @@ Environment=CLICKHOUSE_HOST=127.0.0.1
 Environment=CLICKHOUSE_USER=venue_arb
 Environment=PREFECT_API_URL=http://127.0.0.1:4200/api
 Environment=MLFLOW_TRACKING_URI=http://localhost:5050
-Environment=VENUE_ARB_PUBLISH_DEST=venue-arb@SERVER_IP:./
+Environment=VENUE_ARB_PUBLISH_DEST=venue-arb@venue-arb-push-host:./
 Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
 Environment=PYTHONPATH=%h/platform
 ExecStart=%h/.local/bin/mise exec -- %h/.local/bin/secrets uv run python -m venue_arb.collect

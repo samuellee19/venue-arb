@@ -13,6 +13,6 @@ PGUSER = "venue_arb"
 CLICKHOUSE_HOST = "127.0.0.1"
 CLICKHOUSE_USER = "venue_arb"
 # dashboard server for the publisher (not a secret); SERVER_IP is a placeholder, set the real one on the box
-VENUE_ARB_PUBLISH_DEST = "venue-arb@SERVER_IP:./"
+VENUE_ARB_PUBLISH_DEST = "venue-arb@venue-arb-push-host:./"
 # the platform's qa package (not pip-installable); flows import it, pure modules never do
 PYTHONPATH = "{{env.HOME}}/platform"
