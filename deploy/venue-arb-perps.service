@@ -2,7 +2,10 @@
 Description=venue-arb stock-perp snapshot collector
 
 [Service]
-WorkingDirectory=%h/projects/venue-arb
+# run from the member directory (sql_checks/, data/, labels/ are cwd-relative)
+WorkingDirectory=%h/platform/projects/venue-arb
+# this service's own venv: a root `uv sync` in ~/platform never touches it
+Environment=UV_PROJECT_ENVIRONMENT=%h/platform/.venvs/venue-arb
 Environment=BWS_PROJECT_ID=42f2b924-cf96-49c8-85a3-b4e4001765b4
 # same values as mise.toml [env]: systemd loads no mise, and without PGUSER/CLICKHOUSE_USER qa.db
 # falls back to the superusers (tests/test_deploy.py keeps these in sync)
@@ -14,10 +17,9 @@ Environment=CLICKHOUSE_HOST=127.0.0.1
 Environment=CLICKHOUSE_USER=venue_arb
 Environment=PREFECT_API_URL=http://127.0.0.1:4200/api
 Environment=MLFLOW_TRACKING_URI=http://localhost:5050
-Environment=VENUE_ARB_PUBLISH_DEST=venue-arb@SERVER_IP:./
+Environment=VENUE_ARB_PUBLISH_DEST=venue-arb@venue-arb-push-host:./
 Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
-Environment=PYTHONPATH=%h/platform
-ExecStart=%h/.local/bin/mise exec -- %h/.local/bin/secrets uv run python -m venue_arb.collect_perps
+ExecStart=%h/.local/bin/mise exec -- %h/.local/bin/secrets uv run --locked --package venue-arb python -m venue_arb.collect_perps
 Restart=always
 RestartSec=30
 

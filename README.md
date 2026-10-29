@@ -65,8 +65,8 @@ Three questions, each with its own tier of data:
   during regular and extended sessions separately, and warns when a name's trailing 5-day regular-session p95 exceeds
   10 bps. Its reports live in `data/private/` and are never pushed; a name leaves the public page only by hand, with a
   neutral comment (Operations, below).
-- **CI and observability.** Every push runs `uv run ruff check .` and `uv run pytest -m "not integration"` in a CI
-  worktree on the OptiPlex before it can fast-forward `main`; the unit suite needs no secrets and no stack, and pins
+- **CI and observability.** Every push runs ruff and the unit suite (`pytest -m "not integration"`) before it can
+  reach `main`; the unit suite needs no secrets and no stack, and pins
   the deploy units, the page copy, the Schwab-free rule for every public file and the bundle schema. Flows run under
   Prefect with per-run checks recorded in `qa.check_results` (the SQL checks are in `sql_checks/`); error-severity
   checks reach Telegram through the platform alerter; the publisher stamps every bundle with the last green run, and the
@@ -163,13 +163,16 @@ server's setup is in `deploy/server/README.md`.
 ## Tests
 
 ```bash
-uv run pytest -m "not integration"      # unit: no secrets, no stack (what CI runs, after `uv run ruff check .`)
-secrets uv run pytest -m integration    # needs the stack up
+uv venv --python 3.14 && uv pip install -r requirements.txt
+.venv/bin/ruff check . && .venv/bin/pytest -m "not integration"   # unit: no secrets, no stack (what this repo's CI runs)
 ```
 
-CI is the worktree `~/projects/venue-arb-ci` on the OptiPlex: push the branch to origin, run both commands there with
-`set -o pipefail`, and fast-forward `main` only on green. The Mac clone lives under iCloud, where pytest hangs on
-evicted venv files, so the Mac is for editing, not for the suite.
+This repository is a **read-only mirror** of `projects/venue-arb` in a private monorepo that also holds the data
+platform (`qa`, `obs`); every green push to that repo's `main` is published here as a fast-forward. Changes are made
+there, so pull requests here are applied by hand; issues are welcome. `requirements.txt` is generated from the
+monorepo's lock (`pyproject.toml` names the private platform as a workspace dependency, so `uv sync` does not work in
+a clone of this repo). Tests that need the platform skip here and run upstream, where integration tests
+(`pytest -m integration`) also run against the live stack.
 
 ## Operations
 
