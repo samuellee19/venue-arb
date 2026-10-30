@@ -1,6 +1,6 @@
 r"""Colab T4 job for the embedding bake-off (runs on the VM; never touches the platform).
 
-From ~/projects/venue-arb (or the Mac clone with `tunnel` open), after `secrets uv run python -m
+From ~/platform/projects/venue-arb (or the Mac clone with `tunnel` open), after `secrets uv run python -m
 venue_arb.bakeoff.snapshot`:
 
     uv run --project ~/platform python -m obs.colab_job run --experiment venue-arb --gpu T4 --param dtype=float16 \

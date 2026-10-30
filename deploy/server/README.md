@@ -40,7 +40,7 @@ No database or secrets live here; the unit sets only `BUNDLE_DIR` and `PYTHONPAT
    once by hand, or every push fails with exit 255 (the publisher's ssh has no terminal to answer the prompt):
    ```bash
    ssh venue-arb-push-host true   # answer "yes"; the forced rrsync command then refuses the shell, which is fine
-   cd ~/projects/venue-arb && mkdir -p data/bundle
+   cd ~/platform/projects/venue-arb && mkdir -p data/bundle
    rsync --dry-run -az --timeout=30 data/bundle/ venue-arb-push-host:./   # exit 0 = key, host key and rrsync all work
    ```
 5. **Start the publisher**: `cp deploy/*.service ~/.config/systemd/user/ && systemctl --user daemon-reload &&

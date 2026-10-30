@@ -12,5 +12,5 @@ PGDATABASE = "app"
 PGUSER = "venue_arb"
 CLICKHOUSE_HOST = "127.0.0.1"
 CLICKHOUSE_USER = "venue_arb"
-# dashboard server for the publisher (not a secret); SERVER_IP is a placeholder, set the real one on the box
+# dashboard server for the publisher: an ssh alias from ~/.ssh/config, so no address is committed (not a secret)
 VENUE_ARB_PUBLISH_DEST = "venue-arb@venue-arb-push-host:./"
