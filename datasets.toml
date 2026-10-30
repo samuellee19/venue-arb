@@ -3,6 +3,7 @@
 # freshness / volume_floor are the ERROR lines; WARNING is a window below warn_ratio (0.5) x the median of the same
 # hour-of-day over baseline_days (14). freshness = "manual": lineage only (written by hand or only when an event occurs).
 # Generated page: docs/DATASETS.md (do not edit it by hand).
+# runbook paths are relative to the generated docs/DATASETS.md.
 
 # --- ClickHouse ---
 
@@ -40,7 +41,7 @@ description = "Executable cross-venue edge per exact pair, direction and book sn
 timestamp = "ts"
 cadence = "1h"
 freshness = "2h"
-volume_window = "1h"
+volume_window = "2h"   # hourly producer: one late or failed run must not empty the window
 volume_floor = 1
 runbook = "../../../docs/runbooks/venue-arb.md#venue-arbscore"
 
@@ -51,9 +52,9 @@ consumers = ["venue-arb-publish", "venue-arb.report"]
 description = "Edge per crypto ladder pair (Kalshi strike vs Polymarket up/down), direction and book snapshot"
 timestamp = "ts"
 cadence = "1h"
-freshness = "2h"
-volume_window = "1h"
-volume_floor = 1
+freshness = "24h"   # event-driven: hours with no open ladder pair write nothing
+volume_window = "24h"
+volume_floor = 0
 runbook = "../../../docs/runbooks/venue-arb.md#venue-arbladder_score"
 
 [datasets."venue_arb.screened_v2"]
@@ -117,7 +118,7 @@ description = "Perp vs stock basis net of fees, spread, funding and borrow, per 
 timestamp = "ts"
 cadence = "1h"
 freshness = "2h"
-volume_window = "1h"
+volume_window = "2h"   # hourly producer: one late or failed run must not empty the window
 volume_floor = 1
 runbook = "../../../docs/runbooks/venue-arb.md#venue-arbstock_perp_score"
 
@@ -141,11 +142,11 @@ engine = "postgres"
 producer = "venue-arb.catalog"
 consumers = ["venue-arb.match", "venue-arb.collector", "venue-arb.score", "venue-arb.ladder_score",
              "venue-arb-publish", "venue-arb.report"]
-description = "Open markets on both venues with rules and labels; last_seen refreshed every catalog run"
+description = "Open markets on both venues with rules and labels; last_seen refreshed every catalog run, so volume counts listings seen in the window, not rows written"
 timestamp = "last_seen"
 cadence = "1h"
 freshness = "2h"
-volume_window = "1h"
+volume_window = "2h"   # hourly producer: one late or failed run must not empty the window
 volume_floor = 1
 runbook = "../../../docs/runbooks/venue-arb.md#venue-arbcatalog"
 
@@ -156,9 +157,9 @@ consumers = ["venue-arb.match", "venue-arb.collector"]
 description = "Candidate cross-venue pairs from embedding similarity and rules, one row per pair"
 timestamp = "created_at"
 cadence = "1h"
-freshness = "2h"
-volume_window = "1h"
-volume_floor = 1
+freshness = "24h"   # event-driven: only new pairs are inserted, many hours write nothing
+volume_window = "24h"
+volume_floor = 0
 runbook = "../../../docs/runbooks/venue-arb.md#venue-arbmatch"
 
 [datasets."venue_arb.adjudications"]
