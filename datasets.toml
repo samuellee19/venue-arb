@@ -1,0 +1,236 @@
+# venue-arb datasets: every table this project writes, who writes and reads it, and the audit thresholds.
+# producer = a job in the platform schedule registry | "service:<unit>" | "many" | "manual".
+# freshness / volume_floor are the ERROR lines; WARNING is a window below warn_ratio (0.5) x the median of the same
+# hour-of-day over baseline_days (14). freshness = "manual": lineage only (written by hand or only when an event occurs).
+# Generated page: docs/DATASETS.md (do not edit it by hand).
+
+# --- ClickHouse ---
+
+[datasets."venue_arb.book_levels_v2"]
+engine = "clickhouse"
+producer = "venue-arb.collector"
+consumers = ["venue-arb.score", "venue-arb.ladder_score", "venue-arb-publish"]
+description = "Order-book levels of every matched market, one row per snapshot per side per level (60 s snapshots)"
+timestamp = "ts"
+cadence = "1m"
+freshness = "15m"
+volume_window = "1h"
+volume_floor = 1000
+partition = "venue"
+partitions = ["kalshi", "polymarket"]
+runbook = "../../../docs/runbooks/venue-arb.md#venue-arbcollector"
+
+[datasets."venue_arb.basis"]
+engine = "clickhouse"
+producer = "venue-arb.basis"
+consumers = ["venue-arb.collector", "venue-arb.ladder_score", "venue-arb.report"]
+description = "Kalshi BRTI settle vs Binance candle close per (asset, settlement instant); lags by the Binance archive's publication delay"
+timestamp = "instant"
+cadence = "1h"
+freshness = "72h"   # the flow's own guard (FRESH_SLACK): the Binance daily archive publishes a day or more late
+volume_window = "24h"
+volume_floor = 0
+runbook = "../../../docs/runbooks/venue-arb.md#venue-arbbasis"
+
+[datasets."venue_arb.edges"]
+engine = "clickhouse"
+producer = "venue-arb.score"
+consumers = ["venue-arb-publish", "venue-arb.report"]
+description = "Executable cross-venue edge per exact pair, direction and book snapshot"
+timestamp = "ts"
+cadence = "1h"
+freshness = "2h"
+volume_window = "1h"
+volume_floor = 1
+runbook = "../../../docs/runbooks/venue-arb.md#venue-arbscore"
+
+[datasets."venue_arb.ladder_edges"]
+engine = "clickhouse"
+producer = "venue-arb.ladder_score"
+consumers = ["venue-arb-publish", "venue-arb.report"]
+description = "Edge per crypto ladder pair (Kalshi strike vs Polymarket up/down), direction and book snapshot"
+timestamp = "ts"
+cadence = "1h"
+freshness = "2h"
+volume_window = "1h"
+volume_floor = 1
+runbook = "../../../docs/runbooks/venue-arb.md#venue-arbladder_score"
+
+[datasets."venue_arb.screened_v2"]
+engine = "clickhouse"
+producer = "manual"
+consumers = ["venue-arb-publish", "venue-arb.report"]
+description = "Top-of-book screen of exact pairs at aligned snapshots (run by hand: python -m venue_arb.flows.screened)"
+freshness = "manual"
+runbook = "../../../docs/runbooks/venue-arb.md"
+
+[datasets."venue_arb.stock_perp_books"]
+engine = "clickhouse"
+producer = "venue-arb.perps"
+consumers = ["venue-arb.stock_perp_score", "venue-arb-publish"]
+description = "Hyperliquid stock-perp order-book levels, one row per snapshot per side per level"
+timestamp = "ts"
+cadence = "1m"
+freshness = "15m"
+volume_window = "1h"
+volume_floor = 100
+runbook = "../../../docs/runbooks/venue-arb.md#venue-arbperps"
+
+[datasets."venue_arb.stock_perp_candles"]
+engine = "clickhouse"
+producer = "manual"
+consumers = ["venue-arb.stock_perp_weekend"]
+description = "Hourly candles and funding per stock perp, 60 days back (run by hand: python -m venue_arb.flows.stock_perp_backfill)"
+freshness = "manual"
+runbook = "../../../docs/runbooks/venue-arb.md#venue-arbstock_perp_weekend"
+
+[datasets."venue_arb.stock_perp_ctx"]
+engine = "clickhouse"
+producer = "venue-arb.perps"
+consumers = ["venue-arb.stock_perp_score", "venue-arb.stock_perp_oracle_check", "venue-arb.stock_perp_weekend",
+             "venue-arb-publish"]
+description = "Per-perp context each snapshot: mark, oracle, mid, funding, premium, open interest, day volume"
+timestamp = "ts"
+cadence = "1m"
+freshness = "15m"
+volume_window = "1h"
+volume_floor = 100
+runbook = "../../../docs/runbooks/venue-arb.md#venue-arbperps"
+
+[datasets."venue_arb.stock_perp_refs"]
+engine = "clickhouse"
+producer = "venue-arb.perps"
+consumers = ["venue-arb.stock_perp_score", "venue-arb.stock_perp_oracle_check"]
+description = "Stock reference quotes (Schwab) for perps with a stock leg, each snapshot; daily opens from the backfill"
+timestamp = "ts"
+cadence = "1m"
+freshness = "15m"
+volume_window = "1h"
+volume_floor = 100
+runbook = "../../../docs/runbooks/venue-arb.md#venue-arbperps"
+
+[datasets."venue_arb.stock_perp_edges"]
+engine = "clickhouse"
+producer = "venue-arb.stock_perp_score"
+consumers = ["venue-arb-publish"]
+description = "Perp vs stock basis net of fees, spread, funding and borrow, per symbol, direction and snapshot"
+timestamp = "ts"
+cadence = "1h"
+freshness = "2h"
+volume_window = "1h"
+volume_floor = 1
+runbook = "../../../docs/runbooks/venue-arb.md#venue-arbstock_perp_score"
+
+[datasets."venue_arb.stock_perp_oracle_check"]
+engine = "clickhouse"
+producer = "venue-arb.stock_perp_oracle_check"
+consumers = ["venue-arb-publish"]
+description = "Daily oracle vs stock quote deviation per symbol and session segment (weekday evenings, for that trading day)"
+timestamp = "day"   # a Date: the trading day, written the evening after; a Monday run finds Friday newest (~97 h)
+cadence = "24h"
+freshness = "120h"
+warn_ratio = 0.85   # 102 h: past the Monday-evening gap, so a normal week never warns
+volume_window = "24h"
+volume_floor = 0
+runbook = "../../../docs/runbooks/venue-arb.md#venue-arbstock_perp_oracle_check"
+
+# --- Postgres ---
+
+[datasets."venue_arb.listings"]
+engine = "postgres"
+producer = "venue-arb.catalog"
+consumers = ["venue-arb.match", "venue-arb.collector", "venue-arb.score", "venue-arb.ladder_score",
+             "venue-arb-publish", "venue-arb.report"]
+description = "Open markets on both venues with rules and labels; last_seen refreshed every catalog run"
+timestamp = "last_seen"
+cadence = "1h"
+freshness = "2h"
+volume_window = "1h"
+volume_floor = 1
+runbook = "../../../docs/runbooks/venue-arb.md#venue-arbcatalog"
+
+[datasets."venue_arb.candidates"]
+engine = "postgres"
+producer = "venue-arb.match"
+consumers = ["venue-arb.match", "venue-arb.collector"]
+description = "Candidate cross-venue pairs from embedding similarity and rules, one row per pair"
+timestamp = "created_at"
+cadence = "1h"
+freshness = "2h"
+volume_window = "1h"
+volume_floor = 1
+runbook = "../../../docs/runbooks/venue-arb.md#venue-arbmatch"
+
+[datasets."venue_arb.adjudications"]
+engine = "postgres"
+producer = "venue-arb.match"
+consumers = ["venue-arb.collector", "venue-arb.score", "venue-arb-publish", "venue-arb.report"]
+description = "Pair verdict (relation, yes mapping, differences, confidence) per candidate pair version and prompt version"
+timestamp = "created_at"
+cadence = "1h"
+freshness = "24h"   # only new or changed pairs are adjudicated: many hours write nothing
+volume_window = "24h"
+volume_floor = 0
+runbook = "../../../docs/runbooks/venue-arb.md#venue-arbmatch"
+
+[datasets."venue_arb.llm_attempts"]
+engine = "postgres"
+producer = "venue-arb.match"
+consumers = ["venue-arb.match"]
+description = "Every LLM adjudication attempt with outcome, error type and cost (retry budget and spend)"
+timestamp = "created_at"
+cadence = "1h"
+freshness = "24h"   # only pairs that need the model are sent: many hours write nothing
+volume_window = "24h"
+volume_floor = 0
+runbook = "../../../docs/runbooks/venue-arb.md#venue-arbmatch"
+
+[datasets."venue_arb.embeddings"]
+engine = "postgres"
+producer = "venue-arb.match"
+consumers = ["venue-arb.match"]
+description = "Listing text embedding per market version (no timestamp column, so lineage only)"
+freshness = "manual"
+runbook = "../../../docs/runbooks/venue-arb.md#venue-arbmatch"
+
+[datasets."venue_arb.opportunities"]
+engine = "postgres"
+producer = "venue-arb.score"
+consumers = ["venue-arb.score", "venue-arb.ladder_score", "venue-arb.stock_perp_score", "venue-arb-publish",
+             "venue-arb.report"]
+description = "Arbitrage episodes (start, end, max edge, capacity); also written by ladder_score and stock_perp_score (source column). Rows only when an edge exists, so lineage only"
+freshness = "manual"
+runbook = "../../../docs/runbooks/venue-arb.md#venue-arbscore"
+
+[datasets."venue_arb.reviews"]
+engine = "postgres"
+producer = "manual"
+consumers = ["venue-arb.score", "venue-arb.report"]
+description = "Hand labels of adjudicated pairs (python -m venue_arb.flows.review_cli)"
+freshness = "manual"
+runbook = "../../../docs/runbooks/venue-arb.md"
+
+[datasets."venue_arb.stock_perp_weekends"]
+engine = "postgres"
+producer = "venue-arb.stock_perp_weekend"
+consumers = ["venue-arb.stock_perp_weekend", "venue-arb-publish"]
+description = "Weekend perp prices vs the Monday open per symbol and weekend, computed Monday after the open"
+timestamp = "computed_at"
+cadence = "168h"
+freshness = "192h"
+warn_ratio = 0.9    # 173 h: a week plus the run's lag after its expected start never warns
+volume_window = "168h"
+volume_floor = 0
+runbook = "../../../docs/runbooks/venue-arb.md#venue-arbstock_perp_weekend"
+
+[datasets."venue_arb.schema_migrations"]
+engine = "postgres"
+producer = "manual"
+description = "Applied migrations (db/migrate.py)"
+freshness = "manual"
+
+# Reviewed drift false positives (tables that no longer exist, or module paths in SQL comments).
+[drift_allowlist.tables]
+"venue_arb.book_levels" = "v1 order-book table, replaced by book_levels_v2; dropped; only its old migration names it"
+"venue_arb.screened" = "v1 screen, replaced by screened_v2; dropped; named by its old migration and in report prose"
+"venue_arb.flows" = "Python package path in a migration comment (pg/006_opportunities_source.sql), not a table"
