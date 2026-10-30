@@ -257,8 +257,10 @@ verdict (spec §5).
 - **Weekly login runbook** (every 7 days, or on `SchwabAuthError`):
   1. In `~/platform/projects/venue-arb` on the OptiPlex, put a write-capable Bitwarden access token in `BWS_WRITE_TOKEN`
      (`read -rs BWS_WRITE_TOKEN && export BWS_WRITE_TOKEN`; the `secrets` wrapper's own token is read-only and it
-     strips `BWS_ACCESS_TOKEN`), then `secrets uv run python -m venue_arb.sources.schwab login`. Without the token it
-     stops before the browser step.
+     strips `BWS_ACCESS_TOKEN`), then
+     `UV_PROJECT_ENVIRONMENT=~/platform/.venvs/venue-arb secrets uv run --locked --package venue-arb python -m venue_arb.sources.schwab login`.
+     Without the token it stops before the browser step; `read -rs` shows nothing while you paste, so check it took
+     with `[ -n "$BWS_WRITE_TOKEN" ] && echo set`.
   2. Open the printed authorize URL, sign in, approve. The browser lands on `https://127.0.0.1/?code=...&session=...`
      and shows a connection error; that is expected. Paste the full URL back at the prompt (the code is URL-encoded in
      the URL and the CLI decodes it before the exchange).

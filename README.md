@@ -328,7 +328,8 @@ Snapshots land in ClickHouse `venue_arb.book_levels_v2` (daily partitions, 90-da
 
 Stock reference quotes come from Schwab Market Data (Market Data product only) and are private: they feed the full
 two-leg stock-perp tier and the oracle check below, never the public page or any pushed file. The refresh
-token expires every 7 days; re-issue it with `secrets uv run python -m venue_arb.sources.schwab login` and a write-capable Bitwarden token in
+token expires every 7 days; re-issue it from `~/platform/projects/venue-arb` with
+`UV_PROJECT_ENVIRONMENT=~/platform/.venvs/venue-arb secrets uv run --locked --package venue-arb python -m venue_arb.sources.schwab login` and a write-capable Bitwarden token in
 `BWS_WRITE_TOKEN`. The runbook, token lifetimes
 and the terms record are in `docs/venues.md`.
 
