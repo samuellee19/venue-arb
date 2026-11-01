@@ -11,6 +11,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import obs
+from obs import prefect_artifacts
 from prefect import flow, get_run_logger
 from qa import checks, db, store
 
@@ -54,7 +55,9 @@ def stock_perp_oracle_check_flow(end: datetime | None = None, pipeline: str = PI
             ch.insert(TABLE, [[r[c] for c in COLUMNS] for r in rows], column_names=COLUMNS)
         results += validation.drift_results(checks, rows)
         REPORT_DIR.mkdir(parents=True, exist_ok=True)
-        (REPORT_DIR / f"oracle-check-{today}.md").write_text(validation.report(rows, today))
+        report = validation.report(rows, today)
+        (REPORT_DIR / f"oracle-check-{today}.md").write_text(report)
+        prefect_artifacts.markdown("oracle-check", report, f"oracle check {today}")  # the same report, on the run
         results.append(checks.Result("oracle_check_rows", True, len(rows), severity="warn", target=TABLE))
         checks.enforce(results)
         log.info("oracle check ok: %d rows, %d drift warns", len(rows), len(results) - 1)
