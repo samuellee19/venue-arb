@@ -1,5 +1,6 @@
 """Serve the hourly flows. Run: secrets uv run python -m venue_arb.flows.serve"""
 
+from obs.prefect_meta import stamp
 from obs.prefect_sweep import crash_orphans
 from prefect import serve
 
@@ -31,5 +32,6 @@ if __name__ == "__main__":
         stock_perp_oracle_check_flow.to_deployment("stock_perp_oracle_check", cron="30 1 * * 2-6", concurrency_limit=1),
     ]
     # a run left Running/Pending by the last runner death would hold its concurrency slot forever
+    stamp(deployments)  # commit tags, version and link: the only "which code runs" the OSS UI shows
     crash_orphans(deployments)
     serve(*deployments)
