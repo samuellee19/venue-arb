@@ -20,7 +20,7 @@ def test_registry_matches_served_flows():
     if not SCHEDULES.exists():
         pytest.skip("no platform checkout")
     reg = tomllib.loads(SCHEDULES.read_text())["jobs"]
-    served = {"catalog": "5 * * * *", "match": "20 * * * *", "basis": "35 * * * *", "score": "40 * * * *",
+    served = {"catalog": "1 * * * *", "match": "20 * * * *", "basis": "35 * * * *", "score": "40 * * * *",
               "ladder_score": "50 * * * *"}
     for name, cron in served.items():
         assert reg[f"venue-arb.{name}"]["cadence"] == cron
