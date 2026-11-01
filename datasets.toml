@@ -79,11 +79,16 @@ runbook = "../../../docs/runbooks/venue-arb.md#venue-arbperps"
 
 [datasets."venue_arb.stock_perp_candles"]
 engine = "clickhouse"
-producer = "manual"
+producer = "venue-arb.stock_perp_candles"
 consumers = ["venue-arb.stock_perp_weekend"]
-description = "Hourly candles and funding per stock perp, 60 days back (run by hand: python -m venue_arb.flows.stock_perp_backfill)"
-freshness = "manual"
-runbook = "../../../docs/runbooks/venue-arb.md#venue-arbstock_perp_weekend"
+description = "Hourly candles and funding per stock perp: the last 4 days every Monday (so Monday to Thursday is not covered), 60 days at deploy from stock_perp_backfill"
+timestamp = "hour"
+cadence = "168h"
+freshness = "192h"  # measured from the last expected start: one missed Monday (about 169 h) is the missed-run push's
+warn_ratio = 0.9    # 173 h: a single miss stays quiet here; two misses (about 337 h) are an ERROR
+volume_window = "168h"
+volume_floor = 1
+runbook = "../../../docs/runbooks/venue-arb.md#venue-arbstock_perp_candles"
 
 [datasets."venue_arb.stock_perp_ctx"]
 engine = "clickhouse"

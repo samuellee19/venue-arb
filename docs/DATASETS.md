@@ -10,7 +10,7 @@
 | `venue_arb.ladder_edges` | clickhouse | `venue-arb.ladder_score` | `venue-arb-publish`, `venue-arb.report` | 1h | 24h | 0 | Edge per crypto ladder pair (Kalshi strike vs Polymarket up/down), direction and book snapshot | `docs/runbooks/venue-arb.md#venue-arbladder_score` |
 | `venue_arb.screened_v2` | clickhouse | `manual` | `venue-arb-publish`, `venue-arb.report` |  | manual |  | Top-of-book screen of exact pairs at aligned snapshots (run by hand: python -m venue_arb.flows.screened) | `docs/runbooks/venue-arb.md` |
 | `venue_arb.stock_perp_books` | clickhouse | `venue-arb.perps` | `venue-arb-publish`, `venue-arb.stock_perp_score` | 1m | 20m | 100 | Hyperliquid stock-perp order-book levels, one row per snapshot per side per level | `docs/runbooks/venue-arb.md#venue-arbperps` |
-| `venue_arb.stock_perp_candles` | clickhouse | `manual` | `venue-arb.stock_perp_weekend` |  | manual |  | Hourly candles and funding per stock perp, 60 days back (run by hand: python -m venue_arb.flows.stock_perp_backfill) | `docs/runbooks/venue-arb.md#venue-arbstock_perp_weekend` |
+| `venue_arb.stock_perp_candles` | clickhouse | `venue-arb.stock_perp_candles` | `venue-arb.stock_perp_weekend` | 168h | 192h | 1 | Hourly candles and funding per stock perp: the last 4 days every Monday (so Monday to Thursday is not covered), 60 days at deploy from stock_perp_backfill | `docs/runbooks/venue-arb.md#venue-arbstock_perp_candles` |
 | `venue_arb.stock_perp_ctx` | clickhouse | `venue-arb.perps` | `venue-arb-publish`, `venue-arb.stock_perp_oracle_check`, `venue-arb.stock_perp_score`, `venue-arb.stock_perp_weekend` | 1m | 20m | 100 | Per-perp context each snapshot: mark, oracle, mid, funding, premium, open interest, day volume | `docs/runbooks/venue-arb.md#venue-arbperps` |
 | `venue_arb.stock_perp_refs` | clickhouse | `venue-arb.perps` | `venue-arb.stock_perp_oracle_check`, `venue-arb.stock_perp_score` | 1m | 20m | 100 | Stock reference quotes (Schwab) for perps with a stock leg, each snapshot; daily opens from the backfill | `docs/runbooks/venue-arb.md#venue-arbperps` |
 | `venue_arb.stock_perp_edges` | clickhouse | `venue-arb.stock_perp_score` | `venue-arb-publish` | 1h | 2h | 1 | Perp vs stock basis net of fees, spread, funding and borrow, per symbol, direction and snapshot | `docs/runbooks/venue-arb.md#venue-arbstock_perp_score` |
@@ -36,6 +36,7 @@ flowchart LR
     manual(["manual"])
     venue-arb.perps(["venue-arb.perps"])
     venue-arb.stock_perp_score(["venue-arb.stock_perp_score"])
+    venue-arb.stock_perp_candles(["venue-arb.stock_perp_candles"])
     venue-arb.stock_perp_weekend(["venue-arb.stock_perp_weekend"])
     venue-arb.stock_perp_oracle_check(["venue-arb.stock_perp_oracle_check"])
     venue-arb.catalog(["venue-arb.catalog"])
@@ -80,7 +81,7 @@ flowchart LR
     venue-arb.perps --> venue_arb.stock_perp_books
     venue_arb.stock_perp_books --> venue-arb-publish
     venue_arb.stock_perp_books --> venue-arb.stock_perp_score
-    manual --> venue_arb.stock_perp_candles
+    venue-arb.stock_perp_candles --> venue_arb.stock_perp_candles
     venue_arb.stock_perp_candles --> venue-arb.stock_perp_weekend
     venue-arb.perps --> venue_arb.stock_perp_ctx
     venue_arb.stock_perp_ctx --> venue-arb-publish
