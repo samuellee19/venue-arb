@@ -66,6 +66,7 @@ def default_fetchers() -> dict:
 LISTING_COLS = ("venue", "market_id", "event_id", "category", "title", "yes_label", "close_time", "yes_token")
 LISTINGS_SQL = (f"SELECT {', '.join(LISTING_COLS)} FROM venue_arb.listings WHERE category = 'crypto_price' "
                 "AND last_seen > now() - INTERVAL '2 hours' AND close_time > now()")
+STRIKES_SQL = "SELECT venue, market_id FROM venue_arb.listings WHERE category = 'crypto_price'"
 BASIS_SQL = f"SELECT asset, diff FROM venue_arb.basis FINAL WHERE instant > now() - INTERVAL {BASIS_WINDOW_DAYS} DAY"
 
 
@@ -122,9 +123,11 @@ def _fetch(fetchers: dict, venue: str, market_id: str, yes_token: str | None):
 
 
 def tick(watch, fetchers: dict, buf: dict[str, list[dict]], stats: dict[str, list[int]],
-         workers: int = WORKERS) -> None:
+         workers: int = WORKERS, strikes: frozenset[tuple[str, str]] = frozenset()) -> None:
     """Fetch every watched book into buf, `workers` at a time. stats[venue] = [attempts, errors, empty books];
-    failures are logged and counted, never raised. Accounting happens on this thread, so it needs no lock."""
+    failures are logged and counted, never raised. Accounting happens on this thread, so it needs no lock.
+    An empty book of a (venue, market_id) in `strikes` is not counted: crypto strike ladders list tail strikes nobody
+    quotes (Polymarket's hourly ladder opens with most of its tails empty) and makers pull quotes at the close."""
     with ThreadPoolExecutor(max_workers=workers) as pool:
         results = pool.map(lambda w: _fetch(fetchers, *w), watch)
         for (venue, market_id, _), (rows, err) in zip(watch, results, strict=True):
@@ -133,7 +136,7 @@ def tick(watch, fetchers: dict, buf: dict[str, list[dict]], stats: dict[str, lis
                 stats[venue][1] += 1
                 log.warning("book fetch failed venue=%s market=%s error=%s", venue, market_id, err)
             elif not rows:
-                stats[venue][2] += 1
+                stats[venue][2] += (venue, market_id) not in strikes
             else:
                 buf[venue] += rows
 
@@ -190,6 +193,7 @@ def run_forever(interval_s: int = SNAPSHOT_INTERVAL_S, flush_every: int = 2) -> 
 
     obs.init(service="venue-arb")
     fetchers, buf, watch, n, stamp = default_fetchers(), {v: [] for v in VENUES}, [], 0, None
+    strikes: frozenset[tuple[str, str]] = frozenset()
     stats, cycles = {v: [0, 0, 0] for v in VENUES}, []
 
     def load(rows):
@@ -206,8 +210,9 @@ def run_forever(interval_s: int = SNAPSHOT_INTERVAL_S, flush_every: int = 2) -> 
                 now_stamp = catalog.listings_stamp(conn)
                 if n % 10 == 0 or now_stamp != stamp:
                     watch, stamp = load_watchlist(conn, db.ch), now_stamp
+                    strikes = frozenset(conn.execute(STRIKES_SQL).fetchall())
             n += 1
-            tick(watch, fetchers, buf, stats)
+            tick(watch, fetchers, buf, stats, strikes=strikes)
             cycles.append(time.monotonic() - started)
             if n % flush_every == 0:
                 with obs.run("venue-arb.collector"):

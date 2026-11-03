@@ -91,7 +91,7 @@ def match_flow(limit: int = 500) -> dict:
                 "SELECT a_id, a_version, b_id, b_version, model FROM venue_arb.adjudications "
                 "WHERE prompt_version = %s", (adjudicate.PROMPT_VERSION,)).fetchall()
                 if model in rules.RULE_MODELS or not (a in kal and b in pmr and rules.decide(kal[a], pmr[b]))}
-            pairs = unadjudicated(cands, kal, pmr, done, limit)
+            pairs = unadjudicated(cands, kal, pmr, done, limit, free=lambda a, b: rules.decide(a, b) is not None)
             m = adjudicate.month_spend(conn)
             budget = m + adjudicate.daily_budget(m, adjudicate.today_spend(conn), datetime.now(UTC).date())
             try:  # Claude call traces; adjudicate._traced tags each with this obs run id. Telemetry never breaks the flow

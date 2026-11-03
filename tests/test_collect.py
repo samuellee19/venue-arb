@@ -81,6 +81,13 @@ def test_empty_book_counted_and_warned():
     assert fetch["venue_arb.book_levels_v2:polymarket"].passed  # empty is not an error
 
 
+def test_empty_strike_book_not_counted():
+    buf, stats = {"kalshi": [], "polymarket": []}, {"kalshi": [0, 0, 0], "polymarket": [0, 0, 0]}
+    tick(WATCH, {"kalshi": lambda m: [], "polymarket": lambda t: []}, buf, stats,
+         strikes=frozenset({("polymarket", "P1")}))
+    assert stats == {"kalshi": [1, 0, 1], "polymarket": [1, 0, 0]}
+
+
 def test_rows_stamped_per_fetch():
     def slow(mid):
         time.sleep(0.02)

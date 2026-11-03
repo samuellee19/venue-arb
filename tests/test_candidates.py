@@ -65,6 +65,14 @@ def test_needs_embedding_skips_current_versions():
     assert needs_embedding(rows, {("kalshi", "k", "v0")}) == rows  # old version does not count
 
 
+def test_unadjudicated_free_pairs_bypass_the_limit():
+    k = {f"k{i}": {"market_id": f"k{i}", "version": "v"} for i in range(4)}
+    p = {f"p{i}": {"market_id": f"p{i}", "version": "w"} for i in range(4)}
+    cands = [(f"k{i}", f"p{i}", 1 - i / 10, "embed") for i in range(4)]
+    out = unadjudicated(cands, k, p, set(), 1, free=lambda a, b: a["market_id"] in ("k0", "k2"))
+    assert [a["market_id"] for a, _ in out] == ["k0", "k1", "k2"]
+
+
 def test_unadjudicated_orders_by_score_skips_done_and_limits():
     k = {x: {"market_id": x, "version": "v"} for x in ("k1", "k2", "k3")}
     p = {x: {"market_id": x, "version": "w"} for x in ("p1", "p2", "p3")}

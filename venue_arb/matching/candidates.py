@@ -53,13 +53,16 @@ def needs_embedding(rows: list[dict], have: set[tuple[str, str, str]]) -> list[d
 
 
 def unadjudicated(cands: list[tuple[str, str, float, str]], kalshi: dict, pm: dict,
-                  done: set[tuple[str, str, str, str]], limit: int) -> list[tuple[dict, dict]]:
-    """Top `limit` candidate pairs by score with no adjudication at the current versions (`done` holds
-    (a_id, a_version, b_id, b_version)). `kalshi`/`pm` map market_id to the current listing row."""
-    out = []
+                  done: set[tuple[str, str, str, str]], limit: int, free=lambda a, b: False) -> list[tuple[dict, dict]]:
+    """Candidate pairs by score with no adjudication at the current versions (`done` holds
+    (a_id, a_version, b_id, b_version)): every pair `free` accepts (rule-decided, no LLM call) plus the top `limit`
+    others. `kalshi`/`pm` map market_id to the current listing row."""
+    out, n = [], 0
     for a, b, *_ in sorted(cands, key=lambda c: -c[2]):
-        if len(out) == limit:
-            break
         if a in kalshi and b in pm and (a, kalshi[a]["version"], b, pm[b]["version"]) not in done:
-            out.append((kalshi[a], pm[b]))
+            if free(kalshi[a], pm[b]):
+                out.append((kalshi[a], pm[b]))
+            elif n < limit:
+                out.append((kalshi[a], pm[b]))
+                n += 1
     return out

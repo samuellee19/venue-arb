@@ -35,6 +35,7 @@ xyz:GOOGL,schwab,GOOGL,NASDAQ,USD,Alphabet,equity
 xyz:HIMS,schwab,HIMS,NYSE,USD,Hims & Hers Health,equity
 xyz:HOOD,schwab,HOOD,NASDAQ,USD,Robinhood,equity
 xyz:IBM,schwab,IBM,NYSE,USD,IBM,equity
+xyz:ICE,schwab,ICE,NYSE,USD,Intercontinental Exchange,equity
 xyz:INTC,schwab,INTC,NASDAQ,USD,Intel,equity
 xyz:IREN,schwab,IREN,NASDAQ,USD,IREN,equity
 xyz:KORU,schwab,KORU,NYSE Arca,USD,Direxion Daily MSCI South Korea Bull 3X,equity
@@ -58,7 +59,7 @@ xyz:NOK,schwab,NOK,NYSE,USD,Nokia,equity
 xyz:NOW,schwab,NOW,NYSE,USD,ServiceNow,equity
 xyz:NVDA,schwab,NVDA,NASDAQ,USD,NVIDIA,equity
 xyz:ORCL,schwab,ORCL,NYSE,USD,Oracle,equity
-xyz:OURA,schwab,OURA,NASDAQ,USD,Oura,equity
+xyz:OURA,none,,,USD,Oura (pre-IPO; Schwab: invalid symbol OURA until it lists),pre_ipo
 xyz:PLTR,schwab,PLTR,NASDAQ,USD,Palantir,equity
 xyz:PURRDAT,schwab,PURR,NASDAQ,USD,Hyperliquid Strategies,equity
 xyz:QCOM,schwab,QCOM,NASDAQ,USD,Qualcomm,equity
