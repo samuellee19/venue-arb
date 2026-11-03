@@ -86,6 +86,10 @@ def match_flow(limit: int = 500) -> dict:
             # here if they ever crowd out new pairs
             kal = {r["market_id"]: r for r in rows if r["venue"] == "kalshi"}
             pmr = {r["market_id"]: r for r in rows if r["venue"] == "polymarket"}
+            # every stored candidate over live listings, not only this run's: the collector watches the table's pairs
+            # and adjudications_cover_candidates checks them, and an earlier run's pair can drop out of the neighbours
+            cands = conn.execute("SELECT a_id, b_id, score, source FROM venue_arb.candidates "
+                                 "WHERE a_id = ANY(%s) AND b_id = ANY(%s)", (list(kal), list(pmr))).fetchall()
             # rule-decidable pairs count as done only when stored by a rule, so old LLM rows get replaced
             done = {(a, av, b, bv) for a, av, b, bv, model in conn.execute(
                 "SELECT a_id, a_version, b_id, b_version, model FROM venue_arb.adjudications "
