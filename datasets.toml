@@ -20,6 +20,14 @@ volume_floor = 1000
 partition = "venue"
 partitions = ["kalshi", "polymarket"]
 runbook = "../../../docs/runbooks/venue-arb.md#venue-arbcollector"
+[datasets."venue_arb.book_levels_v2".columns]  # read by other code; obs.audit check schema:venue_arb.book_levels_v2
+ts = "DateTime64(3, 'UTC')"
+venue = "LowCardinality(String)"
+market_id = "String"
+side = "Enum8('yes' = 1, 'no' = 2)"
+level = "UInt8"
+price = "Float64"
+size = "Float64"
 
 [datasets."venue_arb.basis"]
 engine = "clickhouse"
@@ -32,6 +40,11 @@ freshness = "72h"   # the flow's own guard (FRESH_SLACK): the Binance daily arch
 volume_window = "96h"  # the Binance archive lands a day or more late: a 24 h window is always short
 volume_floor = 0
 runbook = "../../../docs/runbooks/venue-arb.md#venue-arbbasis"
+[datasets."venue_arb.basis".columns]  # read by other code; obs.audit check schema:venue_arb.basis
+asset = "LowCardinality(String)"
+diff = "Float64"
+instant = "DateTime('UTC')"
+binance = "Float64"
 
 [datasets."venue_arb.edges"]
 engine = "clickhouse"
@@ -44,6 +57,13 @@ freshness = "2h"
 volume_window = "2h"   # hourly producer: one late or failed run must not empty the window
 volume_floor = 1
 runbook = "../../../docs/runbooks/venue-arb.md#venue-arbscore"
+[datasets."venue_arb.edges".columns]  # read by other code; obs.audit check schema:venue_arb.edges
+ts = "DateTime64(3, 'UTC')"
+kalshi_id = "String"
+pm_id = "String"
+direction = "LowCardinality(String)"
+best_edge = "Nullable(Float64)"
+capacity_usd = "Float64"
 
 [datasets."venue_arb.ladder_edges"]
 engine = "clickhouse"
@@ -56,6 +76,21 @@ freshness = "24h"   # event-driven: hours with no open ladder pair write nothing
 volume_window = "24h"
 volume_floor = 0
 runbook = "../../../docs/runbooks/venue-arb.md#venue-arbladder_score"
+[datasets."venue_arb.ladder_edges".columns]  # read by other code; obs.audit check schema:venue_arb.ladder_edges
+ts = "DateTime64(3, 'UTC')"
+k_id = "String"
+pm_id = "String"
+direction = "LowCardinality(String)"
+kind = "LowCardinality(String)"
+best_edge = "Nullable(Float64)"
+capacity_usd = "Float64"
+capacity_contracts = "Float64"
+asset = "LowCardinality(String)"
+basis_up = "Float64"
+basis_down = "Float64"
+instant = "DateTime('UTC')"
+a = "Float64"
+b = "Float64"
 
 [datasets."venue_arb.screened_v2"]
 engine = "clickhouse"
@@ -64,6 +99,13 @@ consumers = ["venue-arb-publish", "venue-arb.report"]
 description = "Top-of-book screen of exact pairs at aligned snapshots (run by hand: python -m venue_arb.flows.screened)"
 freshness = "manual"
 runbook = "../../../docs/runbooks/venue-arb.md"
+[datasets."venue_arb.screened_v2".columns]  # read by other code; obs.audit check schema:venue_arb.screened_v2
+net_gap_top = "Float64"
+ts = "DateTime('UTC')"
+k_price = "Float64"
+kalshi_id = "String"
+pm_id = "String"
+direction = "LowCardinality(String)"
 
 [datasets."venue_arb.stock_perp_books"]
 engine = "clickhouse"
@@ -76,6 +118,13 @@ freshness = "20m"   # slack over the writer's 10m heartbeat + 5m grace
 volume_window = "1h"
 volume_floor = 100
 runbook = "../../../docs/runbooks/venue-arb.md#venue-arbperps"
+[datasets."venue_arb.stock_perp_books".columns]  # read by other code; obs.audit check schema:venue_arb.stock_perp_books
+ts = "DateTime64(3, 'UTC')"
+symbol = "LowCardinality(String)"
+side = "LowCardinality(String)"
+level = "UInt8"
+price = "Float64"
+size = "Float64"
 
 [datasets."venue_arb.stock_perp_candles"]
 engine = "clickhouse"
@@ -102,6 +151,17 @@ freshness = "20m"   # slack over the writer's 10m heartbeat + 5m grace
 volume_window = "1h"
 volume_floor = 100
 runbook = "../../../docs/runbooks/venue-arb.md#venue-arbperps"
+[datasets."venue_arb.stock_perp_ctx".columns]  # read by other code; obs.audit check schema:venue_arb.stock_perp_ctx
+ts = "DateTime64(3, 'UTC')"
+symbol = "LowCardinality(String)"
+mark = "Float64"
+oracle = "Float64"
+mid = "Nullable(Float64)"
+funding_h = "Float64"
+premium = "Nullable(Float64)"
+open_interest = "Float64"
+day_volume_usd = "Float64"
+growth_mode = "UInt8"
 
 [datasets."venue_arb.stock_perp_refs"]
 engine = "clickhouse"
@@ -126,6 +186,18 @@ freshness = "2h"
 volume_window = "2h"   # hourly producer: one late or failed run must not empty the window
 volume_floor = 1
 runbook = "../../../docs/runbooks/venue-arb.md#venue-arbstock_perp_score"
+[datasets."venue_arb.stock_perp_edges".columns]  # read by other code; obs.audit check schema:venue_arb.stock_perp_edges
+ts = "DateTime64(3, 'UTC')"
+symbol = "LowCardinality(String)"
+direction = "LowCardinality(String)"
+net_bps = "Float64"
+basis_bps = "Float64"
+capacity_usd = "Float64"
+capacity_contracts = "Float64"
+funding_bps = "Float64"
+borrow_bps = "Float64"
+mode = "LowCardinality(String)"
+session = "LowCardinality(String)"
 
 [datasets."venue_arb.stock_perp_oracle_check"]
 engine = "clickhouse"
@@ -154,6 +226,20 @@ freshness = "2h"
 volume_window = "2h"   # hourly producer: one late or failed run must not empty the window
 volume_floor = 1
 runbook = "../../../docs/runbooks/venue-arb.md#venue-arbcatalog"
+[datasets."venue_arb.listings".columns]  # read by other code; obs.audit check schema:venue_arb.listings
+venue = "text"
+market_id = "text"
+version = "text"
+category = "text"
+title = "text"
+resolution_source = "text"
+close_time = "timestamp with time zone"
+first_seen = "timestamp with time zone"
+last_seen = "timestamp with time zone"
+event_id = "text"
+yes_label = "text"
+yes_token = "text"
+raw = "jsonb"
 
 [datasets."venue_arb.candidates"]
 engine = "postgres"
@@ -178,6 +264,20 @@ freshness = "24h"   # only new or changed pairs are adjudicated: many hours writ
 volume_window = "24h"
 volume_floor = 0
 runbook = "../../../docs/runbooks/venue-arb.md#venue-arbmatch"
+[datasets."venue_arb.adjudications".columns]  # read by other code; obs.audit check schema:venue_arb.adjudications
+a_venue = "text"
+a_id = "text"
+a_version = "text"
+b_venue = "text"
+b_id = "text"
+b_version = "text"
+prompt_version = "text"
+relation = "text"
+yes_maps_to = "text"
+confidence = "real"
+tail_risks = "text"
+model = "text"
+created_at = "timestamp with time zone"
 
 [datasets."venue_arb.llm_attempts"]
 engine = "postgres"
@@ -207,6 +307,19 @@ consumers = ["venue-arb.score", "venue-arb.ladder_score", "venue-arb.stock_perp_
 description = "Arbitrage episodes (start, end, max edge, capacity); also written by ladder_score and stock_perp_score (source column). Rows only when an edge exists, so lineage only"
 freshness = "manual"
 runbook = "../../../docs/runbooks/venue-arb.md#venue-arbscore"
+[datasets."venue_arb.opportunities".columns]  # read by other code; obs.audit check schema:venue_arb.opportunities
+source = "text"
+kalshi_id = "text"
+pm_id = "text"
+direction = "text"
+start_ts = "timestamp with time zone"
+end_ts = "timestamp with time zone"
+max_edge = "real"
+median_capacity_usd = "real"
+transfer_cost_usd = "real"
+snapshots = "integer"
+annualized = "real"
+us_executable = "boolean"
 
 [datasets."venue_arb.reviews"]
 engine = "postgres"
@@ -215,6 +328,16 @@ consumers = ["venue-arb.score", "venue-arb.report"]
 description = "Hand labels of adjudicated pairs (python -m venue_arb.flows.review_cli)"
 freshness = "manual"
 runbook = "../../../docs/runbooks/venue-arb.md"
+[datasets."venue_arb.reviews".columns]  # read by other code; obs.audit check schema:venue_arb.reviews
+a_venue = "text"
+a_id = "text"
+a_version = "text"
+b_venue = "text"
+b_id = "text"
+b_version = "text"
+prompt_version = "text"
+label = "text"
+reviewed_at = "timestamp with time zone"
 
 [datasets."venue_arb.stock_perp_weekends"]
 engine = "postgres"
@@ -228,6 +351,15 @@ warn_ratio = 0.9    # 173 h: a week plus the run's lag after its expected start 
 volume_window = "168h"
 volume_floor = 0
 runbook = "../../../docs/runbooks/venue-arb.md#venue-arbstock_perp_weekend"
+[datasets."venue_arb.stock_perp_weekends".columns]  # read by other code; obs.audit check schema:venue_arb.stock_perp_weekends
+symbol = "text"
+friday = "date"
+p_fri = "double precision"
+p_sat = "double precision"
+p_sun = "double precision"
+p_open_pre = "double precision"
+p_open_reg = "double precision"
+ref_kind = "text"
 
 [datasets."venue_arb.schema_migrations"]
 engine = "postgres"

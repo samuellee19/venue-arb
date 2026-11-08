@@ -25,6 +25,22 @@
 | `venue_arb.stock_perp_weekends` | postgres | `venue-arb.stock_perp_weekend` | `venue-arb-publish`, `venue-arb.stock_perp_weekend` | 168h | 192h | 0 | Weekend perp prices vs the Monday open per symbol and weekend, computed Monday after the open | `docs/runbooks/venue-arb.md#venue-arbstock_perp_weekend` |
 | `venue_arb.schema_migrations` | postgres | `manual` |  |  | manual |  | Applied migrations (db/migrate.py) |  |
 
+Columns other code reads (checked hourly by obs.audit, check `schema:<table>`):
+
+- `venue_arb.book_levels_v2`: `ts` DateTime64(3, 'UTC'), `venue` LowCardinality(String), `market_id` String, `side` Enum8('yes' = 1, 'no' = 2), `level` UInt8, `price` Float64, `size` Float64
+- `venue_arb.basis`: `asset` LowCardinality(String), `diff` Float64, `instant` DateTime('UTC'), `binance` Float64
+- `venue_arb.edges`: `ts` DateTime64(3, 'UTC'), `kalshi_id` String, `pm_id` String, `direction` LowCardinality(String), `best_edge` Nullable(Float64), `capacity_usd` Float64
+- `venue_arb.ladder_edges`: `ts` DateTime64(3, 'UTC'), `k_id` String, `pm_id` String, `direction` LowCardinality(String), `kind` LowCardinality(String), `best_edge` Nullable(Float64), `capacity_usd` Float64, `capacity_contracts` Float64, `asset` LowCardinality(String), `basis_up` Float64, `basis_down` Float64, `instant` DateTime('UTC'), `a` Float64, `b` Float64
+- `venue_arb.screened_v2`: `net_gap_top` Float64, `ts` DateTime('UTC'), `k_price` Float64, `kalshi_id` String, `pm_id` String, `direction` LowCardinality(String)
+- `venue_arb.stock_perp_books`: `ts` DateTime64(3, 'UTC'), `symbol` LowCardinality(String), `side` LowCardinality(String), `level` UInt8, `price` Float64, `size` Float64
+- `venue_arb.stock_perp_ctx`: `ts` DateTime64(3, 'UTC'), `symbol` LowCardinality(String), `mark` Float64, `oracle` Float64, `mid` Nullable(Float64), `funding_h` Float64, `premium` Nullable(Float64), `open_interest` Float64, `day_volume_usd` Float64, `growth_mode` UInt8
+- `venue_arb.stock_perp_edges`: `ts` DateTime64(3, 'UTC'), `symbol` LowCardinality(String), `direction` LowCardinality(String), `net_bps` Float64, `basis_bps` Float64, `capacity_usd` Float64, `capacity_contracts` Float64, `funding_bps` Float64, `borrow_bps` Float64, `mode` LowCardinality(String), `session` LowCardinality(String)
+- `venue_arb.listings`: `venue` text, `market_id` text, `version` text, `category` text, `title` text, `resolution_source` text, `close_time` timestamp with time zone, `first_seen` timestamp with time zone, `last_seen` timestamp with time zone, `event_id` text, `yes_label` text, `yes_token` text, `raw` jsonb
+- `venue_arb.adjudications`: `a_venue` text, `a_id` text, `a_version` text, `b_venue` text, `b_id` text, `b_version` text, `prompt_version` text, `relation` text, `yes_maps_to` text, `confidence` real, `tail_risks` text, `model` text, `created_at` timestamp with time zone
+- `venue_arb.opportunities`: `source` text, `kalshi_id` text, `pm_id` text, `direction` text, `start_ts` timestamp with time zone, `end_ts` timestamp with time zone, `max_edge` real, `median_capacity_usd` real, `transfer_cost_usd` real, `snapshots` integer, `annualized` real, `us_executable` boolean
+- `venue_arb.reviews`: `a_venue` text, `a_id` text, `a_version` text, `b_venue` text, `b_id` text, `b_version` text, `prompt_version` text, `label` text, `reviewed_at` timestamp with time zone
+- `venue_arb.stock_perp_weekends`: `symbol` text, `friday` date, `p_fri` double precision, `p_sat` double precision, `p_sun` double precision, `p_open_pre` double precision, `p_open_reg` double precision, `ref_kind` text
+
 ```mermaid
 flowchart LR
     venue-arb.collector(["venue-arb.collector"])
