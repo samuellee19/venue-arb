@@ -29,7 +29,7 @@ description = "Kalshi BRTI settle vs Binance candle close per (asset, settlement
 timestamp = "instant"
 cadence = "1h"
 freshness = "72h"   # the flow's own guard (FRESH_SLACK): the Binance daily archive publishes a day or more late
-volume_window = "24h"
+volume_window = "96h"  # the Binance archive lands a day or more late: a 24 h window is always short
 volume_floor = 0
 runbook = "../../../docs/runbooks/venue-arb.md#venue-arbbasis"
 
@@ -136,7 +136,7 @@ timestamp = "day"   # a Date: the trading day, written the evening after; a Mond
 cadence = "24h"
 freshness = "120h"
 warn_ratio = 0.85   # 102 h: past the Monday-evening gap, so a normal week never warns
-volume_window = "24h"
+volume_window = "120h"  # rows are stamped with the trading day: weekend and Monday days have none
 volume_floor = 0
 runbook = "../../../docs/runbooks/venue-arb.md#venue-arbstock_perp_oracle_check"
 
