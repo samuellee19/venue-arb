@@ -217,8 +217,8 @@ A reviewer read §1–9 as a builder and asked six questions. None needed Sam; t
 5. **A ladder violation = an `arb`-kind `ladder_edges` row with `capacity_contracts > 0`** (≥ 1¢ net on at least
    its first slice), counted over the same clock hour as `ladder_admissible_checks`, both read from the hourly
    `ladder_score` run. The KPI is labeled "last scored hour" with its window, not "last hour".
-6. **US mode greys rather than hides.** Every Kalshi/Polymarket pair is non-executable from the US today, and that
-   *is* the finding: the US toggle greys all affected rows, sets the executable KPIs to 0, and shows a banner
+6. **US mode grays rather than hides.** Every Kalshi/Polymarket pair is non-executable from the US today, and that
+   *is* the finding: the US toggle grays all affected rows, sets the executable KPIs to 0, and shows a banner
    "No pair is executable from the US: Polymarket rejects US orders (docs/venues.md). Gaps shown for reference." If a
    US-executable venue is added later nothing changes but `US_EXECUTABLE`.
 

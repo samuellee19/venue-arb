@@ -142,7 +142,7 @@ A reviewer read §1–6 as a builder and asked eight questions; none needed Sam.
 5. **Inter by name only**, with the system stack as fallback; nothing vendored. The wordmark's repo link is set in
    JavaScript from the existing `REPO` constant, as the footer already does, so the static test's rule stands.
 6. **Scanner shows one row per market pair** — its better direction by net edge; the other direction is one click
-   away in the Explorer. Stale and no-asks rows are listed last with the stale tone; US-greyed rows use the stale
+   away in the Explorer. Stale and no-asks rows are listed last with the stale tone; US-grayed rows use the stale
    tone with the "Not executable from the US" badge text.
 7. **The example row** is generic ("Example — what a row looks like when a pair clears the rule"), invented round
    numbers, not clickable, excluded from counts, chips, sorting and the pairs figure, rendered only when no

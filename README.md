@@ -70,7 +70,7 @@ Three questions, each with its own tier of data:
   the deploy units, the page copy, the Schwab-free rule for every public file and the bundle schema. Flows run under
   Prefect with per-run checks recorded in `qa.check_results` (the SQL checks are in `sql_checks/`); error-severity
   checks reach Telegram through the platform alerter; the publisher stamps every bundle with the last green run, and the
-  page greys its figures when the bundle goes stale.
+  page grays its figures when the bundle goes stale.
 
 ## Live dashboard
 

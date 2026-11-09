@@ -49,7 +49,7 @@ research; the server is unchanged.
    click handler — checked in the browser walk).
 4. **An episode with `end_ts` NULL (open)**: the scoped 7-day count must include it. Test in Task 1
    (`test_episodes_7d_counts_open_episode`, integration, and the unit test on the SQL window via a fixture row).
-5. **Header figures stale**: `computed_at` older than 1 h greys the two header figures exactly as the v1 tiles did;
+5. **Header figures stale**: `computed_at` older than 1 h grays the two header figures exactly as the v1 tiles did;
    `collector_last_snapshot_at` null keeps the books rule. Test in Task 5 (static copy + browser walk with an old
    sample `computed_at`).
 
@@ -215,14 +215,14 @@ detail code moves out in Task 6); Test `tests/test_dashboard_static.py`.
   direction with the larger `net_edge_cents` (nulls last) — sorted by net edge desc, stale/no-asks rows last;
   `counts` per category for the chips; `example` true when no row has the executable label. `renderScanner()`.
   Columns and copy per spec §3; verdict tones: `none` (exact/spread no edge), `basis` (near-exact), `exec`, `stale`
-  (no asks, stale, US-greyed with the "Not executable from the US" text). Unit switch ¢ | bps applies to the edge
+  (no asks, stale, US-grayed with the "Not executable from the US" text). Unit switch ¢ | bps applies to the edge
   column; ROI is its own column (`net_edge_roi` as `+1.4%`). Footer line: "{n} pairs — per-leg quotes are not
   published (venue display terms) — ROI = net edge ÷ all-in cost per contract — {checks} admissible ladder checks in
   the last scored hour, {violations} violations". Example row: `data-example`, text "Example — what a row looks like
   when a pair clears the rule", values +1.4¢ / +1.4% / $620, no click handler.
 - `app.js`: tabs `#scanner` (default) `#explorer` `#research` from the URL hash; header per spec (wordmark link set
   from `REPO`, H1, description, two figures `episodes · 7 d` and `pairs live` = sum of `kpis.pairs_live`, live dot +
-  books time; figures greyed when `age_s > 3600`); poll as v1; the US toggle moves above the Scanner table with the v1
+  books time; figures grayed when `age_s > 3600`); poll as v1; the US toggle moves above the Scanner table with the v1
   banner copy; theme toggle in the header's right edge.
 - `styles.css`: the spec's style block as CSS variables and three type sizes; light `:root`, dark under
   `[data-theme=dark]`; table rules (left text / right numbers, 44-px rows).
@@ -237,7 +237,7 @@ detail code moves out in Task 6); Test `tests/test_dashboard_static.py`.
   against the sample (`BUNDLE_DIR=dashboard/sample uv run uvicorn dashboard.api.app:app --port 8787`); the Explorer
   and Research tabs show their placeholders ("coming in the next task") for now.
 - [ ] **Step 4: Browser walk** (Claude Browser pane): both themes; chips filter and counts; sort by each numeric
-  header; unit switch; US toggle greys + banner; the example row present with the sample (which has an executable
+  header; unit switch; US toggle grays + banner; the example row present with the sample (which has an executable
   row — temporarily serve a copy with that row removed to see the example row) and absent otherwise; stale header
   after serving a copy with an old `computed_at`; 390 px width stacks without horizontal scroll. Screenshot to
   `reports/dashboard-scanner.png`.

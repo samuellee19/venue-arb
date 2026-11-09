@@ -418,7 +418,7 @@ in the `dev` group so CI has them); Test `tests/test_dashboard_api.py`.
   ladder rows under a collapsed header per `pair.ladder`; any ladder row with `net_edge_cents ≥ 1` surfaces above the
   fold), detail pane (leg chips as links, verdict badge, three boxes, Plotly chart, four check cards), footer
   (denominator sentence from `kpis`, `attribution`, `caveats`, "Read-only. No orders are placed.", repo link),
-  staleness banner at `age_s > 120`, greyed tiles at `> 3600`, US mode greys rows + banner per §10.6, books boxes
+  staleness banner at `age_s > 120`, grayed tiles at `> 3600`, US mode grays rows + banner per §10.6, books boxes
   replaced by the derived-only panel when `show_books` is false. Chart: traces per direction from `/history`,
   range buttons call the API with `range`, hover template with the row's asks/sizes/fees/net/capacity, annotations
   toggle maps `annotations[]` + `episodes[]` to Plotly `shapes`/`annotations` (threshold line at +1¢ always), click

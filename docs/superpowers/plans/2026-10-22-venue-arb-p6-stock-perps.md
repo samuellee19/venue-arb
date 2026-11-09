@@ -86,7 +86,7 @@ amendment: Asia-listed names are oracle-only; no Pyth client is built).
     list[str]]`: perps with a label (in label order) and the symbols the venue lists that are in neither file (the
     collector warns on them and still snapshots them).
   - `label_or_none(symbol: str, labels: dict[str, Label]) -> Label`: the label, or `Label(symbol, "none", None, "",
-    "USD", symbol)` for an unlabelled perp (oracle-only everywhere downstream).
+    "USD", symbol)` for an unlabeled perp (oracle-only everywhere downstream).
   - `config.CATEGORIES` gains `"stock_perps"`; `taxonomy.DISPLAY["stock_perps"] = "Stock perps"`;
     `config.DASHBOARD_SHOW_STOCK_PERPS = False`; `config.STOCK_PERP_MIN_NET_BPS = 10.0`,
     `STOCK_PERP_HOLD_H = 24`, `STOCK_PERP_HOLD_SENSITIVITY_H = (1, 168)`, `STOCK_PERP_BORROW_BPS_YR = 50.0`,
@@ -135,7 +135,7 @@ def test_unlabelled_perp_is_oracle_only(fx):
 ```
 
   Out-of-scope symbols are listed in `labels/stock_perps_excluded.txt` (one symbol per line, a trailing `# reason`);
-  `catalog` reports as unlabelled only symbols in neither file. Add `assert "xyz:GOLD" in hl.load_excluded()`.
+  `catalog` reports as unlabeled only symbols in neither file. Add `assert "xyz:GOLD" in hl.load_excluded()`.
 
 - [ ] **Step 3: Run the tests to verify they fail**
 

@@ -25,7 +25,7 @@
 ## Review Focus
 
 1. A `pre_ipo` name whose context ticks come with a stray Schwab ref row (a label edited from `schwab` to `pre_ipo` while the collector still buffered a quote): the scorer must still skip it. Pinned in Task 3.
-2. A symbol missing from the labels (`label_or_none`): must stay `equity` with an empty exchange, so unlabelled names behave exactly as today. Pinned in Task 1.
+2. A symbol missing from the labels (`label_or_none`): must stay `equity` with an empty exchange, so unlabeled names behave exactly as today. Pinned in Task 1.
 3. A `pre_ipo` row in the All view: its verdict carries no edge, its net is null, so it sorts last with the stale rows and never trips the "example row" logic. Pinned in Task 7 (static guard) and Task 5 (null net).
 4. The history Parquet written after this change must carry only two-part stock keys, including the rows of a name that had a reference symbol, otherwise the Explorer's history lookups miss. Pinned in Task 6.
 5. The weekend tier with a `pre_ipo` label and a US-shaped exchange left by mistake is impossible (validation), but the weekend row builder must still return `ref_kind none` for a `pre_ipo` label if handed one. Pinned in Task 4.
