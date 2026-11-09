@@ -26,7 +26,8 @@ button { font:inherit; color:inherit; }
 .banner { padding:8px 24px; font-size:13px; background:var(--warn-bg); color:var(--warn); border-bottom:1px solid var(--warn-line); }
 [hidden] { display:none !important; }  /* wins over later display rules such as .size */
 
-header { display:flex; align-items:center; gap:16px 24px; padding:16px 24px; background:var(--panel); border-bottom:1px solid var(--line); flex-wrap:wrap; }
+/* one centered 1200px column: header, tabs and footer keep full-width bands, their content lines up with main */
+header { display:flex; align-items:center; gap:16px 24px; padding:16px 24px; padding-left:max(24px, calc((100% - 1152px) / 2)); padding-right:max(24px, calc((100% - 1152px) / 2)); background:var(--panel); border-bottom:1px solid var(--line); flex-wrap:wrap; }
 .brand { flex:1 1 360px; min-width:0; }
 .wordmark { font-size:13px; font-weight:600; }
 header h1 { margin:0; font-size:22px; line-height:1.3; font-weight:600; }
@@ -43,10 +44,10 @@ body.dead .badge, body.dead td.num, body.dead .row .e, body.dead .verdict > .bad
 .dot.stale { background:var(--mut); }
 .toggle { font-size:13px; color:var(--mut); background:none; border:1px solid var(--line); border-radius:6px; padding:4px 8px; cursor:pointer; }
 
-.tabs { display:flex; gap:8px; padding:0 24px; background:var(--panel); border-bottom:1px solid var(--line); }
+.tabs { display:flex; gap:8px; padding:0 24px; padding-left:max(24px, calc((100% - 1152px) / 2)); padding-right:max(24px, calc((100% - 1152px) / 2)); background:var(--panel); border-bottom:1px solid var(--line); }
 .tabs a { padding:8px 16px; font-weight:600; color:var(--mut); border-bottom:2px solid transparent; text-decoration:none; }
 .tabs a.on { color:var(--txt); border-bottom-color:var(--k); }
-main { padding:24px; max-width:1200px; }
+main { padding:24px; max-width:1200px; margin:0 auto; }
 
 .bar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:16px; font-size:13px; }
 .chips { display:flex; gap:8px; flex-wrap:wrap; margin-right:auto; }
@@ -150,7 +151,7 @@ a.leg:hover { background:var(--hover); text-decoration:none; }
 .hero, .card, .method { background:var(--panel); border:1px solid var(--line); border-radius:8px; }
 .hero { padding:24px; margin-bottom:16px; }
 .hero h2 { margin:0 0 8px; font-size:22px; line-height:1.3; font-weight:600; }
-.hero p { margin:0; max-width:848px; }
+.hero p { margin:0; }
 .hero p + p { margin-top:8px; }
 .hero .asof { margin-top:8px; font-size:13px; color:var(--mut); }
 .cards { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:16px; margin-bottom:16px; }
@@ -163,10 +164,10 @@ a.leg:hover { background:var(--hover); text-decoration:none; }
 .method { padding:24px; }
 .method h3 { margin:0 0 16px; font-size:15px; font-weight:600; }
 .method h4 { margin:0 0 8px; font-size:13px; font-weight:600; }
-.method p { margin:0 0 16px; max-width:848px; }
+.method p { margin:0 0 16px; }
 .method p:last-child { margin:0; font-size:13px; }
 
-footer { display:flex; flex-wrap:wrap; gap:8px 24px; padding:0 24px 24px; font-size:13px; color:var(--mut); }
+footer { display:flex; flex-wrap:wrap; gap:8px 24px; padding:0 24px 24px; padding-left:max(24px, calc((100% - 1152px) / 2)); padding-right:max(24px, calc((100% - 1152px) / 2)); font-size:13px; color:var(--mut); }
 footer ul { margin:0; padding-left:16px; flex-basis:100%; }
 
 @media (max-width: 760px) {
