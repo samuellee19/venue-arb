@@ -65,7 +65,7 @@ pytest. No new dependencies.
   - KRX: Mon–Fri 09:01–15:20 and 16:05–20:00 `Asia/Seoul`. TSE: 08:20–16:30 and 17:00–23:59 `Asia/Tokyo`.
     HKEX: 09:30–12:00 and 13:00–16:00 `Asia/Hong_Kong`. SSE and SZSE: 09:30–11:30 and 13:00–14:57 `Asia/Shanghai`.
   - Any other exchange (including NSE and a blank exchange): always internal.
-  - Asian exchange holidays are not modelled **(Claude's call; a holiday then reads external with a stale oracle,
+  - Asian exchange holidays are not modeled **(Claude's call; a holiday then reads external with a stale oracle,
     which the existing stale rule does not catch; noted in docs)**.
 
 - [ ] **Step 1: Write the failing tests**
@@ -331,7 +331,7 @@ git commit -am "Stock perps: private oracle-vs-Schwab validation (table, daily f
     "The stock leg is not modelled on this page." No "Schwab" anywhere.
   - `FOOT_STOCK = "{n} stock perps — perp against the venue's oracle, net of 2× perp taker fee, perp spread and 24 h funding, before stock-leg costs"`.
   - `copy.METHOD["stock_perps"]` rewritten (one paragraph, at most six sentences): the venue's oracle as the
-    reference and when it is externally priced, the perp-side costs, that the stock leg is not modelled, the weekend
+    reference and when it is externally priced, the perp-side costs, that the stock leg is not modeled, the weekend
     test on oracle prints, Hyperliquid blocks US traders. No "Schwab".
   - Samples: `live-stock.json` stock rows rebuilt through the new `stock_perp_rows` (an oracle-basis row, a
     within-costs row, an internal row, a stale row).

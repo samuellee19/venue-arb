@@ -48,7 +48,7 @@ Candidate counts are embedding candidates only (production also merges the Fed r
 - min_sim 0.75 never binds on the truth set: production recall equals recall@5 for both models. k=5 is the limit.
 - bge-small gets the threshold and the date right when it gets the top-1 right (e.g. "$74,000 or above, Oct 20" →
   "above $74,000 on October 20", cosine 0.97), but the Polymarket ladders on the same date differ only in the number,
-  so the true partners compete with neighbouring thresholds and with the same threshold on other dates.
+  so the true partners compete with neighboring thresholds and with the same threshold on other dates.
 - Qwen3-4B matches the threshold but loses the date: its top-1 for the Oct 20 Kalshi markets is typically the same
   threshold on **Oct 26** (cosine 0.89–0.91). That is why its recall@1 is 0.02. It does separate the Fed brackets
   better (15/15 at k=5 vs 10/15), but the Fed pairs are already found by `rule_pairs`, so that gain is moot in

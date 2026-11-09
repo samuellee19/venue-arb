@@ -527,7 +527,7 @@ git commit -am "Stock perps: basis, round-trip costs with a 24 h hold, stock-siz
     `kalshi_id = symbol`, `pm_id = label.ref_symbol or symbol`, `source = "stock_perp"`, `us_executable = False`,
     `transfer_cost_usd = 0.0`; qa: `expect_schema`, `expect_rows` when snapshots exist, `sql.run_all(pattern=
     "stock_perp_*.sql")`, `opportunities_*.sql`.
-  - `stock_perp_backfill` (CLI, run once at deploy, idempotent): for every labelled perp, `fetch_candles` and
+  - `stock_perp_backfill` (CLI, run once at deploy, idempotent): for every labeled perp, `fetch_candles` and
     `fetch_funding` from `now - 60 d` into `stock_perp_candles` (ReplacingMergeTree, so re-runs rewrite); for every
     `schwab` label, `Client.price_history` into `stock_perp_refs` with `ts = quote_time = the session's 13:30 UTC`,
     `ref_kind = "schwab_daily"`, `bid = ask = open`, sizes 0. The weekend tier reads `p_open_reg` from those rows;
@@ -764,7 +764,7 @@ git commit -am "Stock perps: research block (spread and weekend cards), method c
     `{n_sun} name-weekends; perp at Sunday 6 PM ET vs Monday's open; {enough ? "" : "too few weekends to conclude"}`,
     chart: contained share per weekend, dots per name). `METHOD` list gains `["stock_perps", "Stock perps"]`.
   - Sample: three stock-perp rows (executable, within costs, oracle-only) and a research `stock_perps` block built
-    through `research.stock_perp_block`; `make_sample.py` keeps the flag-off behaviour: with
+    through `research.stock_perp_block`; `make_sample.py` keeps the flag-off behavior: with
     `DASHBOARD_SHOW_STOCK_PERPS` False the sample has no stock-perp rows (so the page tests both states: the static
     test loads the sample with the flag monkeypatched on through a second generated file `dashboard/sample/live-stock.json`
     — committed, deterministic).

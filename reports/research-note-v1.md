@@ -43,7 +43,7 @@ When Kalshi and Polymarket list the same contract, do their prices leave money o
 
 ## Method
 
-**What counts as exact.** The two Yes outcomes pay in the same states of the world: same event, same outcome definition, same decision date and same resolving authority. Trading close times and the wording of the source pages do not count as differences. Rare edge clauses (for example a cancelled meeting, or an odd-size rate move rounded up) keep a pair exact but are recorded as tail risks and listed under Results. **Near** means the Yes outcomes overlap but differ (window, threshold or authority). **Different** means the Yes outcomes are mutually exclusive or disjoint, including different outcome brackets of the same meeting (hold vs +25 bp, exactly 25 vs more than 25, +25 vs 50+). Every Fed target change since 1989 has been a multiple of 25 bp, so "more than 25 bp" and "50 bp or more" are the same outcome set; an off-grid move is a tail risk. Adjudication was by a deterministic rule (rule:fed-v1 (prompt v3)).
+**What counts as exact.** The two Yes outcomes pay in the same states of the world: same event, same outcome definition, same decision date and same resolving authority. Trading close times and the wording of the source pages do not count as differences. Rare edge clauses (for example a canceled meeting, or an odd-size rate move rounded up) keep a pair exact but are recorded as tail risks and listed under Results. **Near** means the Yes outcomes overlap but differ (window, threshold or authority). **Different** means the Yes outcomes are mutually exclusive or disjoint, including different outcome brackets of the same meeting (hold vs +25 bp, exactly 25 vs more than 25, +25 vs 50+). Every Fed target change since 1989 has been a multiple of 25 bp, so "more than 25 bp" and "50 bp or more" are the same outcome set; an off-grid move is a tail risk. Adjudication was by a deterministic rule (rule:fed-v1 (prompt v3)).
 
 **Eligibility.** The latest adjudication at the listings' current versions says `relation = 'exact'`, and either confidence >= 0.8 with no review, or a human review labeled `correct`; any `wrong` or `unsure` review excludes the pair. The adjudication must be at the current prompt version, and only reviews made of that verdict count. Both listings must be open and seen in the last 2 hours.
 
@@ -143,49 +143,49 @@ Clauses recorded as rare edge cases that keep each eligible pair exact (latest a
 
 - **KXFEDDECISION-26DEC-C25**
   - An off-grid (non-25 bp) move — none since Oct 1989 — could resolve differently: Polymarket rounds odd moves up to the next bracket, Kalshi thresholds are strict
-  - A cancelled or rescheduled meeting resolves under each venue's own fallback rules
+  - A canceled or rescheduled meeting resolves under each venue's own fallback rules
 - **KXFEDDECISION-26DEC-C26**
   - An off-grid (non-25 bp) move — none since Oct 1989 — could resolve differently: Polymarket rounds odd moves up to the next bracket, Kalshi thresholds are strict
-  - A cancelled or rescheduled meeting resolves under each venue's own fallback rules
+  - A canceled or rescheduled meeting resolves under each venue's own fallback rules
 - **KXFEDDECISION-26DEC-H0**
   - An off-grid (non-25 bp) move — none since Oct 1989 — could resolve differently: Polymarket rounds odd moves up to the next bracket, Kalshi thresholds are strict
-  - A cancelled or rescheduled meeting resolves under each venue's own fallback rules
+  - A canceled or rescheduled meeting resolves under each venue's own fallback rules
 - **KXFEDDECISION-26DEC-H25**
   - An off-grid (non-25 bp) move — none since Oct 1989 — could resolve differently: Polymarket rounds odd moves up to the next bracket, Kalshi thresholds are strict
-  - A cancelled or rescheduled meeting resolves under each venue's own fallback rules
+  - A canceled or rescheduled meeting resolves under each venue's own fallback rules
 - **KXFEDDECISION-26DEC-H26**
   - An off-grid (non-25 bp) move — none since Oct 1989 — could resolve differently: Polymarket rounds odd moves up to the next bracket, Kalshi thresholds are strict
-  - A cancelled or rescheduled meeting resolves under each venue's own fallback rules
+  - A canceled or rescheduled meeting resolves under each venue's own fallback rules
 - **KXFEDDECISION-26OCT-C25**
   - An off-grid (non-25 bp) move — none since Oct 1989 — could resolve differently: Polymarket rounds odd moves up to the next bracket, Kalshi thresholds are strict
-  - A cancelled or rescheduled meeting resolves under each venue's own fallback rules
+  - A canceled or rescheduled meeting resolves under each venue's own fallback rules
 - **KXFEDDECISION-26OCT-C26**
   - An off-grid (non-25 bp) move — none since Oct 1989 — could resolve differently: Polymarket rounds odd moves up to the next bracket, Kalshi thresholds are strict
-  - A cancelled or rescheduled meeting resolves under each venue's own fallback rules
+  - A canceled or rescheduled meeting resolves under each venue's own fallback rules
 - **KXFEDDECISION-26OCT-H0**
   - An off-grid (non-25 bp) move — none since Oct 1989 — could resolve differently: Polymarket rounds odd moves up to the next bracket, Kalshi thresholds are strict
-  - A cancelled or rescheduled meeting resolves under each venue's own fallback rules
+  - A canceled or rescheduled meeting resolves under each venue's own fallback rules
 - **KXFEDDECISION-26OCT-H25**
   - An off-grid (non-25 bp) move — none since Oct 1989 — could resolve differently: Polymarket rounds odd moves up to the next bracket, Kalshi thresholds are strict
-  - A cancelled or rescheduled meeting resolves under each venue's own fallback rules
+  - A canceled or rescheduled meeting resolves under each venue's own fallback rules
 - **KXFEDDECISION-26OCT-H26**
   - An off-grid (non-25 bp) move — none since Oct 1989 — could resolve differently: Polymarket rounds odd moves up to the next bracket, Kalshi thresholds are strict
-  - A cancelled or rescheduled meeting resolves under each venue's own fallback rules
+  - A canceled or rescheduled meeting resolves under each venue's own fallback rules
 - **KXFEDDECISION-27JAN-C25**
   - An off-grid (non-25 bp) move — none since Oct 1989 — could resolve differently: Polymarket rounds odd moves up to the next bracket, Kalshi thresholds are strict
-  - A cancelled or rescheduled meeting resolves under each venue's own fallback rules
+  - A canceled or rescheduled meeting resolves under each venue's own fallback rules
 - **KXFEDDECISION-27JAN-C26**
   - An off-grid (non-25 bp) move — none since Oct 1989 — could resolve differently: Polymarket rounds odd moves up to the next bracket, Kalshi thresholds are strict
-  - A cancelled or rescheduled meeting resolves under each venue's own fallback rules
+  - A canceled or rescheduled meeting resolves under each venue's own fallback rules
 - **KXFEDDECISION-27JAN-H0**
   - An off-grid (non-25 bp) move — none since Oct 1989 — could resolve differently: Polymarket rounds odd moves up to the next bracket, Kalshi thresholds are strict
-  - A cancelled or rescheduled meeting resolves under each venue's own fallback rules
+  - A canceled or rescheduled meeting resolves under each venue's own fallback rules
 - **KXFEDDECISION-27JAN-H25**
   - An off-grid (non-25 bp) move — none since Oct 1989 — could resolve differently: Polymarket rounds odd moves up to the next bracket, Kalshi thresholds are strict
-  - A cancelled or rescheduled meeting resolves under each venue's own fallback rules
+  - A canceled or rescheduled meeting resolves under each venue's own fallback rules
 - **KXFEDDECISION-27JAN-H26**
   - An off-grid (non-25 bp) move — none since Oct 1989 — could resolve differently: Polymarket rounds odd moves up to the next bracket, Kalshi thresholds are strict
-  - A cancelled or rescheduled meeting resolves under each venue's own fallback rules
+  - A canceled or rescheduled meeting resolves under each venue's own fallback rules
 
 ### Same-instant crypto ladders (model-free)
 

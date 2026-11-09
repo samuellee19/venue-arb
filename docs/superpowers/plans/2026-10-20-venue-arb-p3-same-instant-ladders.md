@@ -16,7 +16,7 @@ edge walk, episodes, opportunities table and note.
 **Spec:** `docs/superpowers/specs/2026-10-19-venue-arb-design.md`, amended by the decision below (Sam, 2026-10-20).
 
 ## Decision this plan implements (Sam, 2026-10-20)
-- What we're trying to prove: cross-venue prices are inconsistent in a way a skeptical reader can't dismiss as a modelling
+- What we're trying to prove: cross-venue prices are inconsistent in a way a skeptical reader can't dismiss as a modeling
   choice. So only **same-instant** pairs count as evidence: both markets settle at the same moment (Kalshi's close_time
   equals its settlement instant — "60-second average of CF Benchmarks BRTI before H"; Polymarket's hourly "Bitcoin
   above X on <date>, <h>AM ET?" settles on the Binance candle ending at H; its daily ladder at noon ET).

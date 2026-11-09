@@ -124,7 +124,7 @@ Caddy in front for HTTPS (Let's Encrypt on the domain, or Caddy's internal CA on
 server; the bundle directory is the state.
 
 **Freshness.** The page polls `/api/live` every 30 s; the header countdown is derived from `computed_at`. Age over
-2 min shows the banner; over 1 h the KPI tiles grey out. The server never errors because the OptiPlex is away.
+2 min shows the banner; over 1 h the KPI tiles gray out. The server never errors because the OptiPlex is away.
 
 ## 5. Data contracts
 
@@ -216,7 +216,7 @@ A reviewer read §1–9 as a builder and asked six questions. None needed Sam; t
    pipeline's episode rule, and the badge text says "+1.4¢ · $620 before transfer · $598 after".
 5. **A ladder violation = an `arb`-kind `ladder_edges` row with `capacity_contracts > 0`** (≥ 1¢ net on at least
    its first slice), counted over the same clock hour as `ladder_admissible_checks`, both read from the hourly
-   `ladder_score` run. The KPI is labelled "last scored hour" with its window, not "last hour".
+   `ladder_score` run. The KPI is labeled "last scored hour" with its window, not "last hour".
 6. **US mode greys rather than hides.** Every Kalshi/Polymarket pair is non-executable from the US today, and that
    *is* the finding: the US toggle greys all affected rows, sets the executable KPIs to 0, and shows a banner
    "No pair is executable from the US: Polymarket rejects US orders (docs/venues.md). Gaps shown for reference." If a

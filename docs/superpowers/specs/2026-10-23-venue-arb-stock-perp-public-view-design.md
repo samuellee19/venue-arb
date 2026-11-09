@@ -6,7 +6,7 @@ merged to main at 9b99493, not deployed). Everything that design says still hold
 
 ## 1. Why this exists
 
-On 2026-10-23 Sam had the terms read (record in the memory vault, summarised in §7). The Schwab Trader API
+On 2026-10-23 Sam had the terms read (record in the memory vault, summarized in §7). The Schwab Trader API
 Developer Program Agreement (May 2023) licenses Sam's "Trader API – Individual" app for his own use: data may be
 used only through his own application, not by third parties (§9.4); exchange data is licensed personally and may not
 be shared or re-used (§9.4.2); derivative works of Schwab data are barred (§5(n), §8.1); Schwab names may not be used
@@ -39,7 +39,7 @@ restrict. Hyperliquid's and trade.xyz's terms govern their trading websites, whi
 - Showing stock-side size, spread or borrow from any source.
 
 **Anti-goals**
-- A public row labelled "Executable edge" for stock perps. The stock leg is not modelled publicly, so no public
+- A public row labeled "Executable edge" for stock perps. The stock leg is not modeled publicly, so no public
   stock-perp row claims a completed trade.
 - A public number that moves because of a Schwab quote: if a figure would change when Schwab data changes, it is
   private.
@@ -58,8 +58,8 @@ exchange and a fixed session calendar in `venue_arb/sessions.py` (new), not from
 - `oracle_basis_bps = (mark / oracle − 1) × 1e4`, the displayed basis.
 - Perp-side costs over the existing 24 h hold: 2 × taker, perp half spread on exit, funding × 24. Borrow is a
   stated assumption, not market data, so it stays as a sensitivity line only **(Claude's call)**.
-- `perp_net_bps`: the walked perp fill against the oracle, in the trade's favour, minus those perp-side costs.
-  Labelled on the page "before stock-leg costs".
+- `perp_net_bps`: the walked perp fill against the oracle, in the trade's favor, minus those perp-side costs.
+  Labeled on the page "before stock-leg costs".
 - `perp_depth_usd`: perp book depth walked while the marginal perp-side net stays ≥ 10 bps (the existing rule,
   with no stock cap).
 
@@ -77,7 +77,7 @@ named.
 
 - **Scoring (pure).** `stock_perps.score` gains an explicit `mode: Literal["executable", "oracle"]`
   **(Claude's call)**. `oracle` mode uses the oracle as the reference, no stock cap, no stock spread, and reports
-  `perp_net_bps` and `perp_depth_usd`. `executable` mode is today's behaviour (Schwab when fresh, else oracle).
+  `perp_net_bps` and `perp_depth_usd`. `executable` mode is today's behavior (Schwab when fresh, else oracle).
 - **Storage.** The hourly scoring flow writes **two** rows per tick into `stock_perp_edges`, one per mode, with a new
   column `mode LowCardinality(String)` and `mode` added to the ORDER BY so the two do not collapse under
   ReplacingMergeTree. Migration `ch/008` is not yet applied anywhere, so it is edited in place (same reasoning as the
@@ -95,7 +95,7 @@ named.
   `oracle_krx` for the public rows; Schwab rows are no longer written there **(Claude's call)**.
 - **Dashboard.** The Reference cell shows "oracle, live" or "oracle internal"; the word Schwab is removed from
   `explorer.js` and the docs-facing copy; the Explorer cost table lists perp-side lines only and states that the
-  stock leg is not modelled on this page. `copy.METHOD["stock_perps"]` is rewritten to describe the public view
+  stock leg is not modeled on this page. `copy.METHOD["stock_perps"]` is rewritten to describe the public view
   (oracle reference, perp-side costs, no stock leg) without naming Schwab.
 - **Private validation.** A new module `venue_arb/validation.py` (pure) and a CLI
   `python -m venue_arb.validation` on the OptiPlex compare `stock_perp_ctx.oracle` with the Schwab mid at the same tick
@@ -122,7 +122,7 @@ named.
 - Schwab Trader API Developer Program Agreement, May 2023: the clauses in §1 above; plus §5(v) automated collection
   only through your own app, §10 keep 18 months of records with audit rights, Texas law.
 - Hyperliquid Terms of Use, updated 2026-06-15: cover only the app.hyperliquid.xyz interface; US persons barred from
-  it; no data licence or scraping clause.
+  it; no data license or scraping clause.
 - trade.xyz Terms of Use, updated 2026-09-06: cover app.trade.xyz; US persons barred; no scraping of that interface.
 - Pyth: website terms grant no right to reuse price data; API plans: free (no API), Starter $500 (crypto only), Pro
   from $2,500 (equities, display rights).

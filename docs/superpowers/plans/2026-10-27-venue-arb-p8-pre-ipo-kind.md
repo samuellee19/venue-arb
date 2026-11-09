@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Give pre-IPO perps an explicit label kind so one field decides their behaviour everywhere, show them behind a "Pre-IPO" chip, never score them, and key stock-perp rows on the perp symbol alone so a listing keeps the row.
+**Goal:** Give pre-IPO perps an explicit label kind so one field decides their behavior everywhere, show them behind a "Pre-IPO" chip, never score them, and key stock-perp rows on the perp symbol alone so a listing keeps the row.
 
 **Architecture:** `Label` gains `kind` (`equity` | `pre_ipo`), read from a new CSV column and validated by `load_labels`. Every consumer that today infers from an empty exchange switches on `kind` instead: `sessions.state` returns `pre_ipo`, the scorer skips the name, the weekend tier and the private oracle check exclude it, `bundle.stock_perp_rows` emits a `pre_ipo` category row with its own verdict, and the client renders the chip, the row and the Explorer note. `bundle.stock_key` drops the stock symbol; the publisher's history keys follow and the pushed history is rewritten once after deploy.
 
@@ -149,7 +149,7 @@ git commit -m "Sessions: pre_ipo state for pre-IPO labels, never external"
 
 **Interfaces:**
 - Consumes: `label_or_none(...).kind`, `sessions.state` (Task 2).
-- Produces: `score_window(...)` writes no edge row and no episode for a `pre_ipo` label and counts it once per symbol in the returned stats under `symbols_pre_ipo`; the flow's `stats` dict gains the key `symbols_pre_ipo` initialised to 0.
+- Produces: `score_window(...)` writes no edge row and no episode for a `pre_ipo` label and counts it once per symbol in the returned stats under `symbols_pre_ipo`; the flow's `stats` dict gains the key `symbols_pre_ipo` initialized to 0.
 
 - [ ] **Step 1: Write the failing test**
 

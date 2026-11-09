@@ -131,8 +131,8 @@ the stock.
   position pays or receives it by side. For growth-mode names the round trip is under 2 bps; for standard-fee names
   it is 18 bps before carry, so most of them never clear 10 bps, which is the honest result.
 - Episode rule: `net_bps ≥ 10`, ≥ $100 fillable on the smaller leg, in ≥ 2 consecutive snapshots, 150 s gap breaks
-  the run. `episodes.find` is reused with its threshold and payout arithmetic parameterised (it hard-codes a 1¢
-  edge and a `close_time` for annualisation; stock perps have no close, so annualised edge is `net_bps` over the
+  the run. `episodes.find` is reused with its threshold and payout arithmetic parameterized (it hard-codes a 1¢
+  edge and a `close_time` for annualization; stock perps have no close, so annualized edge is `net_bps` over the
   stated hold) **(Claude's call)**.
 - Episodes are stored with `source = 'stock_perp'`. The pair-tier queries read `source = 'pair'` and the ladder
   tier `'ladder'`, but `publish.EPISODES_SQL` and `publish.scope_episodes` currently keep every non-pair row, so
@@ -151,7 +151,7 @@ test at the usual level, stated).
 `fundingHistory` per perp. Backfilled once at deploy into a screened table (hour, open, close, volume, funding).
 The weekend tier reads perp candles from it for weekends before the collector started; the reference side of those
 weekends comes from Schwab `pricehistory` (daily open) for US names and is absent for Asia names until the
-collector has run. Screened and executable tiers are labelled apart, as elsewhere.
+collector has run. Screened and executable tiers are labeled apart, as elsewhere.
 
 ## 6. What changes behind the page
 

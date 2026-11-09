@@ -25,7 +25,7 @@ row carries a verdict with reasons, the page shows how many checks found nothing
 - An **Explorer** tab: today's detail view (cost panel, chart, verdict cards), reached from a Scanner row.
 - A **Research** tab: the note's findings with **live numbers**, recomputed hourly from the same tables, with the
   method in plain words.
-- A visual system that looks designed: one typeface, three sizes, 8-px rhythm, one accent, signed-number colours
+- A visual system that looks designed: one typeface, three sizes, 8-px rhythm, one accent, signed-number colors
   only, no ornament.
 - The name: wordmark `venue-arb`, title **Prediction Market Arbitrage**.
 
@@ -58,12 +58,12 @@ the edge column only. Ladder rows: shown flat like the rest, sorted with everyth
 collapsed-ladder grouping is dropped — grouping belongs in the Explorer list, not the scanner). US mode moves to a
 small toggle above the table with the v1 banner copy. Below the table a one-line footer: pair count, "per-leg quotes
 are not published (venue display terms)", "ROI = net edge ÷ all-in cost per contract". A shaded **example row**
-(labelled "example — none live right now") stays at the bottom whenever no executable row exists **(Claude's
+(labeled "example — none live right now") stays at the bottom whenever no executable row exists **(Claude's
 call)**, so the concept of an opportunity is visible on a page that may show none for weeks.
 
 **Explorer.** The v1 page body (pair list + detail pane) re-skinned to the new system; opened by clicking a Scanner
 row, which selects that pair. Keeps the collapsed ladder groups, the chart with annotations, the cost panel, the
-verdict cards, the size box behaviour. Nothing functional changes.
+verdict cards, the size box behavior. Nothing functional changes.
 
 **Research.** In order:
 1. A headline block: the question as a sentence, then the short answer in two or three sentences with the live
@@ -121,7 +121,7 @@ in running text; monospace only in numeric table cells and ids; no gradients, no
 A reviewer read §1–6 as a builder and asked eight questions; none needed Sam. The answers bind the plan:
 
 1. **One definition per number, the note's.** The Research tab and the header use the note's scope (exact pairs at the
-   current prompt version, no wrong/unsure review; episodes from both sources, labelled by tier). The header's
+   current prompt version, no wrong/unsure review; episodes from both sources, labeled by tier). The header's
    "episodes · 7 d" is that same scoped count restricted to episodes ending in the last 7 days; Research headline
    figures are all-history and every figure carries its window in its label. Ladder violations = rows with
    `capacity_contracts > 0` everywhere (the note's `capacity_usd > 0` is changed to match). "Pairs live" counts
@@ -129,7 +129,7 @@ A reviewer read §1–6 as a builder and asked eight questions; none needed Sam.
    change to these definitions; `note.py` is the authority they copy.
 2. **The v1 KPI tiles go.** Their numbers live on the Research cards. The denominator sentence ("N admissible
    ladder checks in the last scored hour, M violations") becomes the Scanner's footer line and the Research
-   ladder card's qualifier. The header figures grey out after 1 h exactly as the v1 tiles did.
+   ladder card's qualifier. The header figures gray out after 1 h exactly as the v1 tiles did.
 3. **Method copy lives in one module**, `venue_arb/report/copy.py`: the four paragraphs as constants, imported by
    both `note.render` (replacing only the equivalent method sentences; the note's other prose is untouched) and
    the publisher. Claude drafts the paragraphs; Sam reviews them (§8). Review precision comes from the `reviews`

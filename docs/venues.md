@@ -191,7 +191,7 @@ Read-only: the collector calls the public info endpoint and no order, account or
   `labels/stock_perps.csv` (86 with a Schwab reference, 19 oracle-only). `catalog` drops delisted perps
   (`isDelisted`). `labels/stock_perps_excluded.txt`
   lists 32 pre-IPO, index, FX, commodity and spot-index perps, plus any name hidden by hand from the public page (a
-  labelled name may also be excluded). A perp in neither file is named by the collector's
+  labeled name may also be excluded). A perp in neither file is named by the collector's
   `unlabelled_perps` warn.
 
 ### Fees (2026-10-22)
@@ -217,7 +217,7 @@ Observed on 2026-10-22:
 
 What this means in the code: on weekends, and for Asia-listed names outside their home hours, the oracle is not an
 outside price. `reference()` uses the Schwab quote only while it is two-sided, uncrossed and at most 120 s old
-(`REF_MAX_AGE_S`); otherwise the row's reference is the oracle, labelled "oracle only", and it carries no executable
+(`REF_MAX_AGE_S`); otherwise the row's reference is the oracle, labeled "oracle only", and it carries no executable
 verdict (spec §5).
 
 ### Access (2026-10-22)
@@ -310,7 +310,7 @@ personal-use terms, Pyth display terms).
 
 ### Hyperliquid Terms of Use, updated 2026-06-15 (as read on 2026-10-23)
 - They govern the `app.hyperliquid.xyz` interface only. US persons are barred from that interface. There is no
-  data-licence or scraping clause; automated use beyond reasonable usage is prohibited.
+  data-license or scraping clause; automated use beyond reasonable usage is prohibited.
 - The collector reads the public API (`api.hyperliquid.xyz/info`), not the interface, at a rate set in "Info endpoint
   and rate budget" above.
 
@@ -341,5 +341,5 @@ personal-use terms, Pyth display terms).
   history Parquet, research block and episode counts (history hours already pushed keep the name until rewritten: with `DASHBOARD_SHOW_STOCK_PERPS` on, run `secrets uv run python -m venue_arb.publish history --hours 240` (the server keeps about 10 days of hour files; the run rewrites and pushes them); with the flag off the hour files hold no stock rows, so there is nothing to rewrite.). A name may be in both the labels CSV and the excluded file; its
   rows stay in the private tables. The collector (`collect_perps.run_forever`) skips excluded names, so an excluded
   name's private rows stop growing from the next label reload; what was collected before stays.
-- Asian exchange holidays are not modelled in the session calendar (`venue_arb/sessions.py`); on such a day a name
+- Asian exchange holidays are not modeled in the session calendar (`venue_arb/sessions.py`); on such a day a name
   can read as external against a stale oracle.

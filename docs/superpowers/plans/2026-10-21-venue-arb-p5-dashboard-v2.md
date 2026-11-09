@@ -21,7 +21,7 @@ research; the server is unchanged.
   Benchmarks/Binance series republished, pure modules never import `qa`, CI = `uv run ruff check .` +
   `env -u PYTHONPATH uv run pytest -m "not integration" -q`, no Co-Authored-By trailer, additive migrations — none here).
 - One definition per number, the note's (spec §7.1): scope = exact pairs at the current prompt version without a
-  wrong/unsure review; episodes from both sources, labelled by tier; ladder violations = `capacity_contracts > 0`;
+  wrong/unsure review; episodes from both sources, labeled by tier; ladder violations = `capacity_contracts > 0`;
   "pairs live" = distinct market pairs with both legs live.
 - Name: wordmark `venue-arb`; H1 **Prediction Market Arbitrage**; description *Kalshi vs Polymarket: matched markets,
   executable edge after fees and depth, and why most gaps aren't arbitrage.*; `<title>` `venue-arb · Prediction Market
@@ -269,9 +269,9 @@ Modify `dashboard/static/app.js` (wire tabs: a Scanner row click selects the pai
 - [ ] **Step 1: Failing test** additions: `explorer.js` and `research.js` referenced from `app.js` imports and
   present; `NOT_COMPUTED` and the review-line copy present; v1 verdict labels still verbatim (now in `common.js` or
   `explorer.js`).
-- [ ] **Step 2:** FAIL. **Step 3:** move the v1 code into `explorer.js` (no behaviour change except theme), write
+- [ ] **Step 2:** FAIL. **Step 3:** move the v1 code into `explorer.js` (no behavior change except theme), write
   `research.js`, wire row→explorer selection, dark-theme check of the charts.
-- [ ] **Step 4: Browser walk:** Scanner row → Explorer shows that pair; Explorer unchanged behaviours (range buttons,
+- [ ] **Step 4: Browser walk:** Scanner row → Explorer shows that pair; Explorer unchanged behaviors (range buttons,
   annotations, snapshot click, size box disabled with its tooltip); Research tab with the sample (all three charts
   render, headline numbers match the sample's research fields, method paragraphs render); Research with
   `research: null` in a served copy; both themes. Screenshots `reports/dashboard-research.png` and the refreshed

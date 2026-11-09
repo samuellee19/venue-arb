@@ -59,7 +59,7 @@ edit of §7 himself with the ticker and exchange. A wrong `equity` row would sco
 reference, while a delayed one only hides it. So the change ends with up to six `pre_ipo` rows and a short status
 report.
 
-## 4. Behaviour by kind
+## 4. Behavior by kind
 
 | | `equity` | `pre_ipo` |
 |---|---|---|
@@ -155,7 +155,7 @@ builder carries out:
 
 Sam's idea (2026-10-27): the same unlisted company is priced by several perp markets at once (Anthropic on
 trade.xyz as `xyz:ANT` near 115 and on another Hyperliquid deployer as `io:ANTH` near 1,950; Binance and Coinbase
-list their own), and the markets disagree. A divergence view would normalise every contract to one implied
+list their own), and the markets disagree. A divergence view would normalize every contract to one implied
 valuation (each defines its own unit and settlement) and show the gap as a two-perp spread with both legs' funding
 and fees. That is a project of its own: research first (which markets, their contract units, whose terms allow
 the data; the other Hyperliquid deployers share the read-only API and terms already in use, Binance and Coinbase
