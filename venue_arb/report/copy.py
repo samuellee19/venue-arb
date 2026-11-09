@@ -43,7 +43,7 @@ METHOD: dict[str, str] = {
         "reads oracle internal and is never an edge. The basis is the perp's price against the oracle in basis points "
         "(bps, hundredths of a percent), and the net is what is left after a round trip held 24 hours: the perp's "
         "taker fee twice, half the perp's bid-ask spread on exit, and funding for the hold. The stock leg is not "
-        "modelled, so its spread and borrow come off the net before any trade. The weekend test compares the perp's "
+        "modeled, so its spread and borrow come off the net before any trade. The weekend test compares the perp's "
         "price at Friday 8 PM, Saturday noon and Sunday 6 PM New York time with the oracle print at Monday's open. "
         "Hyperliquid blocks US traders, so none of this can be executed from the US. "
         "Pre-IPO perps are listed for their price only and are not scored until the company lists."),

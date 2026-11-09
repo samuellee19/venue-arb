@@ -50,7 +50,7 @@ const ref = p => !p.reference || p.reference.kind === "none" ? "—" : p.referen
 
 function row(p) {
   const t = tone(p.net_edge_cents, p), [k, pm] = p.legs, sp = isStock(p);
-  return `<tr data-k="${esc(p.key)}" tabindex="0"${S.us && !p.us_executable ? ' class="grey"' : ""}>`
+  return `<tr data-k="${esc(p.key)}" tabindex="0"${S.us && !p.us_executable ? ' class="gray"' : ""}>`
     + `<td><span class="cat">${esc(S.bundle.categories[p.category] ?? p.category)}</span><span class="title">${esc(p.title)}</span>`
     + `<small class="mono">${esc(k.market_id)} / ${esc(short(pm.market_id))}</small></td>`
     + `<td class="c-legs mut">${sp ? esc(p.trade) : legsTxt(p)}</td>`
@@ -69,7 +69,7 @@ const PAIR_HEAD = document.querySelector("#scan thead").innerHTML;
 
 function stockRow(p) {
   const t = tone(p.net_edge_cents, p), f = p.next_funding_at;
-  return `<tr data-k="${esc(p.key)}" tabindex="0" class="sp${S.us && !p.us_executable ? " grey" : ""}">`
+  return `<tr data-k="${esc(p.key)}" tabindex="0" class="sp${S.us && !p.us_executable ? " gray" : ""}">`
     + `<td><span class="title">${esc(p.title)}</span><small class="mono">${esc(p.legs[0].market_id)}</small></td>`
     + `<td class="c-legs mut" data-l="trade">${esc(p.trade)}</td><td class="num" data-l="basis">${bps(p.basis_bps, 1)}</td><td class="num ${t}" data-l="net">${bps(p.net_bps, 1)}</td>`
     + `<td class="num" data-l="funding">${p.funding_bps_h == null ? "—" : signed(p.funding_bps_h, 2, " bps/h")}`

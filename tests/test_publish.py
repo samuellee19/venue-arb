@@ -619,7 +619,7 @@ def test_excluded_labelled_symbol_reaches_no_public_path(monkeypatch, tmp_path):
 
     monkeypatch.setattr(config, "DASHBOARD_SHOW_STOCK_PERPS", True)
     monkeypatch.setattr(hyperliquid, "load_excluded", lambda: {"xyz:NVDA", "xyz:GOLD"})
-    assert "xyz:NVDA" in hyperliquid.load_labels()  # labelled and excluded: hidden, still in the private tables
+    assert "xyz:NVDA" in hyperliquid.load_labels()  # labeled and excluded: hidden, still in the private tables
     # the live rows: the perps reader drops it, so the bundle has no row for it
     ts = SP_SNAP[0]
     ctx = (ts, "xyz:NVDA", 215.0, 214.0, 215.0, 0.0, 0.0, 1.0, 1.0, 1)

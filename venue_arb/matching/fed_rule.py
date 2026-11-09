@@ -26,7 +26,7 @@ _K = re.compile(r"^KXFEDDECISION-(\d\d)([A-Z]{3})-([A-Z]\d+)$")
 _PM = re.compile(r"^Will the Fed (increase|decrease) interest rates by (25|50\+) bps after the (\w+) (\d{4}) meeting\?$")
 _PM0 = re.compile(r"^Will there be no change in Fed interest rates after the (\w+) (\d{4}) meeting\?$")
 TAIL = ("An off-grid (non-25 bp) move — none since Oct 1989 — could resolve differently: Polymarket rounds odd moves up "
-        "to the next bracket, Kalshi thresholds are strict; A cancelled or rescheduled meeting resolves under each "
+        "to the next bracket, Kalshi thresholds are strict; A canceled or rescheduled meeting resolves under each "
         "venue's own fallback rules")
 
 Outcome = tuple[str, frozenset[int]]

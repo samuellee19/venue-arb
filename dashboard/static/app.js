@@ -43,7 +43,7 @@ function tick() {
   $("clock").textContent = noBooks ? NO_BOOKS
     : `books ${new Date(books).toLocaleTimeString("en-US", {timeZone: "America/Los_Angeles", hour12: false})} PT`;
   $("dot").classList.toggle("stale", noBooks || age > STALE_S);
-  const dead = age > DEAD_S;  // the verdicts and figures were true an hour ago: greyed, never hidden
+  const dead = age > DEAD_S;  // the verdicts and figures were true an hour ago: grayed, never hidden
   $("stale").hidden = age <= STALE_S;
   $("stale").textContent = (dead ? DEAD_BANNER : STALE_BANNER).replace("{n}", num(Math.round(age / 60)));
   $("figs").classList.toggle("dead", dead);
@@ -82,7 +82,7 @@ $("theme").onclick = () => {
   const root = document.documentElement;
   root.dataset.theme = root.dataset.theme === "dark" ? "light" : "dark";
   try { localStorage.setItem("theme", root.dataset.theme); } catch { /* private mode: not persisted */ }
-  renderTab();  // Plotly reads the colour tokens at draw time
+  renderTab();  // Plotly reads the color tokens at draw time
 };
 addEventListener("hashchange", renderTab);
 

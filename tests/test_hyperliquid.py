@@ -61,30 +61,30 @@ def test_labels_cover_every_equity_and_catalog_flags_unlabelled(fx):
     labels = hl.load_labels()
     assert labels["xyz:NVDA"] == hl.Label("xyz:NVDA", "schwab", "NVDA", "NASDAQ", "USD", "NVIDIA")
     assert labels["xyz:SKHX"].ref_kind == "none" and labels["xyz:SKHX"].exchange == "KRX"
-    assert "xyz:GOLD" not in labels and labels["xyz:ANT"].kind == "pre_ipo"  # commodities out of scope; pre-IPO names are labelled, not scored
+    assert "xyz:GOLD" not in labels and labels["xyz:ANT"].kind == "pre_ipo"  # commodities out of scope; pre-IPO names are labeled, not scored
     assert len(labels) >= 100 and all(hl.dex_of(k) for k in labels)
     # equities live on trade.xyz only; another deployer's label is a privately collected pre-IPO contract
     assert all(hl.dex_of(k) == hl.DEX or lb.kind == "pre_ipo" for k, lb in labels.items())
     assert all(lb.ref_kind != "schwab" or lb.ref_symbol for lb in labels.values())
     assert "xyz:GOLD" in hl.load_excluded()
-    kept, unlabelled = hl.catalog(hl.fetch_ctxs(post=lambda body: fx["meta_ctxs"]), labels, hl.load_excluded())
-    assert [c.symbol for c in kept] == ["xyz:NVDA"] and unlabelled == ["xyz:NEWCO"]  # GOLD: labelled out, not unlabelled
+    kept, unlabeled = hl.catalog(hl.fetch_ctxs(post=lambda body: fx["meta_ctxs"]), labels, hl.load_excluded())
+    assert [c.symbol for c in kept] == ["xyz:NVDA"] and unlabeled == ["xyz:NEWCO"]  # GOLD: labeled out, not unlabeled
 
 
 def test_a_labelled_name_may_also_be_excluded(fx):
-    # the excluded file hides a name from every public path (publish reads it); a labelled name stays catalogued
+    # the excluded file hides a name from every public path (publish reads it); a labeled name stays cataloged
     labels = {"xyz:NVDA": hl.load_labels()["xyz:NVDA"]}
-    kept, unlabelled = hl.catalog(hl.fetch_ctxs(post=lambda body: fx["meta_ctxs"]), labels, {"xyz:NVDA", "xyz:GOLD"})
-    assert [c.symbol for c in kept] == ["xyz:NVDA"] and unlabelled == ["xyz:NEWCO"]
+    kept, unlabeled = hl.catalog(hl.fetch_ctxs(post=lambda body: fx["meta_ctxs"]), labels, {"xyz:NVDA", "xyz:GOLD"})
+    assert [c.symbol for c in kept] == ["xyz:NVDA"] and unlabeled == ["xyz:NEWCO"]
 
 
 def test_catalog_drops_delisted_perps(fx):
     ctxs = hl.fetch_ctxs(post=lambda body: fx["meta_ctxs"])
     assert next(c for c in ctxs if c.symbol == "xyz:OLDCO").delisted and not next(c for c in ctxs if c.symbol == "xyz:NVDA").delisted
     labels = {s: hl.label_or_none(s, {}) for s in ("xyz:NVDA", "xyz:OLDCO")}
-    kept, unlabelled = hl.catalog(ctxs, labels)
-    assert [c.symbol for c in kept] == ["xyz:NVDA"]  # labelled but delisted: dropped
-    assert "xyz:OLDCO" not in unlabelled and unlabelled == ["xyz:GOLD", "xyz:NEWCO"]  # unlabelled and delisted: not reported
+    kept, unlabeled = hl.catalog(ctxs, labels)
+    assert [c.symbol for c in kept] == ["xyz:NVDA"]  # labeled but delisted: dropped
+    assert "xyz:OLDCO" not in unlabeled and unlabeled == ["xyz:GOLD", "xyz:NEWCO"]  # unlabeled and delisted: not reported
 
 
 def test_unlabelled_perp_is_oracle_only():
@@ -175,7 +175,7 @@ def _dex_post(payloads):
 
 def test_dex_of_reads_the_prefix():
     assert hl.dex_of("para:ANTH") == "para" and hl.dex_of("xyz:NVDA") == "xyz"
-    assert hl.dex_of("ANTH") == ""  # a bare coin lives on the main dex; never labelled here
+    assert hl.dex_of("ANTH") == ""  # a bare coin lives on the main dex; never labeled here
 
 
 def test_fetch_ctxs_for_queries_each_labelled_dex_and_keeps_only_labelled_names_off_xyz():
@@ -187,10 +187,10 @@ def test_fetch_ctxs_for_queries_each_labelled_dex_and_keeps_only_labelled_names_
                             "io": [_ctx("io:ANTH"), _ctx("io:OAI")]})
     ctxs = hl.fetch_ctxs_for(labels, post=post)
     assert [b["dex"] for b in sent] == ["xyz", "para", "io"] and all(b["type"] == "metaAndAssetCtxs" for b in sent)
-    # xyz comes back whole (catalog flags xyz:NEW as unlabelled); the other deployers contribute labelled names only
+    # xyz comes back whole (catalog flags xyz:NEW as unlabeled); the other deployers contribute labeled names only
     assert [c.symbol for c in ctxs] == ["xyz:NVDA", "xyz:NEW", "para:ANTH", "io:ANTH"]
-    kept, unlabelled = hl.catalog(ctxs, labels)
-    assert [c.symbol for c in kept] == ["xyz:NVDA", "para:ANTH", "io:ANTH"] and unlabelled == ["xyz:NEW"]
+    kept, unlabeled = hl.catalog(ctxs, labels)
+    assert [c.symbol for c in kept] == ["xyz:NVDA", "para:ANTH", "io:ANTH"] and unlabeled == ["xyz:NEW"]
 
 
 def test_fetch_ctxs_for_with_xyz_labels_only_makes_one_call():

@@ -42,7 +42,7 @@ class Store:
         self.dir = Path(bundle_dir)
         self._bundle: LiveBundle | None = None
         self._sig: tuple[int, int] | None = None  # (mtime_ns, size) of the live.json behind _bundle
-        self._json: bytes | None = None  # _bundle serialised once, served to every request until the next bundle
+        self._json: bytes | None = None  # _bundle serialized once, served to every request until the next bundle
         self._con = duckdb.connect(config=DUCKDB_CONFIG)
 
     def live(self) -> tuple[LiveBundle, float]:
@@ -62,7 +62,7 @@ class Store:
         return self._bundle, time.time() - self._bundle.computed_at.timestamp()
 
     def live_json(self) -> tuple[bytes, float]:
-        """live() with the bundle as JSON bytes, serialised once per bundle rather than once per request."""
+        """live() with the bundle as JSON bytes, serialized once per bundle rather than once per request."""
         _, age = self.live()
         return self._json, age
 

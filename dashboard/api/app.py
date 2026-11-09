@@ -55,14 +55,14 @@ def index():
 
 LIVE_CACHE = "public, max-age=15"  # the publisher pushes every 60 s; the page polls every 30 s
 HISTORY_CACHE = "public, max-age=300"  # history changes once an hour, when the publisher writes the next hour file
-HISTORY_MAX = 128  # cached history responses (serialised bytes; ~100 KB each at most, so ~12 MB)
+HISTORY_MAX = 128  # cached history responses (serialized bytes; ~100 KB each at most, so ~12 MB)
 _history: OrderedDict[tuple, bytes] = OrderedDict()
 
 
 @app.get("/api/live")
 def live():
     try:
-        body, age = store.live_json()  # serialised once per bundle, not per request
+        body, age = store.live_json()  # serialized once per bundle, not per request
     except NoBundle:
         raise HTTPException(503, "no bundle yet") from None
     return Response(b'{"bundle":' + body + b',"age_s":' + repr(float(age)).encode() + b"}",
@@ -77,7 +77,7 @@ def healthz():
 
 @app.get("/api/pair/{key}/history")
 def history(key: str, range: Literal["1h", "24h", "7d", "all"] = "24h"):
-    """Served from a bounded cache of serialised responses until a history file changes; empty results are not cached
+    """Served from a bounded cache of serialized responses until a history file changes; empty results are not cached
     (a key that is neither live nor in history is a 404 below)."""
     ck = (str(store.dir), key, range, store.signature())
     if (body := _history.get(ck)) is not None:

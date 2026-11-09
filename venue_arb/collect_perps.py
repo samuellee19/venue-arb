@@ -1,6 +1,6 @@
 """Stock-perp snapshot collector. Run: secrets uv run python -m venue_arb.collect_perps
 
-Every tick: one Hyperliquid contexts call per labelled deployer (trade.xyz whole, other deployers' labelled names
+Every tick: one Hyperliquid contexts call per labeled deployer (trade.xyz whole, other deployers' labeled names
 only), one book per perp (thread pool), one Schwab quotes call for the perps with a stock reference. tick() and flush() are plain functions (fetchers, loader and recorder injected) so tests need no stack
 or network; qa and obs are imported lazily in run_forever.
 """
@@ -91,10 +91,10 @@ def tick(perps: list[PerpCtx] | None, labels: dict, fetch_ctxs, fetch_book, quot
         stats["ctx"][1] += 1
         log.warning("contexts fetch failed error=%s", type(e).__name__)
     else:
-        kept, unlabelled = catalog(ctxs, labels)
+        kept, unlabeled = catalog(ctxs, labels)
         by_symbol = {c.symbol: c for c in ctxs}
-        perps = kept + [by_symbol[s] for s in unlabelled]
-        stats["unlabelled"] = unlabelled
+        perps = kept + [by_symbol[s] for s in unlabeled]
+        stats["unlabeled"] = unlabeled
         buf["ctx"] += [_ctx_row(c, now) for c in perps]
     perps = perps or []
     with ThreadPoolExecutor(max_workers=workers) as pool:
@@ -132,9 +132,9 @@ def flush_results(checks, stats: dict, issued_at: datetime | None, now: datetime
     n = stats["schwab_fetch_errors"]
     results.append(checks.Result("schwab_fetch_errors", n == 0, n, 0, f"{n} Schwab quote calls failed since the last flush",
                                  severity="warn", target=PIPELINE))
-    unlabelled = stats["unlabelled"]
-    results.append(checks.Result("unlabelled_perps", not unlabelled, len(unlabelled), 0,
-                                 f"listed but in neither label file: {', '.join(unlabelled) or 'none'}",
+    unlabeled = stats["unlabeled"]
+    results.append(checks.Result("unlabelled_perps", not unlabeled, len(unlabeled), 0,
+                                 f"listed but in neither label file: {', '.join(unlabeled) or 'none'}",
                                  severity="warn", target=PIPELINE))
     return results
 
@@ -190,7 +190,7 @@ def run_forever(interval_s: int = SNAPSHOT_INTERVAL_S, flush_every: int = 5) -> 
     quotes, issued_at = _schwab_from_env()
     post = partial(hyperliquid.post_json, delay=0)  # no polite delay: the worker count bounds the rate
     buf, n, perps, labels, excluded, cycles = {k: [] for k in TABLES}, 0, None, {}, set(), []
-    stats = {**{k: [0, 0, 0] for k in TABLES}, "schwab_auth": 0, "schwab_fetch_errors": 0, "unlabelled": []}
+    stats = {**{k: [0, 0, 0] for k in TABLES}, "schwab_auth": 0, "schwab_fetch_errors": 0, "unlabeled": []}
 
     def fetch_ctxs():
         return [c for c in hyperliquid.fetch_ctxs_for(labels, post=post) if c.symbol not in excluded]

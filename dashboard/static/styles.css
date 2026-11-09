@@ -36,7 +36,7 @@ header p { margin:0; font-size:13px; color:var(--mut); }
 .fig b { display:block; font-size:26px; line-height:1.2; font-weight:600; font-variant-numeric:tabular-nums; }
 .fig span { font-size:13px; color:var(--mut); }
 .figs.dead .fig { opacity:.45; }
-/* a dead bundle: every verdict and net figure fades and loses its colour, on the Scanner and in the Explorer */
+/* a dead bundle: every verdict and net figure fades and loses its color, on the Scanner and in the Explorer */
 body.dead .badge, body.dead td.num, body.dead .row .e, body.dead .verdict > .badge, body.dead .wf .r.t { opacity:.45; filter:grayscale(1); }
 .live { display:inline-flex; align-items:center; gap:8px; font-size:13px; color:var(--mut); }
 .dot { width:8px; height:8px; border-radius:50%; background:var(--pos); flex:none; }
@@ -72,7 +72,7 @@ td small { display:block; font-size:13px; line-height:16px; color:var(--mut); ov
 tr[data-k] { cursor:pointer; }
 tr[data-k]:hover td { background:var(--hover); }
 tr[data-k]:focus-visible { outline:2px solid var(--k); outline-offset:-2px; }
-tr.grey td { opacity:.45; }
+tr.gray td { opacity:.45; }
 tr.example td { background:var(--example); }
 .cat { font-size:13px; color:var(--mut); background:var(--chip); border-radius:4px; padding:0 8px; margin-right:8px; white-space:nowrap; }
 .title { font-weight:500; }
@@ -97,7 +97,7 @@ tr.sp td.c-legs { white-space:normal; min-width:136px; }
 .row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:4px 8px; padding:8px 16px; border-bottom:1px solid var(--line); cursor:pointer; }
 .row:hover { background:var(--hover); }
 .row.sel { background:var(--sel); box-shadow:inset 2px 0 var(--k); }
-.row.grey { opacity:.45; }
+.row.gray { opacity:.45; }
 .row .n { font-weight:500; overflow-wrap:anywhere; }
 .row .m { display:flex; flex-wrap:wrap; gap:0 16px; color:var(--mut); font-size:13px; }
 .row .e { font-weight:600; text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
@@ -186,7 +186,7 @@ footer ul { margin:0; padding-left:16px; flex-basis:100%; }
   #scan tbody tr[data-k]:hover { background:var(--hover); }
   #scan td { height:auto; padding:0 8px; border:0; text-align:left; }
   #scan td:first-child, #scan td:last-child { grid-column:1 / -1; }
-  /* the stock-perp header: Name, then Basis, Net, Funding and Reference in two labelled columns, then the verdict */
+  /* the stock-perp header: Name, then Basis, Net, Funding and Reference in two labeled columns, then the verdict */
   #scan tbody tr.sp { grid-template-columns:1fr 1fr; }
   #scan tr.sp td.num { text-align:left; }
   #scan tr.sp td[data-l]::before { content:attr(data-l) " "; color:var(--mut); font-family:Inter, -apple-system, "Segoe UI", sans-serif; }

@@ -1,7 +1,7 @@
 """When the trade.xyz oracle is externally derived (per exchange session) vs following the perp.
 
 Source: trade.xyz Specification Index, read 2026-10-22. Window ends are exclusive.
-Asian exchange holidays are not modelled (ponytail: a holiday reads external with a stale oracle).
+Asian exchange holidays are not modeled (ponytail: a holiday reads external with a stale oracle).
 """
 
 from datetime import date, datetime, time

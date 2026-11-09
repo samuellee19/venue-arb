@@ -239,10 +239,10 @@ def test_cache_respects_prompt_version():
 
 def test_rejudge_upserts():
     conn = FakeConn(old=[("k1", "v1", "p1", "w1")])
-    v = V.model_copy(update={"tail_risks": "Meeting cancelled resolves No Change."})
+    v = V.model_copy(update={"tail_risks": "Meeting canceled resolves No Change."})
     run(conn, [(listing("k1", "v1"), listing("p1", "w1"))], 0.0, call=lambda p: (v.model_dump(), 1000, 0))
     assert "ON CONFLICT (a_venue,a_id,a_version,b_venue,b_id,b_version) DO UPDATE SET" in conn.sqls[0]
-    assert conn.inserts[0][-2:] == ("v3", "Meeting cancelled resolves No Change.")
+    assert conn.inserts[0][-2:] == ("v3", "Meeting canceled resolves No Change.")
 
 
 def test_prompt_v2_mentions_rules():

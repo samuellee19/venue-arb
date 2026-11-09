@@ -105,8 +105,8 @@ def fetch_ctxs(post=post_json, dex: str = DEX) -> list[PerpCtx]:
 
 
 def fetch_ctxs_for(labels: dict[str, Label], post=post_json) -> list[PerpCtx]:
-    """Contexts for the collector: every perp on DEX (so catalog() can flag unlabelled trade.xyz listings), then only
-    the labelled perps of each other deployer in the label file, in label order. A deployer whose call fails is
+    """Contexts for the collector: every perp on DEX (so catalog() can flag unlabeled trade.xyz listings), then only
+    the labeled perps of each other deployer in the label file, in label order. A deployer whose call fails is
     skipped for this tick (logged by name, no body); DEX's own failure propagates as before."""
     out = fetch_ctxs(post, DEX)
     for dex in dict.fromkeys(d for s in labels if (d := dex_of(s)) and d != DEX):
@@ -166,11 +166,11 @@ def load_excluded(path: Path = EXCLUDED) -> set[str]:
 def catalog(
     ctxs: list[PerpCtx], labels: dict[str, Label], excluded: set[str] = frozenset()
 ) -> tuple[list[PerpCtx], list[str]]:
-    """(labelled perps in label order, symbols the venue lists that are in neither file); delisted perps are dropped."""
+    """(labeled perps in label order, symbols the venue lists that are in neither file); delisted perps are dropped."""
     by_symbol = {c.symbol: c for c in ctxs if not c.delisted}
     kept = [by_symbol[s] for s in labels if s in by_symbol]
-    unlabelled = [s for s in by_symbol if s not in labels and s not in excluded]
-    return kept, unlabelled
+    unlabeled = [s for s in by_symbol if s not in labels and s not in excluded]
+    return kept, unlabeled
 
 
 def label_or_none(symbol: str, labels: dict[str, Label]) -> Label:

@@ -82,5 +82,5 @@ def score_window(ctx_rows: list[dict], book_rows: list[dict], ref_rows: list[dic
 
 def stock_perp_opportunity_row(ep: episodes.Episode, source: str) -> dict:
     """An `opportunities` row for a stock-perp episode: kalshi_id is the perp, pm_id the stock (the episode carries
-    both); never US-executable (Hyperliquid perps), and no transfer between venues is modelled."""
+    both); never US-executable (Hyperliquid perps), and no transfer between venues is modeled."""
     return {**scoring.opportunity_row(ep, source), "us_executable": False, "transfer_cost_usd": 0.0}

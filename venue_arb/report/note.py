@@ -690,7 +690,7 @@ def render(summary: dict, out_dir: Path) -> Path:
         "",
         "**What counts as exact.** The two Yes outcomes pay in the same states of the world: same event, same outcome "
         "definition, same decision date and same resolving authority. Trading close times and the wording of the "
-        "source pages do not count as differences. Rare edge clauses (for example a cancelled meeting, or an odd-size "
+        "source pages do not count as differences. Rare edge clauses (for example a canceled meeting, or an odd-size "
         "rate move rounded up) keep a pair exact but are recorded as tail risks and listed under Results. "
         "**Near** means the Yes outcomes overlap but differ (window, threshold or authority). **Different** means the "
         "Yes outcomes are mutually exclusive or disjoint, including different outcome brackets of the same meeting "

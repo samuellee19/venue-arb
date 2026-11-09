@@ -202,7 +202,7 @@ def test_live_serialises_each_bundle_once(monkeypatch, client):
     calls = []
     real = LiveBundle.model_dump_json
     monkeypatch.setattr(LiveBundle, "model_dump_json", lambda self, **kw: calls.append(1) or real(self, **kw))
-    monkeypatch.setattr(LiveBundle, "model_dump", lambda self, **kw: pytest.fail("live re-serialised per request"))
+    monkeypatch.setattr(LiveBundle, "model_dump", lambda self, **kw: pytest.fail("live re-serialized per request"))
     first = client.get("/api/live").json()
     second = client.get("/api/live").json()
     assert first["bundle"] == second["bundle"] and len(calls) <= 1

@@ -1,4 +1,4 @@
-"""Weekly top-up of venue_arb.stock_perp_candles: hourly candles and funding of the last 4 days for every labelled perp,
+"""Weekly top-up of venue_arb.stock_perp_candles: hourly candles and funding of the last 4 days for every labeled perp,
 Monday 14:00 UTC, an hour before stock_perp_weekend, whose fallback reads these candles when the 60 s contexts do not
 reach back to Friday evening. Candles only (no Schwab). Fetch and insert are the backfill's (load_candles).
 

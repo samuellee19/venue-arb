@@ -1,5 +1,5 @@
 // Explorer tab: the v1 pair list (collapsed ladder groups) and detail pane (verdict, cost panel, size re-walk, net-edge
-// chart with snapshot click), moved from the v1 app.js; behaviour unchanged, re-skinned to the v2 system.
+// chart with snapshot click), moved from the v1 app.js; behavior unchanged, re-skinned to the v2 system.
 // app.js calls renderExplorer() when the tab is shown and on each poll while it is visible.
 import {$, esc, enc, num, usd, signed, cents, bpsOf, tone, css, pz, hm, seg, safeUrl, pairs, byKey,
   legsTxt, settles, baseLayout, S, VERDICT_TONES, PLOT_CFG, NOT_ADVICE, STOCK_MIN_BPS} from "./common.js";
@@ -123,7 +123,7 @@ function buildDetail() {
     + `<div class="chart"><div class="tools"><h4>${sp ? "Net and basis, bps of notional, UTC" : "Net edge after fees, ¢ per contract, UTC"}</h4>`
     + `<span class="seg" id="range">${ranges.join("")}</span><button class="chip${S.ann ? " on" : ""}" id="ann">annotations</button></div>`
     + `<div id="plot"></div><div class="legend">${sp
-      ? `<span>dashed red: +${STOCK_MIN_BPS} bps net threshold</span><span>amber band: net not scored</span><span>grey band: collector gap</span>`
+      ? `<span>dashed red: +${STOCK_MIN_BPS} bps net threshold</span><span>amber band: net not scored</span><span>gray band: collector gap</span>`
       : `<span>dashed red: +1¢ episode threshold</span><span>dotted: settlement, listing, basis change</span><span>shaded: collector gap</span><span>▲ episode</span>`
         + `<span>${S.bundle.show_books ? "hover for the books" : "hover for the row's values"}</span>`}<span>click a point to load that snapshot</span></div></div>`
     + `<div class="why" id="why"></div>`;
@@ -241,7 +241,7 @@ function costStock(p) {
     + r("Net, before stock-leg costs", `<span class="${tone(p.net_edge_cents, p)}">${bps(p.net_bps)}</span>`, "t")
     + r("Net at 1 h / 7 d / with borrow", `${bps(s.net_bps_1h)} / ${bps(s.net_bps_7d)} / ${bps(s.net_bps_with_borrow)}`)
     + r("Perp depth while net ≥ 10 bps", usd(p.capacity_usd))
-    + `<div class="note">The stock leg is not modelled on this page.</div>`;
+    + `<div class="note">The stock leg is not modeled on this page.</div>`;
 }
 
 function costStockSnap(s) {  // a history row of a stock perp

@@ -121,7 +121,7 @@ def test_dst_ambiguous_and_nonexistent_et_hours_are_dropped():
     assert parse_strike(_pm("Bitcoin above 80,000 on November 1, 1AM ET?", fall)) is None  # 1 AM happens twice
     spring = datetime(2027, 3, 14, 7, tzinfo=UTC)
     assert parse_strike(_pm("Bitcoin above 80,000 on March 14, 2AM ET?", spring)) is None  # 2 AM never happens
-    # the neighbouring hours are fine
+    # the neighboring hours are fine
     s = parse_strike(_pm("Bitcoin above 80,000 on November 1, 2AM ET?", datetime(2026, 11, 1, 7, tzinfo=UTC)))
     assert s.instant == datetime(2026, 11, 1, 7, tzinfo=UTC)  # EST
 

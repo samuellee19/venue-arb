@@ -58,7 +58,7 @@ The relation is about how the two markets RESOLVE, not when trading stops.
 outcome is determined (e.g. the FOMC meeting date); differences in trading close time on or before that date do not
 make a pair near. Two sources are the same authority when they are pages of the same institution (e.g.
 federalreserve.gov and its FOMC calendar or statement pages); wording differences in the source page do not count.
-Rare edge clauses that matter only in unusual circumstances (e.g. a cancelled meeting, rounding of an odd-sized move to
+Rare edge clauses that matter only in unusual circumstances (e.g. a canceled meeting, rounding of an odd-sized move to
 a bracket) do NOT downgrade exact to near: keep "exact" and list each in tail_risks, one short sentence each
 (null if none).
 Decide the relation from the two Yes outcome SETS for the same event. "exact": the Yes outcomes pay in the same states

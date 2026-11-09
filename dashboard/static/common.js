@@ -51,8 +51,8 @@ export const safeUrl = u => /^https:\/\/(kalshi\.com|polymarket\.com|app\.hyperl
 export const pairs = () => S.bundle.pairs;
 export const byKey = k => pairs().find(p => p.key === k);
 export const usBlocked = () => S.us && !pairs().some(p => p.us_executable);
-export const greyed = p => S.us && !p.us_executable;
-export const label = p => greyed(p) ? NOT_US : p.verdict.label;
+export const grayed = p => S.us && !p.us_executable;
+export const label = p => grayed(p) ? NOT_US : p.verdict.label;
 export const legsTxt = p => p.kind === "stock_perp" ? `${esc(p.legs[0].side)} perp / ${esc(p.legs[1].side)} stock`
   : p.legs.map(l => `${l.venue === "kalshi" ? "K" : "PM"} ${esc(l.side)}`).join(" / ");
 
@@ -65,7 +65,7 @@ export function settles(iso) {  // v1's long form, for the Explorer; a stock per
   return `settles ${when}, in ${m >= 2880 ? `${Math.round(m / 1440)} d` : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")} m`}`;
 }
 
-// one Plotly layout for every chart (Explorer, Research): Inter 13, 8-px margins, no modebar (PLOT_CFG); colours are
+// one Plotly layout for every chart (Explorer, Research): Inter 13, 8-px margins, no modebar (PLOT_CFG); colors are
 // read from the CSS tokens at draw time, so a re-draw after a theme switch picks up the other theme
 export function baseLayout() {
   const line = css("--line"), ax = {gridcolor: line, linecolor: line, zerolinecolor: line};

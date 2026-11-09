@@ -42,7 +42,7 @@ QUOTES = {s: Quote(s, 99.8, 100.2, 100.0, 200.0, None, NOW - timedelta(seconds=3
 
 def fresh():
     return {"books": [], "ctx": [], "refs": []}, {"books": [0, 0, 0], "ctx": [0, 0, 0], "refs": [0, 0, 0],
-                                                  "schwab_auth": 0, "schwab_fetch_errors": 0, "unlabelled": []}
+                                                  "schwab_auth": 0, "schwab_fetch_errors": 0, "unlabeled": []}
 
 
 def test_tick_fills_three_buffers_and_quotes_once():
@@ -53,8 +53,8 @@ def test_tick_fills_three_buffers_and_quotes_once():
     assert calls == [["NVDA", "AAPL"]] and len(buf["ctx"]) == 3 and len(buf["books"]) == 3 * len(BOOK)
     assert {r["symbol"] for r in buf["refs"]} == {"xyz:NVDA", "xyz:AAPL"}
     assert buf["refs"][0]["quote_time"] == QUOTES["NVDA"].quote_time and buf["refs"][0]["ts"] == NOW
-    assert [p.symbol for p in perps] == ["xyz:NVDA", "xyz:AAPL", "xyz:NEWCO"]  # unlabelled snapshotted, delisted not
-    assert stats["unlabelled"] == ["xyz:NEWCO"] and stats["books"] == [3, 0, 0] and stats["ctx"] == [1, 0, 0]
+    assert [p.symbol for p in perps] == ["xyz:NVDA", "xyz:AAPL", "xyz:NEWCO"]  # unlabeled snapshotted, delisted not
+    assert stats["unlabeled"] == ["xyz:NEWCO"] and stats["books"] == [3, 0, 0] and stats["ctx"] == [1, 0, 0]
     aapl = next(r for r in buf["ctx"] if r["symbol"] == "xyz:AAPL")
     assert aapl["mid"] is None and aapl["growth_mode"] == 1
     assert {r["ts"] for k in ("books", "ctx", "refs") for r in buf[k]} == {NOW}  # one tick time across the tables
@@ -124,7 +124,7 @@ def test_no_schwab_client_skips_quotes():
 
 def test_flush_results_warn_day_before_expiry():
     issued = NOW - timedelta(days=6, hours=1)
-    res = {r.check: r for r in cp.flush_results(FAKE_CHECKS, {"schwab_auth": 0, "schwab_fetch_errors": 0, "unlabelled": ["xyz:NEWCO"]}, issued, NOW)}
+    res = {r.check: r for r in cp.flush_results(FAKE_CHECKS, {"schwab_auth": 0, "schwab_fetch_errors": 0, "unlabeled": ["xyz:NEWCO"]}, issued, NOW)}
     assert not res["schwab_token_expires"].passed and res["schwab_token_expires"].severity == "error"  # pushes
     assert not res["unlabelled_perps"].passed and "xyz:NEWCO" in res["unlabelled_perps"].detail
     assert res["schwab_auth"].passed
@@ -132,14 +132,14 @@ def test_flush_results_warn_day_before_expiry():
 
 def test_flush_results_healthy_and_auth_failed():
     issued = NOW - timedelta(days=1)
-    res = {r.check: r for r in cp.flush_results(FAKE_CHECKS, {"schwab_auth": 0, "schwab_fetch_errors": 0, "unlabelled": []}, issued, NOW)}
+    res = {r.check: r for r in cp.flush_results(FAKE_CHECKS, {"schwab_auth": 0, "schwab_fetch_errors": 0, "unlabeled": []}, issued, NOW)}
     assert all(r.passed for r in res.values())
-    res = {r.check: r for r in cp.flush_results(FAKE_CHECKS, {"schwab_auth": 2, "schwab_fetch_errors": 0, "unlabelled": []}, issued, NOW)}
+    res = {r.check: r for r in cp.flush_results(FAKE_CHECKS, {"schwab_auth": 2, "schwab_fetch_errors": 0, "unlabeled": []}, issued, NOW)}
     assert not res["schwab_auth"].passed and res["schwab_auth"].severity == "error"  # pushes
 
 
 def test_flush_results_without_token_warns_and_skips_expiry():
-    res = {r.check: r for r in cp.flush_results(FAKE_CHECKS, {"schwab_auth": 0, "schwab_fetch_errors": 0, "unlabelled": []}, None, NOW)}
+    res = {r.check: r for r in cp.flush_results(FAKE_CHECKS, {"schwab_auth": 0, "schwab_fetch_errors": 0, "unlabeled": []}, None, NOW)}
     assert not res["schwab_auth"].passed and res["schwab_auth"].detail == "SCHWAB_REFRESH_TOKEN not set"
     assert "schwab_token_expires" not in res
 
@@ -205,10 +205,10 @@ def test_token_check_pushes_two_days_ahead():
 
     def results(hours_left):
         issued = NOW - (schwab.refresh_expires_at(NOW) - NOW) + timedelta(hours=hours_left)  # token expires in hours_left
-        return {r.check: r for r in cp.flush_results(FAKE_CHECKS, {"schwab_auth": 0, "schwab_fetch_errors": 0, "unlabelled": []}, issued, NOW)}
+        return {r.check: r for r in cp.flush_results(FAKE_CHECKS, {"schwab_auth": 0, "schwab_fetch_errors": 0, "unlabeled": []}, issued, NOW)}
 
     assert results(60)["schwab_token_expires"].passed
     r = results(36)["schwab_token_expires"]
     assert not r.passed and r.severity == "error" and r.threshold == 48
-    missing = {r.check: r for r in cp.flush_results(FAKE_CHECKS, {"schwab_auth": 0, "schwab_fetch_errors": 0, "unlabelled": []}, None, NOW)}
+    missing = {r.check: r for r in cp.flush_results(FAKE_CHECKS, {"schwab_auth": 0, "schwab_fetch_errors": 0, "unlabeled": []}, None, NOW)}
     assert missing["schwab_auth"].severity == "error"

@@ -5,8 +5,8 @@
 With symbols, only those labels are loaded (a few new names beside the running collector; the whole set exhausts the
 per-IP budget).
 
-Hourly candles and funding of every labelled perp from the last 60 days into stock_perp_candles (a re-run rewrites
-the same hours: ReplacingMergeTree), and the daily stock opens of every Schwab-labelled perp into stock_perp_refs as
+Hourly candles and funding of every labeled perp from the last 60 days into stock_perp_candles (a re-run rewrites
+the same hours: ReplacingMergeTree), and the daily stock opens of every Schwab-labeled perp into stock_perp_refs as
 `schwab_daily` rows stamped at 09:30 New York of the session day (the weekend tier's regular-session open); a re-run
 skips the (symbol, ts) rows already there, as that table is a plain MergeTree. Needs the four SCHWAB_* variables for the stock opens; without them only the
 candles are loaded.

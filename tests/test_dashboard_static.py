@@ -16,7 +16,7 @@ BANNERS = ("No pair is executable from the US: Polymarket rejects US orders. Gap
 STOCK_COPY = ("Not advice. Hyperliquid blocks US traders; the perp leg is shown for reference.",
               ("{n} stock perps — perp against the venue's oracle, net of 2× perp taker fee, perp spread and 24 h funding, "
                "before stock-leg costs"), "basis is quoted in bps", "oracle internal", "perpetual",
-              "The stock leg is not modelled on this page.", "at 1 h / 7 d / with borrow", "nothing to score until it lists")
+              "The stock leg is not modeled on this page.", "at 1 h / 7 d / with borrow", "nothing to score until it lists")
 SCANNER_COPY = ("Example — what a row looks like when a pair clears the rule",
                 "per-leg quotes are not published (venue display terms)", "ROI = net edge ÷ all-in cost per contract",
                 "admissible ladder checks in the last scored hour", "violations", "no scored hour yet",
