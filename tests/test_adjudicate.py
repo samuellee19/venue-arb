@@ -136,7 +136,7 @@ def test_today_spend():
     assert today_spend(FakeConn()) == 1.5
 
 
-def test_daily_budget_even_split():  # 2026-11-10: 10 days to the next credit (the 20th, qa.credit), today included
+def test_daily_budget_even_split():  # 2026-11-10: 10 days to the next credit (the 20th), today included
     assert daily_budget(0, 0, date(2026, 11, 10), monthly=20) == pytest.approx(20 / 10)
     assert daily_budget(0, 0, date(2026, 11, 25), monthly=20) == pytest.approx(20 / 25)  # after the 20th: Nov 25 to Dec 19
 
@@ -397,3 +397,13 @@ def test_call_claude_telemetry_failures_never_break_the_call(monkeypatch):
     monkeypatch.setattr(mlflow, "update_current_trace", lambda **kw: 1 / 0)  # e.g. no active trace
     with obs.run("venue-arb.test"):
         assert mod._call_claude("p")[1:] == (11, 7)
+
+
+def test_credit_cycle():
+    from datetime import UTC, datetime
+
+    from venue_arb.config import cycle_start, next_credit
+
+    assert cycle_start(datetime(2026, 11, 10, 18, tzinfo=UTC), 20) == datetime(2026, 10, 20, tzinfo=UTC)
+    assert cycle_start(datetime(2026, 1, 5, tzinfo=UTC), 20) == datetime(2025, 12, 20, tzinfo=UTC)
+    assert next_credit(datetime(2026, 12, 25, tzinfo=UTC), 20) == date(2027, 1, 20)

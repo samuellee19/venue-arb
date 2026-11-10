@@ -10,7 +10,7 @@ from typing import Literal
 import anthropic
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
-from venue_arb.config import LLM_MODEL, MONTHLY_LLM_BUDGET_USD
+from venue_arb.config import LLM_MODEL, MONTHLY_LLM_BUDGET_USD, cycle_start, next_credit
 
 # USD per million input/output tokens. Source: claude-api skill model table, 2026-10-19
 # (Haiku 5.5, prompts up to 100K tokens; our prompts are ~1-2K).
@@ -150,11 +150,9 @@ def adjudicate(a: dict, b: dict, call=_call_claude) -> tuple[Verdict, float]:
 
 
 def month_spend(conn) -> float:
-    """Spend this credit cycle (since the credit day, qa.credit), not this calendar month."""
-    from qa import credit
-
+    """Spend this credit cycle (since the credit day, config.cycle_start), not this calendar month."""
     row = conn.execute(
-        "SELECT coalesce(sum(cost_usd),0) FROM venue_arb.llm_attempts WHERE created_at >= %s", (credit.cycle_start(),)
+        "SELECT coalesce(sum(cost_usd),0) FROM venue_arb.llm_attempts WHERE created_at >= %s", (cycle_start(),)
     ).fetchone()
     return float(row[0])
 
@@ -169,9 +167,7 @@ def today_spend(conn) -> float:
 def daily_budget(month_spend: float, today_spend: float, today: date, monthly: float = MONTHLY_LLM_BUDGET_USD) -> float:
     """Today's remaining allowance: an even split of what is left of the credit cycle, today included, minus today's
     spend."""
-    from qa import credit
-
-    days_left = max(1, (credit.next_credit(datetime(today.year, today.month, today.day, 12, tzinfo=UTC)) - today).days)
+    days_left = max(1, (next_credit(datetime(today.year, today.month, today.day, 12, tzinfo=UTC)) - today).days)
     return max(0.0, (monthly - month_spend + today_spend) / days_left - today_spend)
 
 

@@ -1,6 +1,7 @@
 """Project constants."""
 
 import os
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 PIPELINE_PREFIX = "venue_arb"
@@ -10,8 +11,20 @@ REPO_URL = os.environ.get("VENUE_ARB_REPO_URL", "https://github.com/samuellee19/
 CATEGORIES = ("fed_macro", "crypto_price", "stock_perps")
 SQL_CHECKS = Path("sql_checks")
 CONFIDENCE_FLOOR = 0.8
-# per credit cycle (from the 20th, qa.credit), venue-arb's share of the $100 of API credit; a runaway guard
-MONTHLY_LLM_BUDGET_USD = float(os.environ.get("VENUE_ARB_LLM_BUDGET_USD", "30"))  # qa.credit.CAPS["venue-arb"]
+# LLM spend per API credit cycle (from CREDIT_DAY, when the monthly API credit arrives); a runaway guard
+MONTHLY_LLM_BUDGET_USD = float(os.environ.get("VENUE_ARB_LLM_BUDGET_USD", "30"))
+CREDIT_DAY = int(os.environ.get("PLATFORM_CREDIT_DAY", "20"))  # 1-28: every month has that day
+
+
+def cycle_start(now: datetime | None = None, day: int = CREDIT_DAY) -> datetime:
+    """Midnight UTC on the latest credit day on or before `now`: budgets count from here, not from the 1st."""
+    now = now or datetime.now(UTC)
+    d = now.replace(day=day, hour=0, minute=0, second=0, microsecond=0)
+    return d if d <= now else (d.replace(day=1) - timedelta(days=1)).replace(day=day)
+
+
+def next_credit(now: datetime | None = None, day: int = CREDIT_DAY) -> date:
+    return (cycle_start(now, day).replace(day=28) + timedelta(days=4)).replace(day=day).date()
 LLM_MODEL = os.environ.get("VENUE_ARB_LLM_MODEL", "claude-haiku-5-5")
 SNAPSHOT_INTERVAL_S = 60
 SNAPSHOT_MAX_MARKETS = 300
