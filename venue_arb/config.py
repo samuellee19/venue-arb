@@ -10,7 +10,8 @@ REPO_URL = os.environ.get("VENUE_ARB_REPO_URL", "https://github.com/samuellee19/
 CATEGORIES = ("fed_macro", "crypto_price", "stock_perps")
 SQL_CHECKS = Path("sql_checks")
 CONFIDENCE_FLOOR = 0.8
-MONTHLY_LLM_BUDGET_USD = 40.0  # Max-plan API credit covers it; the cap is a runaway guard
+# per credit cycle (from the 20th, qa.credit), venue-arb's share of the $100 of API credit; a runaway guard
+MONTHLY_LLM_BUDGET_USD = float(os.environ.get("VENUE_ARB_LLM_BUDGET_USD", "30"))  # qa.credit.CAPS["venue-arb"]
 LLM_MODEL = os.environ.get("VENUE_ARB_LLM_MODEL", "claude-haiku-5-5")
 SNAPSHOT_INTERVAL_S = 60
 SNAPSHOT_MAX_MARKETS = 300

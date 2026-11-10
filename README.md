@@ -148,8 +148,8 @@ secrets uv run python -m db.migrate                   # apply migrations
 `venue_arb.screened` (v1, paired each Kalshi candle close with the Polymarket print about an hour earlier) was
 dropped by hand on 2026-10-20; `venue_arb.screened_v2` is the only screened table.
 
-LLM spend is capped at $20/month (`MONTHLY_LLM_BUDGET_USD`) and paced daily, so a backlog is worked off over
-the month instead of in one day.
+LLM spend is capped at $30 a credit cycle, from the 20th (`VENUE_ARB_LLM_BUDGET_USD`, `qa.credit`), and paced daily,
+so a backlog is worked off over the cycle instead of in one day.
 
 ### Dashboard
 
