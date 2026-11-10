@@ -1,11 +1,10 @@
 """LLM adjudication of Kalshi/Polymarket pairs: structured verdict, version-keyed cache, monthly budget."""
 
-import calendar
 import json
 import logging
 import time
 from contextlib import contextmanager, suppress
-from datetime import date
+from datetime import UTC, date, datetime
 from typing import Literal
 
 import anthropic
@@ -151,8 +150,11 @@ def adjudicate(a: dict, b: dict, call=_call_claude) -> tuple[Verdict, float]:
 
 
 def month_spend(conn) -> float:
+    """Spend this credit cycle (since the credit day, qa.credit), not this calendar month."""
+    from qa import credit
+
     row = conn.execute(
-        "SELECT coalesce(sum(cost_usd),0) FROM venue_arb.llm_attempts WHERE created_at >= date_trunc('month', now())"
+        "SELECT coalesce(sum(cost_usd),0) FROM venue_arb.llm_attempts WHERE created_at >= %s", (credit.cycle_start(),)
     ).fetchone()
     return float(row[0])
 
@@ -165,8 +167,11 @@ def today_spend(conn) -> float:
 
 
 def daily_budget(month_spend: float, today_spend: float, today: date, monthly: float = MONTHLY_LLM_BUDGET_USD) -> float:
-    """Today's remaining allowance: an even split of what is left of the month, today included, minus today's spend."""
-    days_left = calendar.monthrange(today.year, today.month)[1] - today.day + 1
+    """Today's remaining allowance: an even split of what is left of the credit cycle, today included, minus today's
+    spend."""
+    from qa import credit
+
+    days_left = max(1, (credit.next_credit(datetime(today.year, today.month, today.day, 12, tzinfo=UTC)) - today).days)
     return max(0.0, (monthly - month_spend + today_spend) / days_left - today_spend)
 
 

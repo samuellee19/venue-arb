@@ -51,10 +51,10 @@ class FakeConn:
         self.attempts = [{"pair": k, "outcome": "error", "error_type": error_type, "cost": 0.0} for k in errors]
 
     def execute(self, sql, params=()):
-        pair = tuple(params[i] for i in (1, 2, 4, 5)) if params else None
         if "sum(cost_usd)" in sql:
             assert "venue_arb.llm_attempts" in sql  # spend comes from the ledger, not adjudications
             return Cur((1.5,))
+        pair = tuple(params[i] for i in (1, 2, 4, 5)) if params else None
         if "count(*) FROM venue_arb.llm_attempts" in sql:
             transient = params[-1] if len(params) > 6 else ()
             return Cur((sum(a["pair"] == pair and a["outcome"] == "error" and a["error_type"] not in transient
@@ -136,21 +136,22 @@ def test_today_spend():
     assert today_spend(FakeConn()) == 1.5
 
 
-def test_daily_budget_even_split():
-    assert daily_budget(0, 0, date(2026, 10, 19), monthly=20) == pytest.approx(20 / 13)
+def test_daily_budget_even_split():  # 2026-11-10: 10 days to the next credit (the 20th, qa.credit), today included
+    assert daily_budget(0, 0, date(2026, 11, 10), monthly=20) == pytest.approx(20 / 10)
+    assert daily_budget(0, 0, date(2026, 11, 25), monthly=20) == pytest.approx(20 / 25)  # after the 20th: Nov 25 to Dec 19
 
 
 def test_daily_budget_nearly_spent_month():
-    assert daily_budget(19.99, 0, date(2026, 10, 19), monthly=20) == pytest.approx(0.01 / 13)
+    assert daily_budget(19.99, 0, date(2026, 11, 10), monthly=20) == pytest.approx(0.01 / 10)
 
 
 def test_daily_budget_zero_once_allowance_used():
-    assert daily_budget(1.54, 1.54, date(2026, 10, 19), monthly=20) == 0.0  # allowance (20-1.54+1.54)/13 = 1.538 < 1.54
-    assert daily_budget(25, 0, date(2026, 10, 19), monthly=20) == 0.0
+    assert daily_budget(2.01, 2.01, date(2026, 11, 10), monthly=20) == 0.0  # allowance (20-2.01+2.01)/10 = 2.0 < 2.01
+    assert daily_budget(25, 0, date(2026, 11, 10), monthly=20) == 0.0
 
 
 def test_daily_budget_last_day_takes_all_remaining():
-    assert daily_budget(15, 1, date(2026, 10, 31), monthly=20) == pytest.approx(5.0)  # 20 - 14 spent before today - 1 spent today
+    assert daily_budget(15, 1, date(2026, 11, 19), monthly=20) == pytest.approx(5.0)  # the day before the credit: 20 - 14 - 1
 
 
 def test_ok_attempt_recorded_in_ledger():
