@@ -1,7 +1,7 @@
 """Serve the hourly flows. Run: secrets uv run python -m venue_arb.flows.serve"""
 
 from obs.prefect_meta import stamp
-from obs.prefect_sweep import crash_orphans
+from obs.prefect_sweep import crash_orphans, replay_missed
 from prefect import serve
 
 from venue_arb.flows.basis import basis_flow
@@ -34,4 +34,5 @@ if __name__ == "__main__":
     # a run left Running/Pending by the last runner death would hold its concurrency slot forever
     stamp(deployments)  # commit tags, version and link: the only "which code runs" the OSS UI shows
     crash_orphans(deployments)
+    replay_missed(deployments)  # the cron tick this restart swallowed, if any
     serve(*deployments)
