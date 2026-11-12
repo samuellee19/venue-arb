@@ -91,14 +91,14 @@ WITH latest AS (
   WHERE a_venue = 'kalshi' AND b_venue = 'polymarket' AND prompt_version = %(pv)s
   ORDER BY a_id, b_id, created_at DESC),
 bad AS (SELECT DISTINCT a_id, b_id FROM venue_arb.reviews
-  WHERE a_venue = 'kalshi' AND b_venue = 'polymarket' AND label IN ('wrong', 'unsure') AND prompt_version = %(pv)s),
-cl AS (SELECT DISTINCT ON (venue, market_id) venue, market_id, close_time FROM venue_arb.listings
-  ORDER BY venue, market_id, last_seen DESC)
+  WHERE a_venue = 'kalshi' AND b_venue = 'polymarket' AND label IN ('wrong', 'unsure') AND prompt_version = %(pv)s)
+-- listings is keyed on (venue, market_id), so it is joined directly: a DISTINCT ON over it changed nothing but
+-- materialized all 563k listings and spilled a 1.2M-row sort to disk (137 MB a run, 15.8 s -> 4.6 s, same rows)
 SELECT l.a_id, l.b_id, l.relation, b.a_id IS NOT NULL AS bad_review,
        coalesce(least(k.close_time, p.close_time) <= now(), false) AS closed
 FROM latest l LEFT JOIN bad b USING (a_id, b_id)
-LEFT JOIN cl k ON k.venue = 'kalshi' AND k.market_id = l.a_id
-LEFT JOIN cl p ON p.venue = 'polymarket' AND p.market_id = l.b_id
+LEFT JOIN venue_arb.listings k ON k.venue = 'kalshi' AND k.market_id = l.a_id
+LEFT JOIN venue_arb.listings p ON p.venue = 'polymarket' AND p.market_id = l.b_id
 """
 # latest adjudication at the listings' current versions, as in flows/exact_sql.ELIGIBLE_SQL
 ADJ_SQL = """
